@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="Pulse — Automated DevRel Intelligence & Content Agent" width="100%"/>
+  <img src="assets/banner.svg" alt="Pulsar — Automated DevRel Intelligence & Content Agent" width="100%"/>
 </p>
 
-# Pulse
+# Pulsar
 
 Automated DevRel intelligence and content agent. Scrapes free developer sources twice daily, runs AI analysis via RocketRide pipelines, and outputs trend reports + content drafts for human review.
 

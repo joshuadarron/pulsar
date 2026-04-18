@@ -1,93 +1,128 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#4f46e5"/>
-      <stop offset="50%" style="stop-color:#7c3aed"/>
-      <stop offset="100%" style="stop-color:#a855f7"/>
+      <stop offset="0%" style="stop-color:#0f0a2e"/>
+      <stop offset="50%" style="stop-color:#1a1145"/>
+      <stop offset="100%" style="stop-color:#0d0b26"/>
     </linearGradient>
-    <linearGradient id="wave1" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:rgba(255,255,255,0.08)"/>
-      <stop offset="50%" style="stop-color:rgba(255,255,255,0.15)"/>
-      <stop offset="100%" style="stop-color:rgba(255,255,255,0.05)"/>
+    <radialGradient id="pulsar-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#a78bfa;stop-opacity:0.4"/>
+      <stop offset="40%" style="stop-color:#7c3aed;stop-opacity:0.15"/>
+      <stop offset="100%" style="stop-color:#0f0a2e;stop-opacity:0"/>
+    </radialGradient>
+    <radialGradient id="star-core" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#ffffff"/>
+      <stop offset="30%" style="stop-color:#c4b5fd"/>
+      <stop offset="70%" style="stop-color:#7c3aed"/>
+      <stop offset="100%" style="stop-color:#4c1d95;stop-opacity:0"/>
+    </radialGradient>
+    <linearGradient id="beam1" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" style="stop-color:#c4b5fd;stop-opacity:0.6"/>
+      <stop offset="100%" style="stop-color:#c4b5fd;stop-opacity:0"/>
     </linearGradient>
-    <linearGradient id="pulse-line" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:rgba(255,255,255,0.1)"/>
-      <stop offset="30%" style="stop-color:rgba(255,255,255,0.6)"/>
-      <stop offset="50%" style="stop-color:rgba(255,255,255,0.9)"/>
-      <stop offset="70%" style="stop-color:rgba(255,255,255,0.6)"/>
-      <stop offset="100%" style="stop-color:rgba(255,255,255,0.1)"/>
+    <linearGradient id="beam2" x1="100%" y1="50%" x2="0%" y2="50%">
+      <stop offset="0%" style="stop-color:#c4b5fd;stop-opacity:0.6"/>
+      <stop offset="100%" style="stop-color:#c4b5fd;stop-opacity:0"/>
+    </linearGradient>
+    <linearGradient id="beam-up" x1="50%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" style="stop-color:#a78bfa;stop-opacity:0.5"/>
+      <stop offset="100%" style="stop-color:#a78bfa;stop-opacity:0"/>
+    </linearGradient>
+    <linearGradient id="beam-down" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" style="stop-color:#a78bfa;stop-opacity:0.5"/>
+      <stop offset="100%" style="stop-color:#a78bfa;stop-opacity:0"/>
     </linearGradient>
   </defs>
 
-  <!-- Background -->
+  <!-- Deep space background -->
   <rect width="1200" height="300" fill="url(#bg)" rx="12"/>
 
-  <!-- Decorative grid dots -->
-  <g opacity="0.07">
-    <pattern id="dots" x="0" y="0" width="30" height="30" patternUnits="userSpaceOnUse">
-      <circle cx="2" cy="2" r="1.5" fill="white"/>
-    </pattern>
-    <rect width="1200" height="300" fill="url(#dots)"/>
+  <!-- Stars -->
+  <g opacity="0.6">
+    <circle cx="50" cy="30" r="1" fill="white"/>
+    <circle cx="150" cy="80" r="0.8" fill="white"/>
+    <circle cx="200" cy="20" r="1.2" fill="white"/>
+    <circle cx="310" cy="55" r="0.7" fill="white"/>
+    <circle cx="380" cy="15" r="1" fill="white"/>
+    <circle cx="450" cy="70" r="0.6" fill="white"/>
+    <circle cx="520" cy="25" r="0.9" fill="white"/>
+    <circle cx="620" cy="45" r="0.8" fill="white"/>
+    <circle cx="700" cy="18" r="1.1" fill="white"/>
+    <circle cx="800" cy="65" r="0.7" fill="white"/>
+    <circle cx="870" cy="30" r="1" fill="white"/>
+    <circle cx="950" cy="50" r="0.6" fill="white"/>
+    <circle cx="1020" cy="22" r="0.9" fill="white"/>
+    <circle cx="1100" cy="60" r="0.8" fill="white"/>
+    <circle cx="1160" cy="35" r="1" fill="white"/>
+    <circle cx="80" cy="250" r="0.7" fill="white"/>
+    <circle cx="170" cy="270" r="1" fill="white"/>
+    <circle cx="280" cy="240" r="0.6" fill="white"/>
+    <circle cx="420" cy="265" r="0.9" fill="white"/>
+    <circle cx="550" cy="280" r="0.7" fill="white"/>
+    <circle cx="680" cy="250" r="1" fill="white"/>
+    <circle cx="780" cy="275" r="0.8" fill="white"/>
+    <circle cx="900" cy="260" r="0.6" fill="white"/>
+    <circle cx="1000" cy="245" r="0.9" fill="white"/>
+    <circle cx="1130" cy="270" r="0.7" fill="white"/>
+    <circle cx="60" cy="150" r="0.5" fill="white"/>
+    <circle cx="350" cy="130" r="0.6" fill="white"/>
+    <circle cx="500" cy="155" r="0.5" fill="white"/>
+    <circle cx="750" cy="140" r="0.7" fill="white"/>
+    <circle cx="1050" cy="160" r="0.5" fill="white"/>
+    <circle cx="1150" cy="130" r="0.6" fill="white"/>
   </g>
 
-  <!-- Wave decoration bottom -->
-  <path d="M0 240 Q150 200 300 230 T600 220 T900 240 T1200 225 L1200 300 L0 300Z" fill="url(#wave1)"/>
-  <path d="M0 260 Q200 230 400 255 T800 245 T1200 260 L1200 300 L0 300Z" fill="rgba(255,255,255,0.05)"/>
+  <!-- Pulsar glow -->
+  <circle cx="135" cy="130" r="140" fill="url(#pulsar-glow)"/>
 
-  <!-- Pulse/heartbeat line -->
-  <polyline
-    points="0,185 180,185 220,185 240,160 260,210 280,140 300,220 320,170 340,185 400,185 1200,185"
-    fill="none"
-    stroke="url(#pulse-line)"
-    stroke-width="2.5"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
+  <!-- Emission beams (cone shape, characteristic of pulsars) -->
+  <!-- Right beam -->
+  <polygon points="148,130 300,118 300,142" fill="url(#beam1)" opacity="0.3"/>
+  <polygon points="148,130 250,123 250,137" fill="url(#beam1)" opacity="0.5"/>
+  <!-- Left beam -->
+  <polygon points="122,130 0,115 0,145" fill="url(#beam2)" opacity="0.25"/>
+  <polygon points="122,130 20,120 20,140" fill="url(#beam2)" opacity="0.4"/>
+  <!-- Top beam -->
+  <polygon points="135,117 125,0 145,0" fill="url(#beam-up)" opacity="0.2"/>
+  <polygon points="135,117 130,30 140,30" fill="url(#beam-up)" opacity="0.35"/>
+  <!-- Bottom beam -->
+  <polygon points="135,143 125,300 145,300" fill="url(#beam-down)" opacity="0.2"/>
+  <polygon points="135,143 130,270 140,270" fill="url(#beam-down)" opacity="0.35"/>
 
-  <!-- Decorative circles -->
-  <circle cx="950" cy="70" r="60" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.5"/>
-  <circle cx="980" cy="90" r="90" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
-  <circle cx="1050" cy="50" r="30" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <!-- Rotation ring -->
+  <ellipse cx="135" cy="130" rx="38" ry="8" fill="none" stroke="rgba(167,139,250,0.2)" stroke-width="1" transform="rotate(-25,135,130)"/>
+  <ellipse cx="135" cy="130" rx="52" ry="11" fill="none" stroke="rgba(167,139,250,0.1)" stroke-width="0.75" transform="rotate(-25,135,130)"/>
 
-  <!-- Small data node dots -->
-  <circle cx="100" cy="80" r="3" fill="rgba(255,255,255,0.2)"/>
-  <circle cx="160" cy="60" r="2" fill="rgba(255,255,255,0.15)"/>
-  <circle cx="130" cy="100" r="2.5" fill="rgba(255,255,255,0.18)"/>
-  <line x1="100" y1="80" x2="160" y2="60" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-  <line x1="100" y1="80" x2="130" y2="100" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <!-- Pulsar core -->
+  <circle cx="135" cy="130" r="14" fill="url(#star-core)"/>
+  <circle cx="135" cy="130" r="8" fill="white" opacity="0.9"/>
+  <circle cx="135" cy="130" r="4" fill="white"/>
 
-  <circle cx="1100" cy="200" r="3" fill="rgba(255,255,255,0.2)"/>
-  <circle cx="1140" cy="170" r="2" fill="rgba(255,255,255,0.15)"/>
-  <circle cx="1080" cy="175" r="2.5" fill="rgba(255,255,255,0.18)"/>
-  <line x1="1100" y1="200" x2="1140" y2="170" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-  <line x1="1100" y1="200" x2="1080" y2="175" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-
-  <!-- Logo mark -->
-  <rect x="80" y="108" width="44" height="44" rx="10" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>
-  <polyline
-    points="91,130 98,130 102,120 106,140 110,125 114,130"
-    fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
-  />
+  <!-- Signal waves emanating from pulsar -->
+  <circle cx="135" cy="130" r="28" fill="none" stroke="rgba(196,181,253,0.25)" stroke-width="0.75"/>
+  <circle cx="135" cy="130" r="45" fill="none" stroke="rgba(196,181,253,0.15)" stroke-width="0.5"/>
+  <circle cx="135" cy="130" r="65" fill="none" stroke="rgba(196,181,253,0.08)" stroke-width="0.5"/>
+  <circle cx="135" cy="130" r="90" fill="none" stroke="rgba(196,181,253,0.04)" stroke-width="0.5"/>
 
   <!-- Title -->
-  <text x="142" y="138" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="42" font-weight="700" fill="white" letter-spacing="-1">Pulse</text>
+  <text x="260" y="125" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="52" font-weight="700" fill="white" letter-spacing="-1.5">Pulsar</text>
 
   <!-- Subtitle -->
-  <text x="84" y="170" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="16" fill="rgba(255,255,255,0.75)" letter-spacing="0.5">Automated DevRel Intelligence &amp; Content Agent</text>
+  <text x="264" y="155" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="16" fill="rgba(196,181,253,0.8)" letter-spacing="0.5">Automated DevRel Intelligence &amp; Content Agent</text>
 
   <!-- Tag pills -->
-  <rect x="84" y="192" width="56" height="24" rx="12" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.2)" stroke-width="0.75"/>
-  <text x="112" y="208" font-family="system-ui, sans-serif" font-size="11" fill="rgba(255,255,255,0.8)" text-anchor="middle">Next.js</text>
+  <rect x="264" y="175" width="56" height="22" rx="11" fill="rgba(167,139,250,0.12)" stroke="rgba(167,139,250,0.25)" stroke-width="0.75"/>
+  <text x="292" y="190" font-family="system-ui, sans-serif" font-size="10" fill="rgba(196,181,253,0.85)" text-anchor="middle">Next.js</text>
 
-  <rect x="150" y="192" width="80" height="24" rx="12" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.2)" stroke-width="0.75"/>
-  <text x="190" y="208" font-family="system-ui, sans-serif" font-size="11" fill="rgba(255,255,255,0.8)" text-anchor="middle">RocketRide</text>
+  <rect x="328" y="175" width="80" height="22" rx="11" fill="rgba(167,139,250,0.12)" stroke="rgba(167,139,250,0.25)" stroke-width="0.75"/>
+  <text x="368" y="190" font-family="system-ui, sans-serif" font-size="10" fill="rgba(196,181,253,0.85)" text-anchor="middle">RocketRide</text>
 
-  <rect x="240" y="192" width="52" height="24" rx="12" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.2)" stroke-width="0.75"/>
-  <text x="266" y="208" font-family="system-ui, sans-serif" font-size="11" fill="rgba(255,255,255,0.8)" text-anchor="middle">Neo4j</text>
+  <rect x="416" y="175" width="50" height="22" rx="11" fill="rgba(167,139,250,0.12)" stroke="rgba(167,139,250,0.25)" stroke-width="0.75"/>
+  <text x="441" y="190" font-family="system-ui, sans-serif" font-size="10" fill="rgba(196,181,253,0.85)" text-anchor="middle">Neo4j</text>
 
-  <rect x="302" y="192" width="74" height="24" rx="12" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.2)" stroke-width="0.75"/>
-  <text x="339" y="208" font-family="system-ui, sans-serif" font-size="11" fill="rgba(255,255,255,0.8)" text-anchor="middle">PostgreSQL</text>
+  <rect x="474" y="175" width="74" height="22" rx="11" fill="rgba(167,139,250,0.12)" stroke="rgba(167,139,250,0.25)" stroke-width="0.75"/>
+  <text x="511" y="190" font-family="system-ui, sans-serif" font-size="10" fill="rgba(196,181,253,0.85)" text-anchor="middle">PostgreSQL</text>
 
-  <rect x="386" y="192" width="56" height="24" rx="12" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.2)" stroke-width="0.75"/>
-  <text x="414" y="208" font-family="system-ui, sans-serif" font-size="11" fill="rgba(255,255,255,0.8)" text-anchor="middle">Claude</text>
+  <rect x="556" y="175" width="54" height="22" rx="11" fill="rgba(167,139,250,0.12)" stroke="rgba(167,139,250,0.25)" stroke-width="0.75"/>
+  <text x="583" y="190" font-family="system-ui, sans-serif" font-size="10" fill="rgba(196,181,253,0.85)" text-anchor="middle">Claude</text>
 </svg>
