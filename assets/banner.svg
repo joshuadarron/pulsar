@@ -108,7 +108,7 @@
   <text x="260" y="125" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="52" font-weight="700" fill="white" letter-spacing="-1.5">Pulsar</text>
 
   <!-- Subtitle -->
-  <text x="264" y="155" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="16" fill="rgba(196,181,253,0.8)" letter-spacing="0.5">Automated DevRel Intelligence &amp; Content Agent</text>
+  <text x="264" y="155" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="16" fill="rgba(196,181,253,0.8)" letter-spacing="0.5">Automated AI Market Intelligence &amp; Content Agent</text>
 
   <!-- Tag pills -->
   <rect x="264" y="175" width="56" height="22" rx="11" fill="rgba(167,139,250,0.12)" stroke="rgba(167,139,250,0.25)" stroke-width="0.75"/>

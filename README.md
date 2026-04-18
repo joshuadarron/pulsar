@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="Pulsar — Automated DevRel Intelligence & Content Agent" width="100%"/>
+  <img src="assets/banner.svg" alt="Pulsar — Automated AI Market Intelligence & Content Agent" width="100%"/>
 </p>
 
 # Pulsar
 
-Automated DevRel intelligence and content agent. Scrapes free developer sources twice daily, runs AI analysis via RocketRide pipelines, and outputs trend reports + content drafts for human review.
+Automated AI market intelligence and content agent. Scrapes free developer sources twice daily, runs AI analysis via RocketRide pipelines, and outputs trend reports + content drafts for human review.
 
 ## Architecture
 
