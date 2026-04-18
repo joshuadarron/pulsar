@@ -7,6 +7,7 @@ import { updateTrendScores } from "./trend-scorer.js";
 import { query } from "@/lib/db/postgres";
 import { closeDriver } from "@/lib/db/neo4j";
 import pool from "@/lib/db/postgres";
+import { withRetry } from "@/lib/retry";
 
 async function scrape(sourceFilter?: string, trigger: "scheduled" | "manual" = "manual") {
   // Create run record
@@ -32,7 +33,7 @@ async function scrape(sourceFilter?: string, trigger: "scheduled" | "manual" = "
   for (const [name, adapter] of Object.entries(adapters)) {
     console.log(`Scraping ${name}...`);
     try {
-      const items = await adapter();
+      const items = await withRetry(() => adapter(), 3, 2000);
       totalScraped += items.length;
       console.log(`  Fetched ${items.length} items from ${name}`);
 
