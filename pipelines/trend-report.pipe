@@ -1,0 +1,46 @@
+{
+  "components": [
+    {
+      "id": "webhook_1",
+      "provider": "webhook",
+      "config": { "hideForm": true, "mode": "Source", "parameters": {}, "type": "webhook" }
+    },
+    {
+      "id": "parse_1",
+      "provider": "parse",
+      "config": {},
+      "input": [{ "lane": "tags", "from": "webhook_1" }]
+    },
+    {
+      "id": "question_1",
+      "provider": "question",
+      "config": {
+        "profile": "default",
+        "default": {
+          "question": "You are a DevRel intelligence analyst. You will receive a JSON object containing trending keywords, topics, technologies, entities, and source distributions from the past 7 and 30 days of developer community data. Generate a comprehensive analysis. Return only valid JSON with no preamble: {\"executiveSummary\": \"3-5 sentence high-level overview of the developer ecosystem trends\", \"narrativeAnalysis\": {\"keywords\": \"2-3 paragraph analysis of keyword trends and what they signal\", \"topics\": \"2-3 paragraph analysis of topic momentum and emerging themes\", \"technologies\": \"2-3 paragraph analysis of technology adoption and shifts\", \"opportunities\": \"2-3 paragraph analysis of content creation opportunities\"}, \"contentOpportunities\": [{\"signal\": \"description of the opportunity\", \"source\": \"where the signal came from\", \"url\": \"relevant URL if available\"}], \"emergingTopics\": [\"topic names that are newly trending\"]}"
+        },
+        "parameters": {}
+      },
+      "input": [{ "lane": "text", "from": "parse_1" }]
+    },
+    {
+      "id": "llm_anthropic_1",
+      "provider": "llm_anthropic",
+      "config": {
+        "profile": "claude-sonnet-4-6",
+        "claude-sonnet-4-6": { "apikey": "${ROCKETRIDE_ANTHROPIC_KEY}" },
+        "parameters": {}
+      },
+      "input": [{ "lane": "questions", "from": "question_1" }]
+    },
+    {
+      "id": "response_answers_1",
+      "provider": "response_answers",
+      "config": { "laneName": "answers" },
+      "input": [{ "lane": "answers", "from": "llm_anthropic_1" }]
+    }
+  ],
+  "project_id": "3f10dcc0-9964-4bdc-b44e-a23029b7e0c5",
+  "viewport": { "x": 0, "y": 0, "zoom": 1 },
+  "version": 1
+}

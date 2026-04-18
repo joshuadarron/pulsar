@@ -1,0 +1,46 @@
+{
+  "components": [
+    {
+      "id": "webhook_1",
+      "provider": "webhook",
+      "config": { "hideForm": true, "mode": "Source", "parameters": {}, "type": "webhook" }
+    },
+    {
+      "id": "parse_1",
+      "provider": "parse",
+      "config": {},
+      "input": [{ "lane": "tags", "from": "webhook_1" }]
+    },
+    {
+      "id": "question_1",
+      "provider": "question",
+      "config": {
+        "profile": "default",
+        "default": {
+          "question": "You are a DevRel content strategist. You will receive a JSON object containing a trend report and the top articles from the past 24 hours. Generate content drafts for multiple platforms. Return only valid JSON with no preamble: {\"hashnode\": \"Full markdown article (1500-2500 words). Include title as H1, intro, sections with H2s, code examples where relevant, conclusion.\", \"medium\": \"Same content as hashnode but optimized for Medium formatting.\", \"devto\": \"Same content as hashnode but with DEV.to front matter (title, published, tags).\", \"hackernews\": \"A concise 'Show HN' or 'Ask HN' title with a 2-3 sentence description.\", \"linkedin\": \"Long-form post, 800-1200 words, no markdown, first person, professional tone.\", \"twitter\": \"A numbered thread of 5-8 tweets, each under 280 characters, technical tone.\", \"discord\": \"A short community announcement (2-3 sentences) pointing to the article.\"}"
+        },
+        "parameters": {}
+      },
+      "input": [{ "lane": "text", "from": "parse_1" }]
+    },
+    {
+      "id": "llm_anthropic_1",
+      "provider": "llm_anthropic",
+      "config": {
+        "profile": "claude-sonnet-4-6",
+        "claude-sonnet-4-6": { "apikey": "${ROCKETRIDE_ANTHROPIC_KEY}" },
+        "parameters": {}
+      },
+      "input": [{ "lane": "questions", "from": "question_1" }]
+    },
+    {
+      "id": "response_answers_1",
+      "provider": "response_answers",
+      "config": { "laneName": "answers" },
+      "input": [{ "lane": "answers", "from": "llm_anthropic_1" }]
+    }
+  ],
+  "project_id": "58098179-137c-4676-810b-967e32bb33af",
+  "viewport": { "x": 0, "y": 0, "zoom": 1 },
+  "version": 1
+}
