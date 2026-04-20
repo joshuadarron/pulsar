@@ -53,21 +53,6 @@ export default function Sidebar() {
       </nav>
 
       <div className="border-t border-gray-200 dark:border-neutral-800 p-4 space-y-1">
-        {user && (
-          <div className="flex items-center gap-3 rounded-lg px-3 py-2.5">
-            {user.image ? (
-              <Image src={user.image} alt="" width={28} height={28} className="rounded-full" />
-            ) : (
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
-                {(user.name || user.email || "?").charAt(0).toUpperCase()}
-              </div>
-            )}
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-gray-900 dark:text-neutral-100">{user.name}</p>
-              <p className="truncate text-xs text-gray-400 dark:text-neutral-500">{user.email}</p>
-            </div>
-          </div>
-        )}
         <Link
           href="/settings"
           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
@@ -90,6 +75,21 @@ export default function Sidebar() {
           </svg>
           Sign Out
         </button>
+        {user && (
+          <div className="flex items-center gap-3 rounded-lg px-3 py-2.5 mt-2 border-t border-gray-200 dark:border-neutral-800 pt-3">
+            {user.image ? (
+              <Image src={user.image} alt="" width={28} height={28} className="rounded-full" />
+            ) : (
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                {(user.name || user.email || "?").charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-gray-900 dark:text-neutral-100">{user.name}</p>
+              <p className="truncate text-xs text-gray-400 dark:text-neutral-500">{user.email}</p>
+            </div>
+          </div>
+        )}
       </div>
     </aside>
   );

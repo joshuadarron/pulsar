@@ -21,6 +21,21 @@ async function migratePostgres() {
   `);
 
   await query(`
+    CREATE TABLE IF NOT EXISTS run_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      run_id UUID REFERENCES runs(id) ON DELETE CASCADE,
+      logged_at TIMESTAMPTZ DEFAULT now(),
+      level TEXT DEFAULT 'info',
+      stage TEXT,
+      message TEXT NOT NULL
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_run_logs_run_id ON run_logs (run_id, logged_at)
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS articles_raw (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       url_hash CHAR(64) UNIQUE NOT NULL,

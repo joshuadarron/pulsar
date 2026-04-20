@@ -15,13 +15,13 @@ interface DashboardWidgetsProps {
 }
 
 const SOURCE_COLORS: Record<string, string> = {
-  hackernews: "#ff6600",
+  hackernews: "#ff6b00",
   reddit: "#ff4500",
-  github: "#6e5494",
-  arxiv: "#b31b1b",
-  hashnode: "#2962ff",
-  devto: "#0a0a0a",
-  medium: "#00ab6c",
+  github: "#a855f7",
+  arxiv: "#ef4444",
+  hashnode: "#3b82f6",
+  devto: "#06b6d4",
+  medium: "#22c55e",
   rss: "#f59e0b",
 };
 

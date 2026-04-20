@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 
 interface Run {
   id: string;
@@ -14,17 +15,86 @@ interface Run {
   error_log: string | null;
 }
 
+const PAGE_SIZE = 20;
+
+function formatDuration(startedAt: string, completedAt: string | null): string {
+  const start = new Date(startedAt).getTime();
+  const end = completedAt ? new Date(completedAt).getTime() : Date.now();
+  const seconds = Math.floor((end - start) / 1000);
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+function LiveDuration({ startedAt, completedAt, status }: { startedAt: string; completedAt: string | null; status: string }) {
+  const [display, setDisplay] = useState(() => formatDuration(startedAt, completedAt));
+
+  useEffect(() => {
+    if (status !== "running") {
+      setDisplay(formatDuration(startedAt, completedAt));
+      return;
+    }
+    const timer = setInterval(() => setDisplay(formatDuration(startedAt, null)), 1000);
+    return () => clearInterval(timer);
+  }, [startedAt, completedAt, status]);
+
+  return (
+    <span className="tabular-nums">
+      {display}
+      {status === "running" && <span className="ml-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-500" />}
+    </span>
+  );
+}
+
+type SortKey = "run_type" | "trigger" | "started_at" | "completed_at" | "status" | "articles_scraped" | "articles_new";
+type SortOrder = "asc" | "desc";
+
 export default function RunsPage() {
+  const router = useRouter();
   const [runs, setRuns] = useState<Run[]>([]);
-  const [selectedRun, setSelectedRun] = useState<Run | null>(null);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<SortKey>(() => {
+    if (typeof window !== "undefined") return (localStorage.getItem("runs_sortBy") as SortKey) || "started_at";
+    return "started_at";
+  });
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => {
+    if (typeof window !== "undefined") return (localStorage.getItem("runs_sortOrder") as SortOrder) || "desc";
+    return "desc";
+  });
   const [triggering, setTriggering] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    fetch("/api/runs")
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  function handleSort(key: SortKey) {
+    let newOrder: SortOrder = "desc";
+    if (sortBy === key) {
+      newOrder = sortOrder === "desc" ? "asc" : "desc";
+      setSortOrder(newOrder);
+    } else {
+      setSortBy(key);
+      setSortOrder(newOrder);
+    }
+    localStorage.setItem("runs_sortBy", key);
+    localStorage.setItem("runs_sortOrder", newOrder);
+    setPage(1);
+  }
+
+  const fetchRuns = useCallback(() => {
+    fetch(`/api/runs?page=${page}&limit=${PAGE_SIZE}&sort=${sortBy}&order=${sortOrder}`)
       .then((r) => r.json())
-      .then(setRuns);
-  }, []);
+      .then((data) => {
+        setRuns(data.runs);
+        setTotal(data.total);
+      });
+  }, [page, sortBy, sortOrder]);
+
+  useEffect(() => {
+    fetchRuns();
+    const interval = setInterval(fetchRuns, 3000);
+    return () => clearInterval(interval);
+  }, [fetchRuns]);
 
   async function trigger(type: "scrape" | "pipeline") {
     setTriggering(type);
@@ -36,10 +106,9 @@ export default function RunsPage() {
         body: JSON.stringify({ type }),
       });
       if (res.ok) {
-        setMessage(`${type} triggered successfully. Check run history for progress.`);
-        // Refresh the runs list
-        const updated = await fetch("/api/runs").then((r) => r.json());
-        setRuns(updated);
+        setMessage(`${type} triggered successfully.`);
+        setPage(1);
+        fetchRuns();
       } else {
         setMessage(`Failed to trigger ${type}.`);
       }
@@ -80,13 +149,13 @@ export default function RunsPage() {
         <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
           <thead className="bg-gray-50 dark:bg-neutral-800">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400">Type</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400">Trigger</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400">Started</th>
+              <SortHeader label="Type" sortKey="run_type" current={sortBy} order={sortOrder} onSort={handleSort} />
+              <SortHeader label="Trigger" sortKey="trigger" current={sortBy} order={sortOrder} onSort={handleSort} />
+              <SortHeader label="Started" sortKey="started_at" current={sortBy} order={sortOrder} onSort={handleSort} />
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400">Duration</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400">Status</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400">Articles</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400">New</th>
+              <SortHeader label="Status" sortKey="status" current={sortBy} order={sortOrder} onSort={handleSort} />
+              <SortHeader label="Articles" sortKey="articles_scraped" current={sortBy} order={sortOrder} onSort={handleSort} />
+              <SortHeader label="New" sortKey="articles_new" current={sortBy} order={sortOrder} onSort={handleSort} />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
@@ -95,54 +164,105 @@ export default function RunsPage() {
                 <td colSpan={7} className="px-4 py-8 text-center text-gray-400 dark:text-neutral-500">No runs yet.</td>
               </tr>
             ) : (
-              runs.map((run) => {
-                const duration = run.completed_at
-                  ? `${((new Date(run.completed_at).getTime() - new Date(run.started_at).getTime()) / 1000).toFixed(0)}s`
-                  : "—";
-
-                return (
-                  <tr
-                    key={run.id}
-                    onClick={() => setSelectedRun(run)}
-                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800"
-                  >
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                        run.run_type === "scrape" ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" : "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
-                      }`}>
-                        {run.run_type}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400 capitalize">{run.trigger}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">
-                      {new Date(run.started_at).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">{duration}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                        run.status === "complete" ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" :
-                        run.status === "failed" ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" :
-                        "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
-                      }`}>
-                        {run.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">{run.articles_scraped}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">{run.articles_new}</td>
-                  </tr>
-                );
-              })
+              runs.map((run) => (
+                <tr
+                  key={run.id}
+                  onClick={() => router.push(`/runs/${run.id}`)}
+                  className="cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800"
+                >
+                  <td className="px-4 py-3 text-sm">
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                      run.run_type === "scrape" ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" : "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
+                    }`}>
+                      {run.run_type}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400 capitalize">{run.trigger}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">
+                    {new Date(run.started_at).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">
+                    <LiveDuration startedAt={run.started_at} completedAt={run.completed_at} status={run.status} />
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      run.status === "complete" ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" :
+                      run.status === "failed" ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" :
+                      "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
+                    }`}>
+                      {run.status === "running" && <span className="mr-1.5 h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-500" />}
+                      {run.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">{run.articles_scraped}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">{run.articles_new}</td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>
       </div>
 
-      {selectedRun?.error_log && (
-        <div className="mt-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 p-4">
-          <h3 className="text-sm font-semibold text-red-700 dark:text-red-300">Error Log</h3>
-          <pre className="mt-2 whitespace-pre-wrap text-xs text-red-600 dark:text-red-400">{selectedRun.error_log}</pre>
+      {/* Pagination */}
+      {total > PAGE_SIZE && (
+        <div className="mt-4 flex items-center justify-between">
+          <p className="text-sm text-gray-500 dark:text-neutral-400">
+            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total} runs
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-neutral-300 transition hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-gray-600 dark:text-neutral-400 tabular-nums">
+              {page} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-neutral-300 transition hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
     </div>
+  );
+}
+
+function SortHeader({
+  label,
+  sortKey,
+  current,
+  order,
+  onSort,
+}: {
+  label: string;
+  sortKey: SortKey;
+  current: SortKey;
+  order: SortOrder;
+  onSort: (key: SortKey) => void;
+}) {
+  const active = current === sortKey;
+  return (
+    <th
+      onClick={() => onSort(sortKey)}
+      className="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 transition"
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <svg className={`h-3 w-3 transition ${active ? "opacity-100" : "opacity-0"}`} viewBox="0 0 12 12" fill="currentColor">
+          {order === "desc" ? (
+            <path d="M6 8L2 4h8L6 8z" />
+          ) : (
+            <path d="M6 4L2 8h8L6 4z" />
+          )}
+        </svg>
+      </span>
+    </th>
   );
 }

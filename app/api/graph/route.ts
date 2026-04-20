@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import neo4j from "neo4j-driver";
 import { getSession } from "@/lib/db/neo4j";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const nodeType = searchParams.get("type") || "Topic";
   const limit = Math.min(parseInt(searchParams.get("limit") || "100"), 500);
+
+  const allowedTypes = ["Topic", "Entity", "Article", "Author", "Source"];
+  if (!allowedTypes.includes(nodeType)) {
+    return NextResponse.json({ error: "Invalid node type" }, { status: 400 });
+  }
 
   const session = getSession();
   try {
@@ -21,7 +27,7 @@ export async function GET(request: NextRequest) {
        RETURN n, rels
        ORDER BY coalesce(n.trendScore, 0) DESC
        LIMIT $limit`,
-      { limit },
+      { limit: neo4j.int(limit) },
     );
 
     const nodesMap = new Map<string, { id: string; label: string; type: string; score: number }>();
@@ -72,6 +78,9 @@ export async function GET(request: NextRequest) {
       nodes: Array.from(nodesMap.values()),
       links,
     });
+  } catch (err) {
+    console.error("[Graph API] Error:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   } finally {
     await session.close();
   }

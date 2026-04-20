@@ -59,7 +59,7 @@ export default function ExplorePage() {
 
       ctx.font = "3px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillStyle = "#374151";
+      ctx.fillStyle = document.documentElement.classList.contains("dark") ? "#a3a3a3" : "#374151";
       ctx.fillText(label.slice(0, 20), node.x!, node.y! + size + 4);
     },
     [],
@@ -75,7 +75,7 @@ export default function ExplorePage() {
         <select
           value={nodeType}
           onChange={(e) => setNodeType(e.target.value)}
-          className="rounded-lg border border-gray-300 dark:border-neutral-600 px-3 py-2 text-sm"
+          className="rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-neutral-100 px-3 py-2 text-sm"
         >
           {NODE_TYPES.map((t) => (
             <option key={t} value={t}>{t}s</option>
@@ -101,7 +101,7 @@ export default function ExplorePage() {
               nodeId="id"
               nodeCanvasObject={nodeCanvasObject}
               onNodeClick={handleNodeClick}
-              linkColor={() => "#e5e7eb"}
+              linkColor={() => document.documentElement.classList.contains("dark") ? "#404040" : "#e5e7eb"}
               linkWidth={(link: { weight?: number }) => Math.sqrt((link.weight as number) || 1)}
               width={800}
               height={600}

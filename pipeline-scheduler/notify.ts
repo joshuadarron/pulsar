@@ -64,7 +64,7 @@ export async function sendReportEmail(reportId: string): Promise<void> {
       </div>
 
       <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 24px;">
-        Pulsar — Automated DevRel Intelligence
+        Pulsar — Automated Market Intelligence
       </p>
     </body>
     </html>

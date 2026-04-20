@@ -1,6 +1,22 @@
 // ecosystem.config.cjs
+const path = require("path");
+
+const ROCKETRIDE_SERVER = path.join(
+  require("os").homedir(),
+  "Repositories/RocketRide/rocketride-server/dist/server",
+);
+
 module.exports = {
   apps: [
+    {
+      name: "rocketride",
+      script: "./engine",
+      args: "./ai/eaas.py",
+      interpreter: "none",
+      cwd: ROCKETRIDE_SERVER,
+      autorestart: true,
+      max_memory_restart: "2G",
+    },
     {
       name: "pulsar-web",
       script: "pnpm",
@@ -11,21 +27,21 @@ module.exports = {
       max_memory_restart: "1G",
     },
     {
-      name: "pulsar-scheduler",
+      name: "pulsar-scraper",
       script: "pnpm",
-      args: "run pipeline-scheduler",
+      args: "run scrape-scheduler",
       interpreter: "none",
       cwd: __dirname,
       autorestart: true,
       max_memory_restart: "512M",
     },
     {
-      name: "pulsar-scraper",
+      name: "pulsar-scheduler",
       script: "pnpm",
-      args: "run scrape",
+      args: "run pipeline-scheduler",
       interpreter: "none",
       cwd: __dirname,
-      autorestart: true,          // only if scraper/index.ts self-schedules with node-cron
+      autorestart: true,
       max_memory_restart: "512M",
     },
   ],

@@ -7,8 +7,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "scrape": "tsx scraper/index.ts",
+    "scrape": "tsx scraper/run-once.ts",
+    "scrape-scheduler": "tsx scraper/scheduler.ts",
     "pipeline-scheduler": "tsx pipeline-scheduler/index.ts",
+    "pipeline": "tsx pipeline-scheduler/run-once.ts",
     "db:migrate": "tsx lib/db/migrate.ts"
   },
   "dependencies": {

@@ -27,7 +27,7 @@
       "config": {
         "profile": "default",
         "default": {
-          "question": "You are a DevRel intelligence analyst. You will receive a JSON object containing trending keywords, topics, technologies, entities, and source distributions from the past 7 and 30 days of developer community data. Generate a comprehensive analysis. Return only valid JSON with no preamble: {\"executiveSummary\": \"3-5 sentence high-level overview of the developer ecosystem trends\", \"narrativeAnalysis\": {\"keywords\": \"2-3 paragraph analysis of keyword trends and what they signal\", \"topics\": \"2-3 paragraph analysis of topic momentum and emerging themes\", \"technologies\": \"2-3 paragraph analysis of technology adoption and shifts\", \"opportunities\": \"2-3 paragraph analysis of content creation opportunities\"}, \"contentOpportunities\": [{\"signal\": \"description of the opportunity\", \"source\": \"where the signal came from\", \"url\": \"relevant URL if available\"}], \"emergingTopics\": [\"topic names that are newly trending\"]}"
+          "question": "You are a market intelligence analyst. You will receive a JSON object containing trending keywords, topics, technologies, entities, and source distributions from the past 7 and 30 days of developer community data. Generate a comprehensive analysis. Return only valid JSON with no preamble: {\"executiveSummary\": \"3-5 sentence high-level overview of the developer ecosystem trends\", \"narrativeAnalysis\": {\"keywords\": \"2-3 paragraph analysis of keyword trends and what they signal\", \"topics\": \"2-3 paragraph analysis of topic momentum and emerging themes\", \"technologies\": \"2-3 paragraph analysis of technology adoption and shifts\", \"opportunities\": \"2-3 paragraph analysis of content creation opportunities\"}, \"contentOpportunities\": [{\"signal\": \"description of the opportunity\", \"source\": \"where the signal came from\", \"url\": \"relevant URL if available\"}], \"emergingTopics\": [\"topic names that are newly trending\"]}"
         },
         "parameters": {}
       },
@@ -43,7 +43,7 @@
       "provider": "agent_rocketride",
       "config": {
         "instructions": [
-          "You are a DevRel intelligence analyst. Analyze developer ecosystem data and produce comprehensive trend reports with actionable insights."
+          "You are a market intelligence analyst. Analyze developer ecosystem data and produce comprehensive trend reports with actionable insights."
         ],
         "max_waves": 10,
         "parameters": {}
@@ -99,7 +99,7 @@
       ]
     }
   ],
-  "project_id": "edc6b3ca-9f0f-495f-883f-644c2bbba593",
+  "project_id": "0d2c060e-2e92-42b0-a56e-d175fe5fcf01",
   "viewport": {
     "x": 0,
     "y": 0,

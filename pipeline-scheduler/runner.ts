@@ -1,13 +1,15 @@
 import { getClient, disconnectClient } from "@/lib/rocketride";
 import { query } from "@/lib/db/postgres";
 import { getSession } from "@/lib/db/neo4j";
+import { logRun } from "@/lib/run-logger";
+import { extractJson } from "@/lib/parse-json";
 import type { ReportData } from "@/types";
 import path from "path";
 
 const PIPELINES_DIR = path.join(process.cwd(), "pipelines");
 
-async function runSummarization(client: Awaited<ReturnType<typeof getClient>>) {
-  console.log("[Pipeline] Running summarization...");
+async function runSummarization(client: Awaited<ReturnType<typeof getClient>>, runId: string) {
+  await logRun(runId, "info", "summarization", "Starting summarization pipeline...");
 
   // Get unenriched articles from last 24h
   const articles = await query<{
@@ -24,17 +26,20 @@ async function runSummarization(client: Awaited<ReturnType<typeof getClient>>) {
   );
 
   if (articles.rows.length === 0) {
-    console.log("[Pipeline] No unenriched articles found.");
+    await logRun(runId, "warn", "summarization", "No unenriched articles found.");
     return;
   }
 
-  console.log(`[Pipeline] Enriching ${articles.rows.length} articles...`);
+  await logRun(runId, "info", "summarization", `Enriching ${articles.rows.length} articles...`);
 
   // Start the summarization pipeline
   const result = await client.use({
     filepath: path.join(PIPELINES_DIR, "summarization.pipe"),
   });
   const token = result.token;
+
+  let enriched = 0;
+  let failed = 0;
 
   for (const article of articles.rows) {
     // Get raw content
@@ -60,7 +65,7 @@ async function runSummarization(client: Awaited<ReturnType<typeof getClient>>) {
 
       if (response?.answers && response.answers.length > 0) {
         const answer = response.answers[0];
-        enrichment = typeof answer === "string" ? JSON.parse(answer) : answer;
+        enrichment = typeof answer === "string" ? extractJson(answer) : answer;
       }
 
       // Update article with enriched data
@@ -82,26 +87,30 @@ async function runSummarization(client: Awaited<ReturnType<typeof getClient>>) {
           article.id,
         ],
       );
+      enriched++;
     } catch (err) {
-      console.error(`[Pipeline] Failed to enrich article ${article.id}:`, err);
+      failed++;
+      await logRun(runId, "error", "summarization", `Failed to enrich article ${article.id}: ${err}`);
     }
   }
 
   await client.terminate(token);
-  console.log("[Pipeline] Summarization complete.");
+  await logRun(runId, "success", "summarization", `Summarization complete: ${enriched} enriched, ${failed} failed out of ${articles.rows.length}`);
 }
 
 async function runTrendReport(
   client: Awaited<ReturnType<typeof getClient>>,
   runId: string,
 ): Promise<string | null> {
-  console.log("[Pipeline] Running trend report...");
+  await logRun(runId, "info", "trend-report", "Starting trend report pipeline...");
 
   // Gather trend data from Neo4j
   const session = getSession();
   let trendData: Record<string, unknown>;
 
   try {
+    await logRun(runId, "info", "trend-report", "Querying Neo4j for trend data...");
+
     // Trending topics (7d)
     const topicsResult = await session.run(
       `MATCH (t:Topic)
@@ -197,6 +206,8 @@ async function runTrendReport(
     );
     const articleCount = parseInt(countResult.rows[0].count);
 
+    await logRun(runId, "info", "trend-report", `Trend data gathered: ${articleCount} articles, ${trendingTopics.length} topics, ${entityProminence.length} entities`);
+
     trendData = {
       articleCount,
       trendingKeywords: trendingKeywordsWithDelta,
@@ -210,6 +221,8 @@ async function runTrendReport(
   }
 
   // Send to RocketRide for narrative analysis
+  await logRun(runId, "info", "trend-report", "Sending data to AI for narrative analysis...");
+
   const result = await client.use({
     filepath: path.join(PIPELINES_DIR, "trend-report.pipe"),
   });
@@ -233,7 +246,7 @@ async function runTrendReport(
 
   if (response?.answers && response.answers.length > 0) {
     const answer = response.answers[0];
-    aiAnalysis = typeof answer === "string" ? JSON.parse(answer) : answer;
+    aiAnalysis = typeof answer === "string" ? extractJson(answer) : answer;
   }
 
   const now = new Date();
@@ -293,7 +306,7 @@ async function runTrendReport(
   );
 
   const reportId = reportResult.rows[0].id;
-  console.log(`[Pipeline] Trend report saved: ${reportId}`);
+  await logRun(runId, "success", "trend-report", `Trend report saved: ${reportId}`);
   return reportId;
 }
 
@@ -302,7 +315,7 @@ async function runContentDrafts(
   runId: string,
   reportId: string,
 ) {
-  console.log("[Pipeline] Running content drafts...");
+  await logRun(runId, "info", "content-drafts", "Starting content drafts pipeline...");
 
   // Get latest report
   const reportResult = await query<{ report_data: ReportData }>(
@@ -318,6 +331,8 @@ async function runContentDrafts(
      ORDER BY score DESC NULLS LAST LIMIT 10`,
   );
 
+  await logRun(runId, "info", "content-drafts", `Using ${articlesResult.rows.length} top articles for draft generation`);
+
   const payload = {
     report: {
       executiveSummary: reportData.executiveSummary,
@@ -329,6 +344,8 @@ async function runContentDrafts(
   };
 
   // Send to RocketRide
+  await logRun(runId, "info", "content-drafts", "Sending data to AI for draft generation...");
+
   const result = await client.use({
     filepath: path.join(PIPELINES_DIR, "content-drafts.pipe"),
   });
@@ -346,7 +363,7 @@ async function runContentDrafts(
   let drafts: Record<string, string> = {};
   if (response?.answers && response.answers.length > 0) {
     const answer = response.answers[0];
-    drafts = typeof answer === "string" ? JSON.parse(answer) : answer;
+    drafts = typeof answer === "string" ? extractJson(answer) : answer;
   }
 
   // Save each draft
@@ -370,7 +387,7 @@ async function runContentDrafts(
     );
   }
 
-  console.log(`[Pipeline] Content drafts saved for ${Object.keys(drafts).length} platforms.`);
+  await logRun(runId, "success", "content-drafts", `Content drafts saved for ${Object.keys(drafts).length} platforms`);
 }
 
 export async function runAllPipelines(trigger: "scheduled" | "manual" = "scheduled") {
@@ -382,10 +399,12 @@ export async function runAllPipelines(trigger: "scheduled" | "manual" = "schedul
   const runId = runResult.rows[0].id;
 
   try {
+    await logRun(runId, "info", "init", `Pipeline run started (trigger: ${trigger})`);
     const client = await getClient();
+    await logRun(runId, "info", "init", "Connected to RocketRide");
 
     // Sequential pipeline execution
-    await runSummarization(client);
+    await runSummarization(client, runId);
     const reportId = await runTrendReport(client, runId);
 
     if (reportId) {
@@ -397,9 +416,10 @@ export async function runAllPipelines(trigger: "scheduled" | "manual" = "schedul
       [runId],
     );
 
-    console.log(`[Pipeline] All pipelines complete. Run: ${runId}`);
+    await logRun(runId, "success", "complete", "All pipelines complete");
     return { runId, reportId };
   } catch (err) {
+    await logRun(runId, "error", "fatal", `Pipeline failed: ${err}`);
     await query(
       "UPDATE runs SET completed_at = now(), status = 'failed', error_log = $1 WHERE id = $2",
       [String(err), runId],

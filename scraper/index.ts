@@ -1,22 +1,20 @@
-import "dotenv/config";
 import { sources } from "./sources/index.js";
 import { hashUrl, exists } from "./dedup.js";
 import { extractKeywords, extractEntities, categorizeSource } from "./extract.js";
 import { writeArticleToGraph } from "./graph-writer.js";
 import { updateTrendScores } from "./trend-scorer.js";
 import { query } from "@/lib/db/postgres";
-import { closeDriver } from "@/lib/db/neo4j";
-import pool from "@/lib/db/postgres";
 import { withRetry } from "@/lib/retry";
+import { logRun } from "@/lib/run-logger";
 
-async function scrape(sourceFilter?: string, trigger: "scheduled" | "manual" = "manual") {
+export async function scrape(sourceFilter?: string, trigger: "scheduled" | "manual" = "manual") {
   // Create run record
   const runResult = await query<{ id: string }>(
     "INSERT INTO runs (trigger, run_type) VALUES ($1, 'scrape') RETURNING id",
     [trigger],
   );
   const runId = runResult.rows[0].id;
-  console.log(`Run ${runId} started (trigger: ${trigger})`);
+  await logRun(runId, "info", "init", `Scrape run started (trigger: ${trigger})`);
 
   let totalScraped = 0;
   let totalNew = 0;
@@ -26,17 +24,21 @@ async function scrape(sourceFilter?: string, trigger: "scheduled" | "manual" = "
     : sources;
 
   if (sourceFilter && !sources[sourceFilter]) {
-    console.error(`Unknown source: ${sourceFilter}. Available: ${Object.keys(sources).join(", ")}`);
-    process.exit(1);
+    await logRun(runId, "error", "init", `Unknown source: ${sourceFilter}. Available: ${Object.keys(sources).join(", ")}`);
+    return;
   }
 
+  const sourceNames = Object.keys(adapters);
+  await logRun(runId, "info", "init", `Scraping ${sourceNames.length} sources: ${sourceNames.join(", ")}`);
+
   for (const [name, adapter] of Object.entries(adapters)) {
-    console.log(`Scraping ${name}...`);
+    await logRun(runId, "info", name, `Scraping ${name}...`);
     try {
       const items = await withRetry(() => adapter(), 3, 2000);
       totalScraped += items.length;
-      console.log(`  Fetched ${items.length} items from ${name}`);
+      await logRun(runId, "info", name, `Fetched ${items.length} items from ${name}`);
 
+      let sourceNew = 0;
       for (const item of items) {
         const urlHash = hashUrl(item.url);
 
@@ -78,12 +80,19 @@ async function scrape(sourceFilter?: string, trigger: "scheduled" | "manual" = "
         // Write to Neo4j
         await writeArticleToGraph(item, articleResult.rows[0].id, keywords, entities, category);
 
+        sourceNew++;
         totalNew++;
       }
 
-      console.log(`  ${name}: ${totalNew} new articles inserted`);
+      await logRun(runId, "success", name, `${name} complete: ${items.length} scraped, ${sourceNew} new`);
+
+      // Update running counts
+      await query(
+        "UPDATE runs SET articles_scraped = $1, articles_new = $2 WHERE id = $3",
+        [totalScraped, totalNew, runId],
+      );
     } catch (err) {
-      console.error(`  Error scraping ${name}:`, err);
+      await logRun(runId, "error", name, `Error scraping ${name}: ${err}`);
       await query(
         "UPDATE runs SET error_log = COALESCE(error_log, '') || $1 WHERE id = $2",
         [`\n[${name}] ${err}`, runId],
@@ -92,7 +101,9 @@ async function scrape(sourceFilter?: string, trigger: "scheduled" | "manual" = "
   }
 
   // Update trend scores
+  await logRun(runId, "info", "trend-scores", "Updating trend scores...");
   await updateTrendScores();
+  await logRun(runId, "success", "trend-scores", "Trend scores updated");
 
   // Complete run
   await query(
@@ -100,24 +111,5 @@ async function scrape(sourceFilter?: string, trigger: "scheduled" | "manual" = "
     [totalScraped, totalNew, runId],
   );
 
-  console.log(`Run ${runId} complete. Scraped: ${totalScraped}, New: ${totalNew}`);
+  await logRun(runId, "success", "complete", `Scrape complete. Scraped: ${totalScraped}, New: ${totalNew}`);
 }
-
-// CLI entry point
-const args = process.argv.slice(2);
-let sourceFilter: string | undefined;
-for (const arg of args) {
-  if (arg.startsWith("--source=")) {
-    sourceFilter = arg.split("=")[1];
-  }
-}
-
-scrape(sourceFilter)
-  .catch((err) => {
-    console.error("Fatal scrape error:", err);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await closeDriver();
-    await pool.end();
-  });

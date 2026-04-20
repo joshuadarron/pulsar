@@ -3,8 +3,8 @@ import ThemeProvider from "@/components/ThemeProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Pulsar — DevRel Intelligence",
-  description: "Automated DevRel intelligence and content agent",
+  title: "Pulsar — AI Market Intelligence",
+  description: "Automated market intelligence and content agent",
 };
 
 export default function RootLayout({

@@ -1,8 +1,8 @@
-# PRD: Pulsar — Automated DevRel Intelligence & Content Agent
+# PRD: Pulsar — Automated Market Intelligence & Content Agent
 
 ## Purpose
 
-Joshua spends too much time on the marketing and community side of DevRel. Pulsar automates the majority of that surface area: content research, trend analysis, draft generation, and reporting. The goal is to get DevRel-related time spend to under 15% of the work week, with the rest freed for building.
+Joshua spends too much time on manual market research and content creation. Pulsar automates the majority of that surface area: content research, trend analysis, draft generation, and reporting. The goal is to get marketing-related time spend to under 15% of the work week, with the rest freed for building.
 
 This system is a programmatic data pipeline that feeds a RocketRide AI layer, which does the intelligence work and outputs structured reports and content drafts for human review.
 

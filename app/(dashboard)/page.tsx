@@ -60,7 +60,7 @@ export default async function DashboardPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">Dashboard</h1>
-      <p className="mt-1 text-gray-500 dark:text-neutral-400">Overview of your DevRel intelligence pipeline</p>
+      <p className="mt-1 text-gray-500 dark:text-neutral-400">Overview of your market intelligence pipeline</p>
 
       {/* Stat Cards */}
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
