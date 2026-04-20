@@ -7,7 +7,7 @@ export default function TopicsSparkline({ data }: { data: TrendingTopic[] }) {
     <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
       <h3 className="mb-4 text-sm font-semibold text-gray-700 dark:text-neutral-300 uppercase">Trending Topics</h3>
       <div className="space-y-3">
-        {data.slice(0, 10).map((topic, i) => (
+        {data.slice(0, 5).map((topic, i) => (
           <div key={topic.topic} className="flex items-center gap-3">
             <span className="w-6 text-right text-sm font-medium text-gray-400 dark:text-neutral-500">{i + 1}</span>
             <div className="flex-1">

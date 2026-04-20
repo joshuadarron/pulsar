@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import type { ReportData } from "@/types";
@@ -10,7 +11,7 @@ interface DashboardWidgetsProps {
   sentimentDist: { sentiment: string; count: number }[];
   draftStatus: { status: string; count: number }[];
   recentArticles: { id: string; title: string; source_platform: string; sentiment: string; published_at: string; score: number }[];
-  recentRuns: { id: string; started_at: string; status: string; run_type: string; articles_new: number; articles_scraped: number }[];
+  recentRuns: { id: string; started_at: string; completed_at: string | null; status: string; trigger: string; run_type: string; articles_new: number; articles_scraped: number }[];
   successRate: number;
 }
 
@@ -46,12 +47,80 @@ export default function DashboardWidgets({
   recentRuns,
   successRate,
 }: DashboardWidgetsProps) {
-  const topKeywords = latestReport?.report_data?.trendingKeywords?.slice(0, 8) || [];
-  const topTopics = latestReport?.report_data?.trendingTopics?.slice(0, 6) || [];
+  const topKeywords = latestReport?.report_data?.trendingKeywords?.slice(0, 5) || [];
+  const topTopics = latestReport?.report_data?.trendingTopics?.slice(0, 5) || [];
 
   return (
     <>
-      {/* Row 2: Latest Report + Trending Keywords */}
+      {/* Recent Runs */}
+      <div className="mt-6 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase text-gray-500 dark:text-neutral-400">Recent Runs</h2>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="text-gray-500 dark:text-neutral-400">Success rate:</span>
+              <span className={`font-semibold ${successRate >= 80 ? "text-green-600 dark:text-green-400" : successRate >= 50 ? "text-yellow-600 dark:text-yellow-400" : "text-red-600 dark:text-red-400"}`}>
+                {successRate}%
+              </span>
+            </div>
+            <Link href="/runs" className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">
+              All Runs
+            </Link>
+          </div>
+        </div>
+        <div className="mt-3 overflow-x-auto">
+          <table className="min-w-full">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-neutral-800">
+                <th className="pb-2 text-left text-xs font-medium text-gray-400 dark:text-neutral-500">Type</th>
+                <th className="pb-2 text-left text-xs font-medium text-gray-400 dark:text-neutral-500">Trigger</th>
+                <th className="pb-2 text-left text-xs font-medium text-gray-400 dark:text-neutral-500">Started</th>
+                <th className="pb-2 text-left text-xs font-medium text-gray-400 dark:text-neutral-500">Duration</th>
+                <th className="pb-2 text-left text-xs font-medium text-gray-400 dark:text-neutral-500">Status</th>
+                <th className="pb-2 text-right text-xs font-medium text-gray-400 dark:text-neutral-500">Scraped</th>
+                <th className="pb-2 text-right text-xs font-medium text-gray-400 dark:text-neutral-500">New</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentRuns.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-6 text-center text-sm text-gray-400 dark:text-neutral-500">No runs yet.</td>
+                </tr>
+              ) : (
+                recentRuns.map((run) => (
+                  <tr key={run.id} className="border-b border-gray-50 dark:border-neutral-800 last:border-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800" onClick={() => window.location.href = `/runs/${run.id}`}>
+                    <td className="py-2 text-sm">
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                        run.run_type === "scrape" ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" : "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
+                      }`}>{run.run_type}</span>
+                    </td>
+                    <td className="py-2 text-sm text-gray-600 dark:text-neutral-400 capitalize">{run.trigger}</td>
+                    <td className="py-2 text-sm text-gray-600 dark:text-neutral-400">{new Date(run.started_at).toLocaleString()}</td>
+                    <td className="py-2 text-sm text-gray-600 dark:text-neutral-400">
+                      <LiveDuration startedAt={run.started_at} completedAt={run.completed_at} status={run.status} />
+                    </td>
+                    <td className="py-2 text-sm">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                        run.status === "complete" ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" :
+                        run.status === "failed" ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" :
+                        run.status === "cancelled" ? "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300" :
+                        "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
+                      }`}>
+                        {run.status === "running" && <span className="mr-1.5 h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-500" />}
+                        {run.status}
+                      </span>
+                    </td>
+                    <td className="py-2 text-right text-sm text-gray-600 dark:text-neutral-400">{run.articles_scraped}</td>
+                    <td className="py-2 text-right text-sm text-gray-600 dark:text-neutral-400">{run.articles_new}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Latest Report + Trending Keywords */}
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Latest Report */}
         <div className="lg:col-span-2 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
@@ -104,7 +173,7 @@ export default function DashboardWidgets({
                     contentStyle={{ backgroundColor: "var(--tooltip-bg, #fff)", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12 }}
                     formatter={(value: number) => [value, "7d mentions"]}
                   />
-                  <Bar dataKey="count7d" fill="#7c3aed" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="count7d" fill="#7c3aed" radius={[0, 4, 4, 0]} barSize={20} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -322,71 +391,38 @@ export default function DashboardWidgets({
         </div>
       </div>
 
-      {/* Row 5: Recent Runs */}
-      <div className="mt-4 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase text-gray-500 dark:text-neutral-400">Recent Runs</h2>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-gray-500 dark:text-neutral-400">Success rate:</span>
-              <span className={`font-semibold ${successRate >= 80 ? "text-green-600 dark:text-green-400" : successRate >= 50 ? "text-yellow-600 dark:text-yellow-400" : "text-red-600 dark:text-red-400"}`}>
-                {successRate}%
-              </span>
-            </div>
-            <Link href="/runs" className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">
-              All Runs
-            </Link>
-          </div>
-        </div>
-        <div className="mt-3 overflow-x-auto">
-          <table className="min-w-full">
-            <thead>
-              <tr className="border-b border-gray-100 dark:border-neutral-800">
-                <th className="pb-2 text-left text-xs font-medium text-gray-400 dark:text-neutral-500">Type</th>
-                <th className="pb-2 text-left text-xs font-medium text-gray-400 dark:text-neutral-500">Started</th>
-                <th className="pb-2 text-left text-xs font-medium text-gray-400 dark:text-neutral-500">Status</th>
-                <th className="pb-2 text-right text-xs font-medium text-gray-400 dark:text-neutral-500">Scraped</th>
-                <th className="pb-2 text-right text-xs font-medium text-gray-400 dark:text-neutral-500">New</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentRuns.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-6 text-center text-sm text-gray-400 dark:text-neutral-500">No runs yet.</td>
-                </tr>
-              ) : (
-                recentRuns.map((run) => (
-                  <tr key={run.id} className="border-b border-gray-50 dark:border-neutral-800 last:border-0">
-                    <td className="py-2 text-sm">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                        run.run_type === "scrape"
-                          ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
-                          : "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
-                      }`}>
-                        {run.run_type}
-                      </span>
-                    </td>
-                    <td className="py-2 text-sm text-gray-600 dark:text-neutral-400">
-                      {new Date(run.started_at).toLocaleString()}
-                    </td>
-                    <td className="py-2 text-sm">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                        run.status === "complete" ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" :
-                        run.status === "failed" ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" :
-                        "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
-                      }`}>
-                        {run.status}
-                      </span>
-                    </td>
-                    <td className="py-2 text-right text-sm text-gray-600 dark:text-neutral-400">{run.articles_scraped}</td>
-                    <td className="py-2 text-right text-sm text-gray-600 dark:text-neutral-400">{run.articles_new}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </>
+  );
+}
+
+function formatDuration(startedAt: string, completedAt: string | null): string {
+  const start = new Date(startedAt).getTime();
+  const end = completedAt ? new Date(completedAt).getTime() : Date.now();
+  const total = Math.floor((end - start) / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function LiveDuration({ startedAt, completedAt, status }: { startedAt: string; completedAt: string | null; status: string }) {
+  const [display, setDisplay] = useState(() => formatDuration(startedAt, completedAt));
+
+  useEffect(() => {
+    if (status !== "running") {
+      setDisplay(formatDuration(startedAt, completedAt));
+      return;
+    }
+    const timer = setInterval(() => setDisplay(formatDuration(startedAt, null)), 1000);
+    return () => clearInterval(timer);
+  }, [startedAt, completedAt, status]);
+
+  return (
+    <span className="tabular-nums">
+      {display}
+      {status === "running" && <span className="ml-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-500" />}
+    </span>
   );
 }

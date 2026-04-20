@@ -16,7 +16,7 @@ export default function VelocityTable({ data }: { data: VelocityOutlier[] }) {
           </tr>
         </thead>
         <tbody>
-          {data.slice(0, 10).map((item) => {
+          {data.slice(0, 5).map((item) => {
             const delta = item.baseline > 0 ? ((item.spike - item.baseline) / item.baseline) * 100 : 0;
             return (
               <tr key={item.topic} className="border-b border-gray-100 dark:border-neutral-800">

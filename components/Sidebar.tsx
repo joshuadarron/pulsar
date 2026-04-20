@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -18,6 +19,27 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const user = session?.user;
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    function fetchUnread() {
+      fetch("/api/notifications?unread=true")
+        .then((r) => r.json())
+        .then((data) => setUnreadCount(data.unreadCount))
+        .catch(() => {});
+    }
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 10000);
+
+    // Listen for notification read events from the notifications page
+    function onRead() { fetchUnread(); }
+    window.addEventListener("notification-read", onRead);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("notification-read", onRead);
+    };
+  }, []);
 
   return (
     <aside className="no-print flex h-screen w-64 flex-col border-r border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
@@ -50,9 +72,30 @@ export default function Sidebar() {
             </Link>
           );
         })}
+
       </nav>
 
       <div className="border-t border-gray-200 dark:border-neutral-800 p-4 space-y-1">
+        <Link
+          href="/notifications"
+          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+            pathname.startsWith("/notifications")
+              ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
+              : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+          }`}
+        >
+          <div className="relative h-5 w-5 flex-shrink-0">
+            <svg className={`h-5 w-5 ${unreadCount > 0 ? "text-red-500" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+            </svg>
+            {unreadCount > 0 && (
+              <span className="absolute -right-2 -top-2 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                {unreadCount > 10 ? "10+" : unreadCount}
+              </span>
+            )}
+          </div>
+          Notifications
+        </Link>
         <Link
           href="/settings"
           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${

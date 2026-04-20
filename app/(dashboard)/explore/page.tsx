@@ -93,25 +93,12 @@ export default function ExplorePage() {
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900" style={{ height: 600 }}>
-          {graphData.nodes.length > 0 ? (
-            <ForceGraph2D
-              ref={graphRef as React.MutableRefObject<null>}
-              graphData={graphData}
-              nodeId="id"
-              nodeCanvasObject={nodeCanvasObject}
-              onNodeClick={handleNodeClick}
-              linkColor={() => document.documentElement.classList.contains("dark") ? "#404040" : "#e5e7eb"}
-              linkWidth={(link: { weight?: number }) => Math.sqrt((link.weight as number) || 1)}
-              width={800}
-              height={600}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-gray-400 dark:text-neutral-500">
-              No graph data available. Run a scrape first.
-            </div>
-          )}
-        </div>
+        <GraphCanvas
+          graphRef={graphRef}
+          graphData={graphData}
+          nodeCanvasObject={nodeCanvasObject}
+          handleNodeClick={handleNodeClick}
+        />
 
         <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
           <h3 className="text-sm font-semibold text-gray-700 dark:text-neutral-300 uppercase">Node Details</h3>
@@ -136,6 +123,59 @@ export default function ExplorePage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function GraphCanvas({
+  graphRef,
+  graphData,
+  nodeCanvasObject,
+  handleNodeClick,
+}: {
+  graphRef: React.MutableRefObject<{ centerAt: (x: number, y: number, ms: number) => void } | null>;
+  graphData: { nodes: GraphNode[]; links: GraphLink[] };
+  nodeCanvasObject: (node: Record<string, unknown>, ctx: CanvasRenderingContext2D) => void;
+  handleNodeClick: (node: Record<string, unknown>) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(600);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(containerRef.current);
+    setWidth(containerRef.current.clientWidth);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      className="lg:col-span-2 overflow-hidden rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900"
+      style={{ height: 600 }}
+    >
+      {graphData.nodes.length > 0 ? (
+        <ForceGraph2D
+          ref={graphRef as React.MutableRefObject<null>}
+          graphData={graphData}
+          nodeId="id"
+          nodeCanvasObject={nodeCanvasObject}
+          onNodeClick={handleNodeClick}
+          linkColor={() => document.documentElement.classList.contains("dark") ? "#404040" : "#e5e7eb"}
+          linkWidth={(link: { weight?: number }) => Math.sqrt((link.weight as number) || 1)}
+          width={width}
+          height={600}
+        />
+      ) : (
+        <div className="flex h-full items-center justify-center text-gray-400 dark:text-neutral-500">
+          No graph data available. Run a scrape first.
+        </div>
+      )}
     </div>
   );
 }

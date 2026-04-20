@@ -9,7 +9,7 @@ export default function CoOccurrenceHeatmap({ data }: { data: TopicCoOccurrence[
     <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
       <h3 className="mb-4 text-sm font-semibold text-gray-700 dark:text-neutral-300 uppercase">Topic Co-occurrence</h3>
       <div className="space-y-2">
-        {data.slice(0, 10).map((item, i) => (
+        {data.slice(0, 5).map((item, i) => (
           <div key={i} className="flex items-center gap-2">
             <span className="w-24 truncate text-right text-xs text-gray-600 dark:text-neutral-400">{item.topicA}</span>
             <div className="flex-1">

@@ -20,10 +20,13 @@ const PAGE_SIZE = 20;
 function formatDuration(startedAt: string, completedAt: string | null): string {
   const start = new Date(startedAt).getTime();
   const end = completedAt ? new Date(completedAt).getTime() : Date.now();
-  const seconds = Math.floor((end - start) / 1000);
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  const total = Math.floor((end - start) / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 function LiveDuration({ startedAt, completedAt, status }: { startedAt: string; completedAt: string | null; status: string }) {
@@ -64,6 +67,7 @@ export default function RunsPage() {
   });
   const [triggering, setTriggering] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [runningTypes, setRunningTypes] = useState<Record<string, string>>({});
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -82,12 +86,14 @@ export default function RunsPage() {
   }
 
   const fetchRuns = useCallback(() => {
-    fetch(`/api/runs?page=${page}&limit=${PAGE_SIZE}&sort=${sortBy}&order=${sortOrder}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setRuns(data.runs);
-        setTotal(data.total);
-      });
+    Promise.all([
+      fetch(`/api/runs?page=${page}&limit=${PAGE_SIZE}&sort=${sortBy}&order=${sortOrder}`).then((r) => r.json()),
+      fetch("/api/runs/trigger").then((r) => r.json()),
+    ]).then(([runsData, statusData]) => {
+      setRuns(runsData.runs);
+      setTotal(runsData.total);
+      setRunningTypes(statusData.running);
+    });
   }, [page, sortBy, sortOrder]);
 
   useEffect(() => {
@@ -105,10 +111,24 @@ export default function RunsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type }),
       });
+      if (res.status === 409) {
+        const data = await res.json();
+        setMessage(data.error);
+        return;
+      }
       if (res.ok) {
         setMessage(`${type} triggered successfully.`);
         setPage(1);
-        fetchRuns();
+        // Poll rapidly until the new run appears
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          const r = await fetch(`/api/runs?page=1&limit=${PAGE_SIZE}&sort=${sortBy}&order=${sortOrder}`);
+          const data = await r.json();
+          setRuns(data.runs);
+          setTotal(data.total);
+          attempts++;
+          if (attempts >= 10 || data.runs[0]?.status === "running") clearInterval(poll);
+        }, 500);
       } else {
         setMessage(`Failed to trigger ${type}.`);
       }
@@ -129,21 +149,21 @@ export default function RunsPage() {
         <div className="flex gap-3">
           <button
             onClick={() => trigger("scrape")}
-            disabled={triggering !== null}
+            disabled={triggering !== null || "scrape" in runningTypes}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {triggering === "scrape" ? "Running..." : "Run Scrape Now"}
+            {triggering === "scrape" ? "Triggering..." : "scrape" in runningTypes ? "Scrape Running..." : "Run Scrape Now"}
           </button>
           <button
             onClick={() => trigger("pipeline")}
-            disabled={triggering !== null}
+            disabled={triggering !== null || "pipeline" in runningTypes}
             className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
           >
-            {triggering === "pipeline" ? "Running..." : "Run Pipeline Now"}
+            {triggering === "pipeline" ? "Triggering..." : "pipeline" in runningTypes ? "Pipeline Running..." : "Run Pipeline Now"}
           </button>
         </div>
       </div>
-      {message && <p className="mt-2 text-sm text-green-600 dark:text-green-400">{message}</p>}
+      {message && <p className={`mt-2 text-sm ${message.includes("already") ? "text-yellow-600 dark:text-yellow-400" : "text-green-600 dark:text-green-400"}`}>{message}</p>}
 
       <div className="mt-6 overflow-hidden rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">

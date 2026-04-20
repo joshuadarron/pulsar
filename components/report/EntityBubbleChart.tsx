@@ -9,13 +9,13 @@ export default function EntityBubbleChart({ data }: { data: EntityProminence[] }
   return (
     <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
       <h3 className="mb-4 text-sm font-semibold text-gray-700 dark:text-neutral-300 uppercase">Entity Prominence</h3>
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data.slice(0, 12)} margin={{ left: 80 }}>
+      <ResponsiveContainer width="100%" height={250}>
+        <BarChart data={data.slice(0, 5)} margin={{ left: 80 }}>
           <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" height={60} />
           <YAxis />
           <Tooltip />
-          <Bar dataKey="mentionCount" radius={[4, 4, 0, 0]}>
-            {data.slice(0, 12).map((_, i) => (
+          <Bar dataKey="mentionCount" radius={[4, 4, 0, 0]} barSize={20}>
+            {data.slice(0, 5).map((_, i) => (
               <Cell key={i} fill={COLORS[i % COLORS.length]} />
             ))}
           </Bar>

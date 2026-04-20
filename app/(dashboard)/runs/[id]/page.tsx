@@ -27,10 +27,13 @@ interface LogEntry {
 function formatDuration(startedAt: string, completedAt: string | null): string {
   const start = new Date(startedAt).getTime();
   const end = completedAt ? new Date(completedAt).getTime() : Date.now();
-  const seconds = Math.floor((end - start) / 1000);
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  const total = Math.floor((end - start) / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 const LEVEL_STYLES: Record<string, string> = {
@@ -131,36 +134,34 @@ export default function RunDetailPage() {
       </div>
 
       <div className="mt-4 flex items-center justify-between">
-        <div>
+        <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">
             {run.run_type === "scrape" ? "Scrape" : "Pipeline"} Run
           </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">
-            Triggered {run.trigger} on {new Date(run.started_at).toLocaleString()}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {run.status === "running" && (
-            <button
-              onClick={async () => {
-                setCancelling(true);
-                await fetch(`/api/runs/${id}/cancel`, { method: "POST" });
-                setCancelling(false);
-              }}
-              disabled={cancelling}
-              className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
-            >
-              {cancelling ? "Cancelling..." : "Cancel Run"}
-            </button>
-          )}
-          <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${STATUS_BADGE[run.status] || ""}`}>
+          <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${STATUS_BADGE[run.status] || ""}`}>
             {run.status === "running" && (
               <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-yellow-500" />
             )}
             {run.status}
           </span>
         </div>
+        {run.status === "running" && (
+          <button
+            onClick={async () => {
+              setCancelling(true);
+              await fetch(`/api/runs/${id}/cancel`, { method: "POST" });
+              setCancelling(false);
+            }}
+            disabled={cancelling}
+            className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+          >
+            {cancelling ? "Cancelling..." : "Cancel Run"}
+          </button>
+        )}
       </div>
+      <p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">
+        Triggered {run.trigger} on {new Date(run.started_at).toLocaleString()}
+      </p>
 
       {/* Stats */}
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -210,7 +211,7 @@ export default function RunDetailPage() {
             </span>
           )}
         </div>
-        <div className="mt-3 max-h-[600px] overflow-y-auto rounded-lg bg-gray-50 dark:bg-neutral-950 p-4 font-mono text-xs">
+        <div className="mt-3 max-h-[400px] overflow-y-auto rounded-lg bg-gray-50 dark:bg-neutral-950 p-4 font-mono text-xs">
           {logs.length === 0 ? (
             <p className="text-gray-400 dark:text-neutral-500">No log entries yet.</p>
           ) : (

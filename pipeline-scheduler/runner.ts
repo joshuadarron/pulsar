@@ -1,4 +1,5 @@
 import { getClient, disconnectClient } from "@/lib/rocketride";
+import { sendReportEmail } from "./notify.js";
 import { query } from "@/lib/db/postgres";
 import { getSession } from "@/lib/db/neo4j";
 import { logRun } from "@/lib/run-logger";
@@ -76,103 +77,6 @@ function setActiveToken(runId: string, client: Awaited<ReturnType<typeof getClie
 
 function checkCancelled(runId: string) {
   if (activeRuns.get(runId)?.aborted) throw new Error("Run was cancelled");
-}
-
-async function runSummarization(client: Awaited<ReturnType<typeof getClient>>, runId: string) {
-  await logRun(runId, "info", "summarization", "Starting summarization pipeline...");
-
-  // Get unenriched articles from last 24h
-  const articles = await query<{
-    id: string;
-    title: string;
-    url: string;
-    raw_id: string;
-  }>(
-    `SELECT a.id, a.title, a.url, a.raw_id
-     FROM articles a
-     WHERE a.enriched_at IS NULL
-       AND a.published_at > now() - interval '24 hours'
-     ORDER BY a.published_at DESC`,
-  );
-
-  if (articles.rows.length === 0) {
-    await logRun(runId, "warn", "summarization", "No unenriched articles found.");
-    return;
-  }
-
-  await logRun(runId, "info", "summarization", `Enriching ${articles.rows.length} articles...`);
-
-  // Start the summarization pipeline
-  checkCancelled(runId);
-  const result = await client.use({
-    filepath: path.join(PIPELINES_DIR, "summarization.pipe"),
-  });
-  const token = result.token;
-  setActiveToken(runId, client, token);
-
-  let enriched = 0;
-  let failed = 0;
-
-  for (const article of articles.rows) {
-    checkCancelled(runId);
-    // Get raw content
-    const raw = await query<{ raw_payload: Record<string, unknown> }>(
-      "SELECT raw_payload FROM articles_raw WHERE id = $1",
-      [article.raw_id],
-    );
-
-    const payload = raw.rows[0]?.raw_payload;
-    const rawContent = ((payload as { rawContent?: string })?.rawContent || article.title).slice(0, 3000);
-    const text = `Title: ${article.title}\n\nContent: ${rawContent}\n\nRespond with ONLY valid JSON.`;
-
-    try {
-      const response = await client.send(token, text);
-
-      // Parse the answer
-      let enrichment: {
-        summary?: string;
-        contentType?: string;
-        sentiment?: string;
-        topicTags?: string[];
-        entityMentions?: { name: string; type: string }[];
-      } = {};
-
-      if (response?.answers && response.answers.length > 0) {
-        const answer = response.answers[0];
-        const raw = typeof answer === "string" ? answer : JSON.stringify(answer);
-        enrichment = await postProcessToJson(client, raw,
-          '{"summary": "string", "contentType": "research|tutorial|news|opinion|release|discussion", "sentiment": "positive|negative|neutral", "topicTags": ["string"], "entityMentions": [{"name": "string", "type": "string"}]}',
-        );
-      }
-
-      // Update article with enriched data
-      await query(
-        `UPDATE articles SET
-           summary = $1,
-           content_type = $2,
-           sentiment = $3,
-           topic_tags = $4,
-           entity_mentions = $5,
-           enriched_at = now()
-         WHERE id = $6`,
-        [
-          enrichment.summary || null,
-          enrichment.contentType || null,
-          enrichment.sentiment || null,
-          enrichment.topicTags || [],
-          JSON.stringify(enrichment.entityMentions || []),
-          article.id,
-        ],
-      );
-      enriched++;
-    } catch (err) {
-      failed++;
-      await logRun(runId, "error", "summarization", `Failed to enrich article ${article.id}: ${err}`);
-    }
-  }
-
-  await client.terminate(token);
-  await logRun(runId, "success", "summarization", `Summarization complete: ${enriched} enriched, ${failed} failed out of ${articles.rows.length}`);
 }
 
 async function runTrendReport(
@@ -389,6 +293,19 @@ async function runTrendReport(
 
   const reportId = reportResult.rows[0].id;
   await logRun(runId, "success", "trend-report", `Trend report saved: ${reportId}`);
+
+  await query(
+    `INSERT INTO notifications (type, title, message, link, reference_id)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [
+      "report",
+      "New Trend Report",
+      `Report generated with ${reportData.articleCount} articles analyzed. ${reportData.emergingTopics.length} emerging topics identified.`,
+      `/reports/${reportId}`,
+      reportId,
+    ],
+  );
+
   return reportId;
 }
 
@@ -464,17 +381,42 @@ async function runContentDrafts(
     discord: { contentType: "social" },
   };
 
+  let savedCount = 0;
   for (const [platform, body] of Object.entries(drafts)) {
-    if (!platformMapping[platform] || !body) continue;
+    if (!platformMapping[platform]) continue;
+    const content = typeof body === "string" ? body : JSON.stringify(body);
+    if (!content || content.length < 10) {
+      await logRun(runId, "warn", "content-drafts", `Skipped ${platform}: empty or too short`);
+      continue;
+    }
 
-    await query(
-      `INSERT INTO content_drafts (run_id, report_id, platform, content_type, body)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [runId, reportId, platform, platformMapping[platform].contentType, body],
-    );
+    try {
+      await query(
+        `INSERT INTO content_drafts (run_id, report_id, platform, content_type, body)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [runId, reportId, platform, platformMapping[platform].contentType, content],
+      );
+      savedCount++;
+    } catch (err) {
+      await logRun(runId, "error", "content-drafts", `Failed to save ${platform} draft: ${err}`);
+    }
   }
 
-  await logRun(runId, "success", "content-drafts", `Content drafts saved for ${Object.keys(drafts).length} platforms`);
+  await logRun(runId, "success", "content-drafts", `Content drafts saved: ${savedCount} of ${Object.keys(drafts).length} platforms`);
+
+  await query(
+    `INSERT INTO notifications (type, title, message, link, reference_id)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [
+      "drafts",
+      "Content Drafts Ready",
+      `${savedCount} platform drafts generated and ready for review.`,
+      "/drafts",
+      reportId,
+    ],
+  );
+
+  return savedCount;
 }
 
 export async function runAllPipelines(trigger: "scheduled" | "manual" = "scheduled") {
@@ -491,12 +433,13 @@ export async function runAllPipelines(trigger: "scheduled" | "manual" = "schedul
     client = await getClient();
     await logRun(runId, "info", "init", "Connected to RocketRide");
 
-    // Sequential pipeline execution
-    await runSummarization(client, runId);
+    // Sequential pipeline execution — trend report + content drafts only
+    // (articles are enriched programmatically at scrape time)
     const reportId = await runTrendReport(client, runId);
+    let draftCount = 0;
 
     if (reportId) {
-      await runContentDrafts(client, runId, reportId);
+      draftCount = await runContentDrafts(client, runId, reportId);
     }
 
     await query(
@@ -506,6 +449,17 @@ export async function runAllPipelines(trigger: "scheduled" | "manual" = "schedul
 
     await cleanupJsonConverter(client);
     await logRun(runId, "success", "complete", "All pipelines complete");
+
+    // Send email notification
+    if (reportId) {
+      try {
+        await sendReportEmail(reportId);
+        await logRun(runId, "info", "email", "Report email sent");
+      } catch (emailErr) {
+        await logRun(runId, "warn", "email", `Failed to send email: ${emailErr}`);
+      }
+    }
+
     activeRuns.delete(runId);
     return { runId, reportId };
   } catch (err) {

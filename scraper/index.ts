@@ -1,6 +1,6 @@
 import { sources } from "./sources/index.js";
 import { hashUrl, exists } from "./dedup.js";
-import { extractKeywords, extractEntities, categorizeSource } from "./extract.js";
+import { extractKeywords, extractEntities, categorizeSource, analyzeSentiment, classifyContentType, extractSummary } from "./extract.js";
 import { writeArticleToGraph } from "./graph-writer.js";
 import { updateTrendScores } from "./trend-scorer.js";
 import { query } from "@/lib/db/postgres";
@@ -52,20 +52,26 @@ export async function scrape(sourceFilter?: string, trigger: "scheduled" | "manu
         );
         const rawId = rawResult.rows[0].id;
 
-        // Extract keywords and entities
+        // Extract keywords, entities, and enrich programmatically
         const text = `${item.title} ${item.rawContent}`;
         const keywords = extractKeywords(text, 10);
         const entities = extractEntities(text);
         const category = categorizeSource(item.sourcePlatform);
+        const sentiment = analyzeSentiment(text);
+        const contentType = classifyContentType(item.title, item.sourcePlatform);
+        const summary = extractSummary(item.title, item.rawContent);
 
-        // Insert into articles
+        // Insert into articles — fully enriched at scrape time
         const articleResult = await query<{ id: string }>(
-          `INSERT INTO articles (raw_id, url, title, topic_tags, entity_mentions, published_at, source_name, source_platform, score, comment_count, run_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+          `INSERT INTO articles (raw_id, url, title, summary, content_type, sentiment, topic_tags, entity_mentions, published_at, source_name, source_platform, score, comment_count, enriched_at, run_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now(), $14) RETURNING id`,
           [
             rawId,
             item.url,
             item.title,
+            summary,
+            contentType,
+            sentiment,
             keywords,
             JSON.stringify(entities),
             item.publishedAt,

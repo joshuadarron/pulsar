@@ -27,7 +27,7 @@
       "config": {
         "profile": "default",
         "default": {
-          "question": "Respond with ONLY a raw JSON object, nothing else. No markdown, no text before or after. Analyze the article and return: {\"summary\": \"2-3 sentence technical summary\", \"contentType\": \"research|tutorial|news|opinion|release|discussion\", \"sentiment\": \"positive|negative|neutral\", \"topicTags\": [\"normalized-slug\"], \"entityMentions\": [{\"name\": \"string\", \"type\": \"company|tool|model|language|person|concept\"}]}"
+          "question": "Respond with ONLY a raw JSON object, nothing else. No markdown, no text before or after. Analyze the article and return: {\"summary\": \"2-3 sentence summary\", \"contentType\": \"research|tutorial|news|opinion|release|discussion\", \"sentiment\": \"positive|negative|neutral\"}"
         },
         "parameters": {}
       },
@@ -99,7 +99,7 @@
       ]
     }
   ],
-  "project_id": "f43dfe91-1d83-4367-ab8f-d3a9be9c6482",
+  "project_id": "d2574cb5-b526-42df-a4f6-9164fc46ebc9",
   "viewport": {
     "x": 0,
     "y": 0,

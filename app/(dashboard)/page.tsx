@@ -36,8 +36,8 @@ export default async function DashboardPage() {
     query<{ id: string; title: string; source_platform: string; sentiment: string; published_at: string; score: number }>(
       "SELECT id, title, source_platform, COALESCE(sentiment, 'neutral') as sentiment, published_at, COALESCE(score, 0) as score FROM articles ORDER BY published_at DESC LIMIT 6",
     ),
-    query<{ id: string; started_at: string; status: string; run_type: string; articles_new: number; articles_scraped: number }>(
-      "SELECT id, started_at, status, run_type, COALESCE(articles_new, 0) as articles_new, COALESCE(articles_scraped, 0) as articles_scraped FROM runs ORDER BY started_at DESC LIMIT 5",
+    query<{ id: string; started_at: string; completed_at: string | null; status: string; trigger: string; run_type: string; articles_new: number; articles_scraped: number }>(
+      "SELECT id, started_at, completed_at, status, trigger, run_type, COALESCE(articles_new, 0) as articles_new, COALESCE(articles_scraped, 0) as articles_scraped FROM runs ORDER BY started_at DESC LIMIT 5",
     ),
     query<{ success: string; total: string }>(
       "SELECT count(*) FILTER (WHERE status = 'complete')::text as success, count(*)::text as total FROM runs",

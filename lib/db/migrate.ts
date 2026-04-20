@@ -94,6 +94,27 @@ async function migratePostgres() {
     )
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      link TEXT,
+      reference_id TEXT,
+      read BOOLEAN DEFAULT false,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+
+  await query(`
+    ALTER TABLE notifications ADD COLUMN IF NOT EXISTS reference_id TEXT
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications (read, created_at DESC)
+  `);
+
   console.log("PostgreSQL migrations complete.");
 }
 

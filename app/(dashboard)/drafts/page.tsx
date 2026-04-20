@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 
 interface Draft {
   id: string;
+  report_id: string;
   platform: string;
   content_type: string;
   body: string;
@@ -17,6 +18,13 @@ export default function DraftsPage() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState<Draft | null>(null);
+  const [unreadRefs, setUnreadRefs] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    fetch("/api/notifications?refs=true")
+      .then((r) => r.json())
+      .then((data) => setUnreadRefs(new Set(data.referenceIds)));
+  }, []);
 
   useEffect(() => {
     const params = filter !== "all" ? `?platform=${filter}` : "";
@@ -24,6 +32,16 @@ export default function DraftsPage() {
       .then((r) => r.json())
       .then(setDrafts);
   }, [filter]);
+
+  async function markAsRead(refId: string) {
+    await fetch(`/api/notifications/${refId}?by=ref`, { method: "PATCH" });
+    setUnreadRefs((prev) => {
+      const next = new Set(prev);
+      next.delete(refId);
+      return next;
+    });
+    window.dispatchEvent(new Event("notification-read"));
+  }
 
   async function updateStatus(id: string, status: string) {
     await fetch(`/api/drafts/${id}`, {
@@ -34,6 +52,13 @@ export default function DraftsPage() {
     setDrafts((prev) =>
       prev.map((d) => (d.id === id ? { ...d, status } : d)),
     );
+  }
+
+  function selectDraft(draft: Draft) {
+    setSelected(draft);
+    if (draft.report_id && unreadRefs.has(draft.report_id)) {
+      markAsRead(draft.report_id);
+    }
   }
 
   return (
@@ -62,36 +87,48 @@ export default function DraftsPage() {
           {drafts.length === 0 ? (
             <p className="text-gray-400 dark:text-neutral-500">No drafts found.</p>
           ) : (
-            drafts.map((draft) => (
-              <button
-                key={draft.id}
-                onClick={() => setSelected(draft)}
-                className={`w-full rounded-lg border p-4 text-left transition ${
-                  selected?.id === draft.id
-                    ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950"
-                    : "border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:border-gray-300 dark:hover:border-neutral-600"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium capitalize text-gray-900 dark:text-neutral-100">
-                    {draft.platform}
-                  </span>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                    draft.status === "approved" ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" :
-                    draft.status === "exported" ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" :
-                    "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
-                  }`}>
-                    {draft.status}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">
-                  {draft.content_type} — {new Date(draft.created_at).toLocaleDateString()}
-                </p>
-                <p className="mt-2 line-clamp-2 text-sm text-gray-600 dark:text-neutral-400">
-                  {draft.body.slice(0, 120)}...
-                </p>
-              </button>
-            ))
+            drafts.map((draft) => {
+              const isNew = draft.report_id && unreadRefs.has(draft.report_id);
+              return (
+                <button
+                  key={draft.id}
+                  onClick={() => selectDraft(draft)}
+                  className={`w-full rounded-lg border p-4 text-left transition ${
+                    selected?.id === draft.id
+                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950"
+                      : isNew
+                        ? "border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 shadow-sm"
+                        : "border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:border-gray-300 dark:hover:border-neutral-600"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium capitalize text-gray-900 dark:text-neutral-100">
+                        {draft.platform}
+                      </span>
+                      {isNew && (
+                        <span className="inline-flex items-center rounded-full bg-indigo-100 dark:bg-indigo-900 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                          New
+                        </span>
+                      )}
+                    </div>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      draft.status === "approved" ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" :
+                      draft.status === "exported" ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" :
+                      "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
+                    }`}>
+                      {draft.status}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">
+                    {draft.content_type} — {new Date(draft.created_at).toLocaleDateString()}
+                  </p>
+                  <p className="mt-2 line-clamp-2 text-sm text-gray-600 dark:text-neutral-400">
+                    {draft.body.slice(0, 120)}...
+                  </p>
+                </button>
+              );
+            })
           )}
         </div>
 
