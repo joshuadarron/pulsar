@@ -20,18 +20,30 @@ export default function Sidebar() {
   const { data: session } = useSession();
   const user = session?.user;
   const [unreadCount, setUnreadCount] = useState(0);
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     function fetchUnread() {
       fetch("/api/notifications?unread=true")
         .then((r) => r.json())
-        .then((data) => setUnreadCount(data.unreadCount))
+        .then((data) => {
+          setUnreadCount(data.unreadCount);
+          // Show toast for any new notifications we haven't seen
+          for (const n of data.notifications || []) {
+            if (!seenIds.has(n.id)) {
+              seenIds.add(n.id);
+              window.dispatchEvent(new CustomEvent("notification-toast", {
+                detail: { id: n.id, title: n.title, message: n.message, link: n.link },
+              }));
+            }
+          }
+          setSeenIds(new Set(seenIds));
+        })
         .catch(() => {});
     }
     fetchUnread();
     const interval = setInterval(fetchUnread, 10000);
 
-    // Listen for notification read events from the notifications page
     function onRead() { fetchUnread(); }
     window.addEventListener("notification-read", onRead);
 

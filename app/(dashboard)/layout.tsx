@@ -2,6 +2,7 @@
 
 import { SessionProvider } from "next-auth/react";
 import Sidebar from "@/components/Sidebar";
+import NotificationToast from "@/components/NotificationToast";
 
 export default function DashboardLayout({
   children,
@@ -16,6 +17,7 @@ export default function DashboardLayout({
           <div className="mx-auto max-w-7xl p-6">{children}</div>
         </main>
       </div>
+      <NotificationToast />
     </SessionProvider>
   );
 }

@@ -28,6 +28,15 @@
   }
 }
 
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.animate-in.slide-in-from-right {
+  animation: slide-in-right 0.3s ease-out;
+}
+
 @media print {
   nav, .no-print { display: none !important; }
   .print-full { width: 100% !important; max-width: none !important; padding: 0 !important; }
