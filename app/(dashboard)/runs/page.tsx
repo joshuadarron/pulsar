@@ -17,6 +17,8 @@ interface Run {
 export default function RunsPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [selectedRun, setSelectedRun] = useState<Run | null>(null);
+  const [triggering, setTriggering] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     fetch("/api/runs")
@@ -24,10 +26,55 @@ export default function RunsPage() {
       .then(setRuns);
   }, []);
 
+  async function trigger(type: "scrape" | "pipeline") {
+    setTriggering(type);
+    setMessage("");
+    try {
+      const res = await fetch("/api/runs/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type }),
+      });
+      if (res.ok) {
+        setMessage(`${type} triggered successfully. Check run history for progress.`);
+        // Refresh the runs list
+        const updated = await fetch("/api/runs").then((r) => r.json());
+        setRuns(updated);
+      } else {
+        setMessage(`Failed to trigger ${type}.`);
+      }
+    } catch {
+      setMessage(`Error triggering ${type}.`);
+    } finally {
+      setTriggering(null);
+    }
+  }
+
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900">Run History</h1>
-      <p className="mt-1 text-gray-500">All scrape and pipeline run logs</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Run History</h1>
+          <p className="mt-1 text-gray-500">All scrape and pipeline run logs</p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={() => trigger("scrape")}
+            disabled={triggering !== null}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {triggering === "scrape" ? "Running..." : "Run Scrape Now"}
+          </button>
+          <button
+            onClick={() => trigger("pipeline")}
+            disabled={triggering !== null}
+            className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+          >
+            {triggering === "pipeline" ? "Running..." : "Run Pipeline Now"}
+          </button>
+        </div>
+      </div>
+      {message && <p className="mt-2 text-sm text-green-600">{message}</p>}
 
       <div className="mt-6 overflow-hidden rounded-lg border border-gray-200 bg-white">
         <table className="min-w-full divide-y divide-gray-200">

@@ -1,59 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { redditSubreddits, rssSources, substackPublications, mediumTags, arxivCategories, githubSearchQueries } from "@/config/sources";
 
 export default function SettingsPage() {
-  const [triggering, setTriggering] = useState<string | null>(null);
-  const [message, setMessage] = useState("");
-
-  async function trigger(type: "scrape" | "pipeline") {
-    setTriggering(type);
-    setMessage("");
-    try {
-      const res = await fetch("/api/runs/trigger", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type }),
-      });
-      if (res.ok) {
-        setMessage(`${type} triggered successfully. Check run history for progress.`);
-      } else {
-        setMessage(`Failed to trigger ${type}.`);
-      }
-    } catch {
-      setMessage(`Error triggering ${type}.`);
-    } finally {
-      setTriggering(null);
-    }
-  }
-
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-      <p className="mt-1 text-gray-500">Configuration and manual controls</p>
-
-      {/* Manual Triggers */}
-      <section className="mt-8">
-        <h2 className="text-lg font-semibold text-gray-900">Manual Triggers</h2>
-        <div className="mt-3 flex gap-3">
-          <button
-            onClick={() => trigger("scrape")}
-            disabled={triggering !== null}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {triggering === "scrape" ? "Running..." : "Run Scrape Now"}
-          </button>
-          <button
-            onClick={() => trigger("pipeline")}
-            disabled={triggering !== null}
-            className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
-          >
-            {triggering === "pipeline" ? "Running..." : "Run Pipeline Now"}
-          </button>
-        </div>
-        {message && <p className="mt-2 text-sm text-green-600">{message}</p>}
-      </section>
+      <p className="mt-1 text-gray-500">Configuration overview</p>
 
       {/* Source Configuration */}
       <section className="mt-8">
