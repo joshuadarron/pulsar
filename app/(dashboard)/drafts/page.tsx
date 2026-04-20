@@ -38,8 +38,8 @@ export default function DraftsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900">Content Drafts</h1>
-      <p className="mt-1 text-gray-500">AI-generated content ready for review</p>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">Content Drafts</h1>
+      <p className="mt-1 text-gray-500 dark:text-neutral-400">AI-generated content ready for review</p>
 
       <div className="mt-4 flex gap-2">
         {PLATFORMS.map((p) => (
@@ -49,7 +49,7 @@ export default function DraftsPage() {
             className={`rounded-full px-3 py-1 text-sm font-medium capitalize ${
               filter === p
                 ? "bg-indigo-600 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                : "bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-400 hover:bg-gray-200 dark:hover:bg-neutral-700"
             }`}
           >
             {p}
@@ -60,7 +60,7 @@ export default function DraftsPage() {
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="space-y-3">
           {drafts.length === 0 ? (
-            <p className="text-gray-400">No drafts found.</p>
+            <p className="text-gray-400 dark:text-neutral-500">No drafts found.</p>
           ) : (
             drafts.map((draft) => (
               <button
@@ -68,26 +68,26 @@ export default function DraftsPage() {
                 onClick={() => setSelected(draft)}
                 className={`w-full rounded-lg border p-4 text-left transition ${
                   selected?.id === draft.id
-                    ? "border-indigo-500 bg-indigo-50"
-                    : "border-gray-200 bg-white hover:border-gray-300"
+                    ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950"
+                    : "border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:border-gray-300 dark:hover:border-neutral-600"
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium capitalize text-gray-900">
+                  <span className="text-sm font-medium capitalize text-gray-900 dark:text-neutral-100">
                     {draft.platform}
                   </span>
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                    draft.status === "approved" ? "bg-green-100 text-green-700" :
-                    draft.status === "exported" ? "bg-blue-100 text-blue-700" :
-                    "bg-yellow-100 text-yellow-700"
+                    draft.status === "approved" ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" :
+                    draft.status === "exported" ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" :
+                    "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
                   }`}>
                     {draft.status}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">
                   {draft.content_type} — {new Date(draft.created_at).toLocaleDateString()}
                 </p>
-                <p className="mt-2 line-clamp-2 text-sm text-gray-600">
+                <p className="mt-2 line-clamp-2 text-sm text-gray-600 dark:text-neutral-400">
                   {draft.body.slice(0, 120)}...
                 </p>
               </button>
@@ -96,9 +96,9 @@ export default function DraftsPage() {
         </div>
 
         {selected && (
-          <div className="rounded-lg border border-gray-200 bg-white p-5">
+          <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold capitalize text-gray-900">
+              <h3 className="text-sm font-semibold capitalize text-gray-900 dark:text-neutral-100">
                 {selected.platform} — {selected.content_type}
               </h3>
               <div className="flex gap-2">
@@ -121,7 +121,7 @@ export default function DraftsPage() {
               </div>
             </div>
             <div className="mt-4 max-h-[60vh] overflow-y-auto">
-              <pre className="whitespace-pre-wrap text-sm text-gray-700 leading-relaxed">
+              <pre className="whitespace-pre-wrap text-sm text-gray-700 dark:text-neutral-300 leading-relaxed">
                 {selected.body}
               </pre>
             </div>

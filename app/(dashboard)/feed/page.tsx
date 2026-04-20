@@ -43,8 +43,8 @@ export default function FeedPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900">Article Feed</h1>
-      <p className="mt-1 text-gray-500">{total.toLocaleString()} articles collected</p>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">Article Feed</h1>
+      <p className="mt-1 text-gray-500 dark:text-neutral-400">{total.toLocaleString()} articles collected</p>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <input
@@ -52,13 +52,13 @@ export default function FeedPage() {
           placeholder="Search articles..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+          className="rounded-lg border border-gray-300 dark:border-neutral-600 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none dark:bg-neutral-900 dark:text-neutral-100"
         />
 
         <select
           value={source}
           onChange={(e) => { setSource(e.target.value); setPage(1); }}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          className="rounded-lg border border-gray-300 dark:border-neutral-600 px-3 py-2 text-sm dark:bg-neutral-900 dark:text-neutral-100"
         >
           {SOURCES.map((s) => (
             <option key={s} value={s}>{s === "all" ? "All Sources" : s}</option>
@@ -68,7 +68,7 @@ export default function FeedPage() {
         <select
           value={sentiment}
           onChange={(e) => { setSentiment(e.target.value); setPage(1); }}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          className="rounded-lg border border-gray-300 dark:border-neutral-600 px-3 py-2 text-sm dark:bg-neutral-900 dark:text-neutral-100"
         >
           {SENTIMENTS.map((s) => (
             <option key={s} value={s}>{s === "all" ? "All Sentiments" : s}</option>
@@ -83,16 +83,16 @@ export default function FeedPage() {
             href={article.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="block rounded-lg border border-gray-200 bg-white p-4 transition hover:border-indigo-300 hover:shadow-sm"
+            className="block rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-4 transition hover:border-indigo-300 hover:shadow-sm"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
-                <h3 className="text-sm font-medium text-gray-900">{article.title}</h3>
+                <h3 className="text-sm font-medium text-gray-900 dark:text-neutral-100">{article.title}</h3>
                 {article.summary && (
-                  <p className="mt-1 text-sm text-gray-500 line-clamp-2">{article.summary}</p>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-neutral-400 line-clamp-2">{article.summary}</p>
                 )}
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                  <span className="rounded bg-gray-100 dark:bg-neutral-800 px-2 py-0.5 text-xs text-gray-600 dark:text-neutral-400">
                     {article.source_name}
                   </span>
                   {article.content_type && (
@@ -102,9 +102,9 @@ export default function FeedPage() {
                   )}
                   {article.sentiment && (
                     <span className={`rounded px-2 py-0.5 text-xs ${
-                      article.sentiment === "positive" ? "bg-green-50 text-green-600" :
-                      article.sentiment === "negative" ? "bg-red-50 text-red-600" :
-                      "bg-gray-50 text-gray-600"
+                      article.sentiment === "positive" ? "bg-green-50 text-green-600 dark:bg-green-900 dark:text-green-300" :
+                      article.sentiment === "negative" ? "bg-red-50 text-red-600 dark:bg-red-900 dark:text-red-300" :
+                      "bg-gray-50 text-gray-600 dark:bg-neutral-800 dark:text-neutral-400"
                     }`}>
                       {article.sentiment}
                     </span>
@@ -118,9 +118,9 @@ export default function FeedPage() {
               </div>
               <div className="text-right flex-shrink-0">
                 {article.score != null && (
-                  <span className="text-sm font-semibold text-gray-700">{article.score}</span>
+                  <span className="text-sm font-semibold text-gray-700 dark:text-neutral-300">{article.score}</span>
                 )}
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-gray-400 dark:text-neutral-500">
                   {article.published_at && new Date(article.published_at).toLocaleDateString()}
                 </p>
               </div>
@@ -129,7 +129,7 @@ export default function FeedPage() {
         ))}
 
         {articles.length === 0 && (
-          <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-400">
+          <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-8 text-center text-gray-400 dark:text-neutral-500">
             No articles found. Run a scrape to populate the feed.
           </div>
         )}
@@ -144,7 +144,7 @@ export default function FeedPage() {
           >
             Previous
           </button>
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-gray-500 dark:text-neutral-400">
             Page {page} of {Math.ceil(total / 20)}
           </span>
           <button

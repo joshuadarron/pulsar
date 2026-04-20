@@ -5,8 +5,8 @@ import type { TrendingTechnology } from "@/types";
 
 export default function TechRankingChart({ data }: { data: TrendingTechnology[] }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-5">
-      <h3 className="mb-4 text-sm font-semibold text-gray-700 uppercase">Top Technologies</h3>
+    <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
+      <h3 className="mb-4 text-sm font-semibold text-gray-700 dark:text-neutral-300 uppercase">Top Technologies</h3>
       <ResponsiveContainer width="100%" height={250}>
         <BarChart data={data.slice(0, 10)} layout="vertical" margin={{ left: 80 }}>
           <XAxis type="number" />
