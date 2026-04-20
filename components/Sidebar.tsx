@@ -20,8 +20,12 @@ export default function Sidebar() {
   return (
     <aside className="no-print flex h-screen w-64 flex-col border-r border-gray-200 bg-white">
       <div className="flex h-16 items-center gap-2 border-b px-6">
-        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600" />
-        <span className="text-xl font-bold">Pulse</span>
+        <svg className="h-8 w-8" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="5" fill="#7c3aed" />
+          <circle cx="16" cy="16" r="9" stroke="#7c3aed" strokeWidth="1.5" opacity="0.6" />
+          <circle cx="16" cy="16" r="13" stroke="#7c3aed" strokeWidth="1.5" opacity="0.3" />
+        </svg>
+        <span className="text-xl font-bold">Pulsar</span>
       </div>
 
       <nav className="flex-1 space-y-1 p-4">

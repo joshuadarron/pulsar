@@ -24,7 +24,7 @@ export const reddit: SourceAdapter = async () => {
     try {
       const url = `https://www.reddit.com/r/${sub}/hot.json?limit=${perSub}`;
       const res = await fetch(url, {
-        headers: { "User-Agent": "pulse-scraper/0.1" },
+        headers: { "User-Agent": "pulsar-scraper/0.1" },
       });
       if (!res.ok) continue;
 

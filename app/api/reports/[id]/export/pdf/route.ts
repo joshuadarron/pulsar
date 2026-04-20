@@ -31,7 +31,7 @@ export async function GET(
     return new NextResponse(Buffer.from(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="pulse-report-${id}.pdf"`,
+        "Content-Disposition": `attachment; filename="pulsar-report-${id}.pdf"`,
       },
     });
   } catch (err) {

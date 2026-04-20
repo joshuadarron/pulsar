@@ -12,14 +12,14 @@ export const env = {
   postgres: {
     host: optional("POSTGRES_HOST", "localhost"),
     port: parseInt(optional("POSTGRES_PORT", "5432")),
-    database: optional("POSTGRES_DB", "pulse"),
-    user: optional("POSTGRES_USER", "pulse"),
-    password: optional("POSTGRES_PASSWORD", "pulse_dev"),
+    database: optional("POSTGRES_DB", "pulsar"),
+    user: optional("POSTGRES_USER", "pulsar"),
+    password: optional("POSTGRES_PASSWORD", "pulsar_dev"),
   },
   neo4j: {
     uri: optional("NEO4J_URI", "bolt://localhost:7687"),
     username: optional("NEO4J_USERNAME", "neo4j"),
-    password: optional("NEO4J_PASSWORD", "pulse_dev"),
+    password: optional("NEO4J_PASSWORD", "pulsar_dev"),
   },
   rocketride: {
     wsUrl: optional("ROCKETRIDE_WS_URL", "ws://localhost:5565"),

@@ -7,7 +7,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Pulse</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Pulsar</h1>
           <p className="mt-2 text-gray-500">DevRel Intelligence Agent</p>
         </div>
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Pulse — Automated DevRel intelligence and content agent. Scrapes free developer sources, runs AI analysis via RocketRide, and outputs trend reports + content drafts for human review. Full PRD at `.claude/PRD.md`.
+Pulsar — Automated DevRel intelligence and content agent. Scrapes free developer sources, runs AI analysis via RocketRide, and outputs trend reports + content drafts for human review. Full PRD at `.claude/PRD.md`.
 
 ## Stack
 

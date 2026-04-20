@@ -40,7 +40,7 @@ export async function sendReportEmail(reportId: string): Promise<void> {
     <html>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1a1a1a;">
       <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 24px; border-radius: 12px 12px 0 0;">
-        <h1 style="color: white; margin: 0; font-size: 24px;">Pulse Daily Report</h1>
+        <h1 style="color: white; margin: 0; font-size: 24px;">Pulsar Daily Report</h1>
         <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0;">${generatedAt} — ${report.articleCount} articles analyzed</p>
       </div>
 
@@ -64,7 +64,7 @@ export async function sendReportEmail(reportId: string): Promise<void> {
       </div>
 
       <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 24px;">
-        Pulse — Automated DevRel Intelligence
+        Pulsar — Automated DevRel Intelligence
       </p>
     </body>
     </html>
@@ -81,9 +81,9 @@ export async function sendReportEmail(reportId: string): Promise<void> {
   });
 
   await transporter.sendMail({
-    from: `"Pulse" <${env.smtp.user}>`,
+    from: `"Pulsar" <${env.smtp.user}>`,
     to: env.smtp.notifyTo,
-    subject: `Pulse Report — ${generatedAt}`,
+    subject: `Pulsar Report — ${generatedAt}`,
     html,
   });
 

@@ -5,9 +5,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: pulse
-      POSTGRES_USER: pulse
-      POSTGRES_PASSWORD: pulse_dev
+      POSTGRES_DB: pulsar
+      POSTGRES_USER: pulsar
+      POSTGRES_PASSWORD: pulsar_dev
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -18,7 +18,7 @@ services:
       - "7474:7474"
       - "7687:7687"
     environment:
-      NEO4J_AUTH: neo4j/pulse_dev
+      NEO4J_AUTH: neo4j/pulsar_dev
     volumes:
       - neo4jdata:/data
 
