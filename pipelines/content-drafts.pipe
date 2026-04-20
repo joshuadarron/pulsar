@@ -3,13 +3,23 @@
     {
       "id": "webhook_1",
       "provider": "webhook",
-      "config": { "hideForm": true, "mode": "Source", "parameters": {}, "type": "webhook" }
+      "config": {
+        "hideForm": true,
+        "mode": "Source",
+        "parameters": {},
+        "type": "webhook"
+      }
     },
     {
       "id": "parse_1",
       "provider": "parse",
       "config": {},
-      "input": [{ "lane": "tags", "from": "webhook_1" }]
+      "input": [
+        {
+          "lane": "tags",
+          "from": "webhook_1"
+        }
+      ]
     },
     {
       "id": "question_1",
@@ -21,26 +31,79 @@
         },
         "parameters": {}
       },
-      "input": [{ "lane": "text", "from": "parse_1" }]
+      "input": [
+        {
+          "lane": "text",
+          "from": "parse_1"
+        }
+      ]
+    },
+    {
+      "id": "agent_rocketride_1",
+      "provider": "agent_rocketride",
+      "config": {
+        "instructions": [
+          "You are a DevRel content strategist. Generate platform-optimized content drafts based on trend data and top articles."
+        ],
+        "max_waves": 10,
+        "parameters": {}
+      },
+      "input": [
+        {
+          "lane": "questions",
+          "from": "question_1"
+        }
+      ]
     },
     {
       "id": "llm_anthropic_1",
       "provider": "llm_anthropic",
       "config": {
         "profile": "claude-sonnet-4-6",
-        "claude-sonnet-4-6": { "apikey": "${ROCKETRIDE_ANTHROPIC_KEY}" },
+        "claude-sonnet-4-6": {
+          "apikey": "${ROCKETRIDE_ANTHROPIC_KEY}"
+        },
         "parameters": {}
       },
-      "input": [{ "lane": "questions", "from": "question_1" }]
+      "control": [
+        {
+          "classType": "llm",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    },
+    {
+      "id": "memory_internal_1",
+      "provider": "memory_internal",
+      "config": {
+        "type": "memory_internal"
+      },
+      "control": [
+        {
+          "classType": "memory",
+          "from": "agent_rocketride_1"
+        }
+      ]
     },
     {
       "id": "response_answers_1",
       "provider": "response_answers",
-      "config": { "laneName": "answers" },
-      "input": [{ "lane": "answers", "from": "llm_anthropic_1" }]
+      "config": {
+        "laneName": "answers"
+      },
+      "input": [
+        {
+          "lane": "answers",
+          "from": "agent_rocketride_1"
+        }
+      ]
     }
   ],
-  "project_id": "58098179-137c-4676-810b-967e32bb33af",
-  "viewport": { "x": 0, "y": 0, "zoom": 1 },
+  "project_id": "87b9e3ff-931c-4e30-b1f4-74dd11544cc0",
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
   "version": 1
 }

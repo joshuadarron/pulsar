@@ -3,13 +3,23 @@
     {
       "id": "webhook_1",
       "provider": "webhook",
-      "config": { "hideForm": true, "mode": "Source", "parameters": {}, "type": "webhook" }
+      "config": {
+        "hideForm": true,
+        "mode": "Source",
+        "parameters": {},
+        "type": "webhook"
+      }
     },
     {
       "id": "parse_1",
       "provider": "parse",
       "config": {},
-      "input": [{ "lane": "tags", "from": "webhook_1" }]
+      "input": [
+        {
+          "lane": "tags",
+          "from": "webhook_1"
+        }
+      ]
     },
     {
       "id": "question_1",
@@ -21,26 +31,79 @@
         },
         "parameters": {}
       },
-      "input": [{ "lane": "text", "from": "parse_1" }]
+      "input": [
+        {
+          "lane": "text",
+          "from": "parse_1"
+        }
+      ]
+    },
+    {
+      "id": "agent_rocketride_1",
+      "provider": "agent_rocketride",
+      "config": {
+        "instructions": [
+          "You are a DevRel intelligence analyst. Analyze developer ecosystem data and produce comprehensive trend reports with actionable insights."
+        ],
+        "max_waves": 10,
+        "parameters": {}
+      },
+      "input": [
+        {
+          "lane": "questions",
+          "from": "question_1"
+        }
+      ]
     },
     {
       "id": "llm_anthropic_1",
       "provider": "llm_anthropic",
       "config": {
         "profile": "claude-sonnet-4-6",
-        "claude-sonnet-4-6": { "apikey": "${ROCKETRIDE_ANTHROPIC_KEY}" },
+        "claude-sonnet-4-6": {
+          "apikey": "${ROCKETRIDE_ANTHROPIC_KEY}"
+        },
         "parameters": {}
       },
-      "input": [{ "lane": "questions", "from": "question_1" }]
+      "control": [
+        {
+          "classType": "llm",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    },
+    {
+      "id": "memory_internal_1",
+      "provider": "memory_internal",
+      "config": {
+        "type": "memory_internal"
+      },
+      "control": [
+        {
+          "classType": "memory",
+          "from": "agent_rocketride_1"
+        }
+      ]
     },
     {
       "id": "response_answers_1",
       "provider": "response_answers",
-      "config": { "laneName": "answers" },
-      "input": [{ "lane": "answers", "from": "llm_anthropic_1" }]
+      "config": {
+        "laneName": "answers"
+      },
+      "input": [
+        {
+          "lane": "answers",
+          "from": "agent_rocketride_1"
+        }
+      ]
     }
   ],
-  "project_id": "3f10dcc0-9964-4bdc-b44e-a23029b7e0c5",
-  "viewport": { "x": 0, "y": 0, "zoom": 1 },
+  "project_id": "edc6b3ca-9f0f-495f-883f-644c2bbba593",
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
   "version": 1
 }
