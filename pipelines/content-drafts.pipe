@@ -43,9 +43,9 @@
       "provider": "agent_rocketride",
       "config": {
         "instructions": [
-          "You are a content strategist. Generate platform-optimized content drafts based on trend data and top articles."
+          "You are a content strategist. You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no preamble, no code fences. Your entire response must be parseable by JSON.parse()."
         ],
-        "max_waves": 10,
+        "max_waves": 3,
         "parameters": {}
       },
       "input": [
@@ -99,7 +99,7 @@
       ]
     }
   ],
-  "project_id": "f0803d12-d675-41d5-b02e-dc00e93e93d3",
+  "project_id": "d5a95b3e-3cf7-4f9c-b2ee-cebc2e9b26da",
   "viewport": {
     "x": 0,
     "y": 0,

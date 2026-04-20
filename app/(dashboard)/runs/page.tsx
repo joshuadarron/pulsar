@@ -188,6 +188,7 @@ export default function RunsPage() {
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                       run.status === "complete" ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" :
                       run.status === "failed" ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" :
+                      run.status === "cancelled" ? "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300" :
                       "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
                     }`}>
                       {run.status === "running" && <span className="mr-1.5 h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-500" />}

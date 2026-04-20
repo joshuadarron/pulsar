@@ -1,23 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
+import activeProcesses from "@/lib/active-processes";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const type = body.type || "scrape";
 
-  // Trigger is handled by spawning the process
-  // In production this would use a job queue
+  const { spawn } = await import("child_process");
+
   if (type === "scrape") {
-    const { exec } = await import("child_process");
-    exec("pnpm run scrape", (err, stdout, stderr) => {
-      if (err) console.error("Manual scrape failed:", stderr);
-      else console.log("Manual scrape output:", stdout);
+    const child = spawn("pnpm", ["run", "scrape"], {
+      cwd: process.cwd(),
+      detached: true,
+      stdio: "pipe",
     });
+    child.stdout?.on("data", (d) => console.log(String(d)));
+    child.stderr?.on("data", (d) => console.error(String(d)));
+    child.on("close", () => activeProcesses.delete("scrape"));
+    activeProcesses.set("scrape", child);
   } else if (type === "pipeline") {
-    const { exec } = await import("child_process");
-    exec("pnpm run pipeline", (err, stdout, stderr) => {
-      if (err) console.error("Manual pipeline failed:", stderr);
-      else console.log("Manual pipeline output:", stdout);
+    const child = spawn("pnpm", ["run", "pipeline"], {
+      cwd: process.cwd(),
+      detached: true,
+      stdio: "pipe",
     });
+    child.stdout?.on("data", (d) => console.log(String(d)));
+    child.stderr?.on("data", (d) => console.error(String(d)));
+    child.on("close", () => activeProcesses.delete("pipeline"));
+    activeProcesses.set("pipeline", child);
   }
 
   return NextResponse.json({ status: "triggered", type });

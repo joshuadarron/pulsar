@@ -43,9 +43,9 @@
       "provider": "agent_rocketride",
       "config": {
         "instructions": [
-          "You are a market intelligence analyst. Analyze developer ecosystem data and produce comprehensive trend reports with actionable insights."
+          "You are a market intelligence analyst. You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no preamble, no code fences. Your entire response must be parseable by JSON.parse()."
         ],
-        "max_waves": 10,
+        "max_waves": 3,
         "parameters": {}
       },
       "input": [
@@ -99,7 +99,7 @@
       ]
     }
   ],
-  "project_id": "0d2c060e-2e92-42b0-a56e-d175fe5fcf01",
+  "project_id": "b4b0f388-ca0e-47b7-8c16-7cd6980fa10e",
   "viewport": {
     "x": 0,
     "y": 0,

@@ -27,7 +27,7 @@
       "config": {
         "profile": "default",
         "default": {
-          "question": "You are a technical analyst specializing in AI and software engineering. Given an article title and body, return only valid JSON with no preamble or markdown: {\"summary\": \"2-3 sentence technical summary\", \"contentType\": \"research|tutorial|news|opinion|release|discussion\", \"sentiment\": \"positive|negative|neutral\", \"topicTags\": [\"normalized-slug\"], \"entityMentions\": [{ \"name\": \"string\", \"type\": \"company|tool|model|language|person|concept\" }]}"
+          "question": "Respond with ONLY a raw JSON object, nothing else. No markdown, no text before or after. Analyze the article and return: {\"summary\": \"2-3 sentence technical summary\", \"contentType\": \"research|tutorial|news|opinion|release|discussion\", \"sentiment\": \"positive|negative|neutral\", \"topicTags\": [\"normalized-slug\"], \"entityMentions\": [{\"name\": \"string\", \"type\": \"company|tool|model|language|person|concept\"}]}"
         },
         "parameters": {}
       },
@@ -43,9 +43,9 @@
       "provider": "agent_rocketride",
       "config": {
         "instructions": [
-          "You are a technical analyst specializing in AI and software engineering. Analyze the provided content and return structured JSON responses."
+          "You are a technical analyst. You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no preamble, no code fences. Your entire response must be parseable by JSON.parse()."
         ],
-        "max_waves": 10,
+        "max_waves": 3,
         "parameters": {}
       },
       "input": [
@@ -99,7 +99,7 @@
       ]
     }
   ],
-  "project_id": "810c81da-042a-40c6-bc98-478252f4cebd",
+  "project_id": "f43dfe91-1d83-4367-ab8f-d3a9be9c6482",
   "viewport": {
     "x": 0,
     "y": 0,

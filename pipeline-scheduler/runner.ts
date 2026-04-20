@@ -8,6 +8,76 @@ import path from "path";
 
 const PIPELINES_DIR = path.join(process.cwd(), "pipelines");
 
+// JSON converter pipeline for post-processing non-JSON LLM responses
+let jsonConverterToken: string | null = null;
+
+async function ensureJsonConverter(client: Awaited<ReturnType<typeof getClient>>): Promise<string> {
+  if (jsonConverterToken) return jsonConverterToken;
+  const result = await client.use({
+    filepath: path.join(PIPELINES_DIR, "json-converter.pipe"),
+  });
+  jsonConverterToken = result.token;
+  return jsonConverterToken;
+}
+
+async function postProcessToJson<T = Record<string, unknown>>(
+  client: Awaited<ReturnType<typeof getClient>>,
+  rawResponse: string,
+  schema: string,
+): Promise<T> {
+  // First try direct extraction
+  try {
+    return extractJson<T>(rawResponse);
+  } catch {
+    // Fall through to post-processing
+  }
+
+  // Use the JSON converter pipeline (direct LLM, no agent)
+  const token = await ensureJsonConverter(client);
+  const prompt = `Extract the data from the following text and return it as a JSON object matching this schema:\n${schema}\n\nText to convert:\n${rawResponse.slice(0, 4000)}`;
+  const response = await client.send(token, prompt);
+
+  if (response?.answers && response.answers.length > 0) {
+    const answer = response.answers[0];
+    const parsed = typeof answer === "string" ? answer : JSON.stringify(answer);
+    return extractJson<T>(parsed);
+  }
+
+  throw new SyntaxError(`Post-processing failed to extract JSON from: ${rawResponse.slice(0, 100)}...`);
+}
+
+async function cleanupJsonConverter(client: Awaited<ReturnType<typeof getClient>>) {
+  if (jsonConverterToken) {
+    await client.terminate(jsonConverterToken).catch(() => {});
+    jsonConverterToken = null;
+  }
+}
+
+// Track active pipeline tokens per run for cancellation
+const activeRuns = new Map<string, { client: Awaited<ReturnType<typeof getClient>>; token: string; aborted: boolean }>();
+
+export function cancelRun(runId: string): boolean {
+  const active = activeRuns.get(runId);
+  if (!active) return false;
+  active.aborted = true;
+  active.client.terminate(active.token).catch(() => {});
+  return true;
+}
+
+export function isRunCancelled(runId: string): boolean {
+  return activeRuns.get(runId)?.aborted === true;
+}
+
+function setActiveToken(runId: string, client: Awaited<ReturnType<typeof getClient>>, token: string) {
+  const existing = activeRuns.get(runId);
+  if (existing?.aborted) throw new Error("Run was cancelled");
+  activeRuns.set(runId, { client, token, aborted: existing?.aborted ?? false });
+}
+
+function checkCancelled(runId: string) {
+  if (activeRuns.get(runId)?.aborted) throw new Error("Run was cancelled");
+}
+
 async function runSummarization(client: Awaited<ReturnType<typeof getClient>>, runId: string) {
   await logRun(runId, "info", "summarization", "Starting summarization pipeline...");
 
@@ -33,15 +103,18 @@ async function runSummarization(client: Awaited<ReturnType<typeof getClient>>, r
   await logRun(runId, "info", "summarization", `Enriching ${articles.rows.length} articles...`);
 
   // Start the summarization pipeline
+  checkCancelled(runId);
   const result = await client.use({
     filepath: path.join(PIPELINES_DIR, "summarization.pipe"),
   });
   const token = result.token;
+  setActiveToken(runId, client, token);
 
   let enriched = 0;
   let failed = 0;
 
   for (const article of articles.rows) {
+    checkCancelled(runId);
     // Get raw content
     const raw = await query<{ raw_payload: Record<string, unknown> }>(
       "SELECT raw_payload FROM articles_raw WHERE id = $1",
@@ -49,7 +122,8 @@ async function runSummarization(client: Awaited<ReturnType<typeof getClient>>, r
     );
 
     const payload = raw.rows[0]?.raw_payload;
-    const text = `Title: ${article.title}\n\nContent: ${(payload as { rawContent?: string })?.rawContent || article.title}`;
+    const rawContent = ((payload as { rawContent?: string })?.rawContent || article.title).slice(0, 3000);
+    const text = `Title: ${article.title}\n\nContent: ${rawContent}\n\nRespond with ONLY valid JSON.`;
 
     try {
       const response = await client.send(token, text);
@@ -65,7 +139,10 @@ async function runSummarization(client: Awaited<ReturnType<typeof getClient>>, r
 
       if (response?.answers && response.answers.length > 0) {
         const answer = response.answers[0];
-        enrichment = typeof answer === "string" ? extractJson(answer) : answer;
+        const raw = typeof answer === "string" ? answer : JSON.stringify(answer);
+        enrichment = await postProcessToJson(client, raw,
+          '{"summary": "string", "contentType": "research|tutorial|news|opinion|release|discussion", "sentiment": "positive|negative|neutral", "topicTags": ["string"], "entityMentions": [{"name": "string", "type": "string"}]}',
+        );
       }
 
       // Update article with enriched data
@@ -221,12 +298,14 @@ async function runTrendReport(
   }
 
   // Send to RocketRide for narrative analysis
+  checkCancelled(runId);
   await logRun(runId, "info", "trend-report", "Sending data to AI for narrative analysis...");
 
   const result = await client.use({
     filepath: path.join(PIPELINES_DIR, "trend-report.pipe"),
   });
   const token = result.token;
+  setActiveToken(runId, client, token);
 
   const response = await client.send(
     token,
@@ -246,7 +325,10 @@ async function runTrendReport(
 
   if (response?.answers && response.answers.length > 0) {
     const answer = response.answers[0];
-    aiAnalysis = typeof answer === "string" ? extractJson(answer) : answer;
+    const raw = typeof answer === "string" ? answer : JSON.stringify(answer);
+    aiAnalysis = await postProcessToJson(client, raw,
+      '{"executiveSummary": "string", "narrativeAnalysis": {"keywords": "string", "topics": "string", "technologies": "string", "opportunities": "string"}, "contentOpportunities": [{"signal": "string", "source": "string", "url": "string"}], "emergingTopics": ["string"]}',
+    );
   }
 
   const now = new Date();
@@ -344,12 +426,14 @@ async function runContentDrafts(
   };
 
   // Send to RocketRide
+  checkCancelled(runId);
   await logRun(runId, "info", "content-drafts", "Sending data to AI for draft generation...");
 
   const result = await client.use({
     filepath: path.join(PIPELINES_DIR, "content-drafts.pipe"),
   });
   const token = result.token;
+  setActiveToken(runId, client, token);
 
   const response = await client.send(
     token,
@@ -363,7 +447,10 @@ async function runContentDrafts(
   let drafts: Record<string, string> = {};
   if (response?.answers && response.answers.length > 0) {
     const answer = response.answers[0];
-    drafts = typeof answer === "string" ? extractJson(answer) : answer;
+    const raw = typeof answer === "string" ? answer : JSON.stringify(answer);
+    drafts = await postProcessToJson(client, raw,
+      '{"hashnode": "string", "medium": "string", "devto": "string", "hackernews": "string", "linkedin": "string", "twitter": "string", "discord": "string"}',
+    );
   }
 
   // Save each draft
@@ -398,9 +485,10 @@ export async function runAllPipelines(trigger: "scheduled" | "manual" = "schedul
   );
   const runId = runResult.rows[0].id;
 
+  let client: Awaited<ReturnType<typeof getClient>> | null = null;
   try {
     await logRun(runId, "info", "init", `Pipeline run started (trigger: ${trigger})`);
-    const client = await getClient();
+    client = await getClient();
     await logRun(runId, "info", "init", "Connected to RocketRide");
 
     // Sequential pipeline execution
@@ -416,14 +504,22 @@ export async function runAllPipelines(trigger: "scheduled" | "manual" = "schedul
       [runId],
     );
 
+    await cleanupJsonConverter(client);
     await logRun(runId, "success", "complete", "All pipelines complete");
+    activeRuns.delete(runId);
     return { runId, reportId };
   } catch (err) {
-    await logRun(runId, "error", "fatal", `Pipeline failed: ${err}`);
+    if (client) await cleanupJsonConverter(client).catch(() => {});
+    const cancelled = activeRuns.get(runId)?.aborted;
+    activeRuns.delete(runId);
+    const status = cancelled ? "cancelled" : "failed";
+    const message = cancelled ? "Run was cancelled by user" : String(err);
+    await logRun(runId, "error", "fatal", message);
     await query(
-      "UPDATE runs SET completed_at = now(), status = 'failed', error_log = $1 WHERE id = $2",
-      [String(err), runId],
+      "UPDATE runs SET completed_at = now(), status = $1, error_log = $2 WHERE id = $3",
+      [status, message, runId],
     );
-    throw err;
+    if (!cancelled) throw err;
+    return { runId, reportId: null };
   }
 }

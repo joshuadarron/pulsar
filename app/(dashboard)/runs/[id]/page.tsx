@@ -44,6 +44,7 @@ const STATUS_BADGE: Record<string, string> = {
   running: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
   complete: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
   failed: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+  cancelled: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300",
 };
 
 export default function RunDetailPage() {
@@ -52,6 +53,7 @@ export default function RunDetailPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [duration, setDuration] = useState("");
   const [loading, setLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch run data and poll while running
@@ -137,12 +139,27 @@ export default function RunDetailPage() {
             Triggered {run.trigger} on {new Date(run.started_at).toLocaleString()}
           </p>
         </div>
-        <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${STATUS_BADGE[run.status] || ""}`}>
+        <div className="flex items-center gap-3">
           {run.status === "running" && (
-            <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-yellow-500" />
+            <button
+              onClick={async () => {
+                setCancelling(true);
+                await fetch(`/api/runs/${id}/cancel`, { method: "POST" });
+                setCancelling(false);
+              }}
+              disabled={cancelling}
+              className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+            >
+              {cancelling ? "Cancelling..." : "Cancel Run"}
+            </button>
           )}
-          {run.status}
-        </span>
+          <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${STATUS_BADGE[run.status] || ""}`}>
+            {run.status === "running" && (
+              <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-yellow-500" />
+            )}
+            {run.status}
+          </span>
+        </div>
       </div>
 
       {/* Stats */}
@@ -193,7 +210,7 @@ export default function RunDetailPage() {
             </span>
           )}
         </div>
-        <div className="mt-3 max-h-96 overflow-y-auto rounded-lg bg-gray-50 dark:bg-neutral-950 p-4 font-mono text-xs">
+        <div className="mt-3 max-h-[600px] overflow-y-auto rounded-lg bg-gray-50 dark:bg-neutral-950 p-4 font-mono text-xs">
           {logs.length === 0 ? (
             <p className="text-gray-400 dark:text-neutral-500">No log entries yet.</p>
           ) : (
