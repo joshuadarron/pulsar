@@ -36,7 +36,7 @@ export default function ReportsPage() {
       <h1 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">Reports</h1>
       <p className="mt-1 text-gray-500 dark:text-neutral-400">AI-generated trend reports from your data</p>
 
-      <div className="mt-6 space-y-4">
+      <div className="mt-6 max-w-3xl space-y-4">
         {reports.length === 0 ? (
           <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-8 text-center text-gray-400 dark:text-neutral-500">
             No reports generated yet. Run the pipeline to generate your first report.
@@ -67,7 +67,7 @@ export default function ReportsPage() {
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-neutral-400 line-clamp-2">
+                    <p className="mt-1 text-sm text-gray-500 dark:text-neutral-400 line-clamp-3">
                       {report.executive_summary || "No summary"}
                     </p>
                   </div>

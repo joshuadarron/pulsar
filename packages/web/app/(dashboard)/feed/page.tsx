@@ -76,7 +76,7 @@ export default function FeedPage() {
         </select>
       </div>
 
-      <div className="mt-6 space-y-3">
+      <div className="mt-6 max-w-3xl space-y-3">
         {articles.map((article) => (
           <a
             key={article.id}

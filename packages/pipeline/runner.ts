@@ -36,7 +36,7 @@ async function postProcessToJson<T = Record<string, unknown>>(
 
   // Use the JSON converter pipeline (direct LLM, no agent)
   const token = await ensureJsonConverter(client);
-  const prompt = `Extract the data from the following text and return it as a JSON object matching this schema:\n${schema}\n\nText to convert:\n${rawResponse.slice(0, 4000)}`;
+  const prompt = `Extract the data from the following text and return it as a JSON object matching this schema:\n${schema}\n\nText to convert:\n${rawResponse.slice(0, 30000)}`;
   const response = await client.send(token, prompt);
 
   if (response?.answers && response.answers.length > 0) {

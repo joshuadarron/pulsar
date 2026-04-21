@@ -83,7 +83,7 @@ export default function DraftsPage() {
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="space-y-3">
+        <div className="max-w-3xl space-y-3">
           {drafts.length === 0 ? (
             <p className="text-gray-400 dark:text-neutral-500">No drafts found.</p>
           ) : (
