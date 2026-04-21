@@ -1,0 +1,29 @@
+{
+  "name": "@pulsar/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./config/env": "./config/env.ts",
+    "./config/sources": "./config/sources.ts",
+    "./db/postgres": "./db/postgres.ts",
+    "./db/neo4j": "./db/neo4j.ts",
+    "./db/migrate": "./db/migrate.ts",
+    "./run-logger": "./run-logger.ts",
+    "./types": "./types.ts"
+  },
+  "scripts": {
+    "db:migrate": "tsx db/migrate.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "neo4j-driver": "^5.27.0",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

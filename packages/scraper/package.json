@@ -1,0 +1,22 @@
+{
+  "name": "@pulsar/scraper",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "scrape": "tsx run-once.ts",
+    "scrape-scheduler": "tsx scheduler.ts"
+  },
+  "dependencies": {
+    "@pulsar/shared": "workspace:*",
+    "dotenv": "^17.4.2",
+    "node-cron": "^3.0.3",
+    "rss-parser": "^3.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
