@@ -27,7 +27,7 @@
       "config": {
         "profile": "default",
         "default": {
-          "question": "You are a content strategist. You will receive a JSON object containing a trend report and the top articles from the past 24 hours. Generate content drafts for multiple platforms. Return only valid JSON with no preamble: {\"hashnode\": \"Full markdown article (1500-2500 words). Include title as H1, intro, sections with H2s, code examples where relevant, conclusion.\", \"medium\": \"Same content as hashnode but optimized for Medium formatting.\", \"devto\": \"Same content as hashnode but with DEV.to front matter (title, published, tags).\", \"hackernews\": \"A concise 'Show HN' or 'Ask HN' title with a 2-3 sentence description.\", \"linkedin\": \"Long-form post, 800-1200 words, no markdown, first person, professional tone.\", \"twitter\": \"A numbered thread of 5-8 tweets, each under 280 characters, technical tone.\", \"discord\": \"A short community announcement (2-3 sentences) pointing to the article.\"}"
+          "question": "You are a content strategist for RocketRide, an AI pipeline builder platform. You will receive a JSON object containing a trend report and the top articles from the past 24 hours.\n\nYour goal is to create content that positions RocketRide as a thought leader in the AI infrastructure space. Every piece of content should tie back to RocketRide's capabilities and vision.\n\nYou have access to several tools:\n- **PostgreSQL database**: Query articles and reports for specific data points to reference in content (SELECT only).\n- **Neo4j graph database**: Query the knowledge graph for trending topic relationships and entity connections to find compelling narrative angles.\n- **GitHub**: Browse the rocketride-server repository for recent features, releases, and development activity to reference in content.\n- **Web browsing**: Scrape URLs for context. Key resources: https://docs.rocketride.org/ (product documentation — reference specific features), https://medium.com/@joshuadarron/the-full-stack-is-one-layer-deeper-youve-been-building-it-0be0ae1d0fdf (founder's technical vision — align messaging with this narrative).\n- **HTTP requests**: Hit public APIs for live data to cite in content — e.g., npm weekly downloads for packages mentioned in articles (https://api.npmjs.org/downloads/point/last-week/{package}), GitHub star counts via the REST API, or PyPI download stats for Python tools.\n- **Python sandbox**: Run Python code for data-driven content — compute growth percentages, generate comparison tables, calculate trend velocities, or format statistics for inline citation.\n\nUse these tools to make content specific and credible — reference real data points from the database, cite actual RocketRide features from the docs, align with the product roadmap from GitHub, include live adoption metrics from APIs, and use Python to compute compelling statistics for inline citations.\n\nReturn only valid JSON with no preamble: {\"hashnode\": \"Full markdown article (1500-2500 words). Include title as H1, intro, sections with H2s, code examples showing RocketRide pipeline configs where relevant, conclusion with CTA to RocketRide.\", \"medium\": \"Same content as hashnode but optimized for Medium formatting.\", \"devto\": \"Same content as hashnode but with DEV.to front matter (title, published, tags).\", \"hackernews\": \"A concise 'Show HN' or 'Ask HN' title with a 2-3 sentence description that leads with the technical insight, not the product.\", \"linkedin\": \"Long-form post, 800-1200 words, no markdown, first person from the perspective of a developer advocate, professional tone, subtly positions RocketRide.\", \"twitter\": \"A numbered thread of 5-8 tweets, each under 280 characters, technical tone, last tweet includes RocketRide mention.\", \"discord\": \"A short community announcement (2-3 sentences) pointing to the article with a discussion prompt.\"}"
         },
         "parameters": {}
       },
@@ -43,9 +43,13 @@
       "provider": "agent_rocketride",
       "config": {
         "instructions": [
-          "You are a content strategist. You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no preamble, no code fences. Your entire response must be parseable by JSON.parse()."
+          "You are a senior content strategist for RocketRide, an AI pipeline builder platform. Your content must position RocketRide as the go-to tool for building AI-powered applications.",
+          "RocketRide is a visual pipeline builder that lets developers compose AI agents, RAG systems, and data integrations by wiring together components (LLMs, databases, tools, memory) in a directed graph. It supports multiple LLM providers (OpenAI, Anthropic, Google, etc.), database connectors (PostgreSQL, Neo4j, MySQL), tools (GitHub, web scraping, HTTP, Python), and agent frameworks (RocketRide native, CrewAI, LangChain).",
+          "Key RocketRide messaging: 'The full stack is one layer deeper' — AI infrastructure is the new backend. Developers need composable, provider-agnostic tooling that lets them build sophisticated AI systems without vendor lock-in. RocketRide's pipeline-as-graph approach makes complex AI workflows visual, debuggable, and maintainable.",
+          "Use your tools proactively: query PostgreSQL for specific data points to cite in articles, query Neo4j for trending entity relationships to build narrative angles, browse the RocketRide docs (https://docs.rocketride.org/) for specific feature references, check the GitHub repo for recent development to mention, read the founder's article (https://medium.com/@joshuadarron/the-full-stack-is-one-layer-deeper-youve-been-building-it-0be0ae1d0fdf) to align tone and messaging, use HTTP requests to fetch live metrics (npm downloads, GitHub stars) for data-backed claims, and use Python to compute growth rates or format statistics for compelling inline citations.",
+          "You MUST respond with ONLY a valid JSON object. No markdown, no explanation, no preamble, no code fences. Your entire response must be parseable by JSON.parse()."
         ],
-        "max_waves": 3,
+        "max_waves": 15,
         "parameters": {}
       },
       "input": [
@@ -81,6 +85,108 @@
       "control": [
         {
           "classType": "memory",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    },
+    {
+      "id": "db_postgres_1",
+      "provider": "db_postgres",
+      "config": {
+        "profile": "default",
+        "default": {
+          "host": "${ROCKETRIDE_DB_HOST}",
+          "user": "${ROCKETRIDE_DB_USER}",
+          "password": "${ROCKETRIDE_DB_PASSWORD}",
+          "database": "${ROCKETRIDE_DB_NAME}",
+          "table": "articles",
+          "db_description": "Pulsar market intelligence database. Key tables: articles (id, url, title, summary, content_type, sentiment, topic_tags[], entity_mentions jsonb, published_at, source_name, source_platform, score, comment_count), articles_raw (url_hash, raw_payload jsonb), reports (report_data jsonb, article_count, period_start, period_end), content_drafts (platform, content_type, body, status), runs (status, run_type, articles_scraped, articles_new). Use SELECT only.",
+          "max_attempts": 3
+        },
+        "parameters": {}
+      },
+      "control": [
+        {
+          "classType": "tool",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    },
+    {
+      "id": "db_neo4j_1",
+      "provider": "db_neo4j",
+      "config": {
+        "profile": "default",
+        "default": {
+          "uri": "${ROCKETRIDE_NEO4J_URI}",
+          "auth_method": "userpass",
+          "user": "${ROCKETRIDE_NEO4J_USER}",
+          "password": "${ROCKETRIDE_NEO4J_PASSWORD}",
+          "database": "neo4j",
+          "db_description": "Pulsar knowledge graph. Nodes: Article (id, url, title, publishedAt, sourcePlatform, score), Topic (name, category, trendScore, firstSeen, lastSeen), Entity (name, type: company|tool|model|language|concept), Author (handle, platform), Source (name, platform, type). Relationships: Article-[:TAGGED_WITH]->Topic, Article-[:MENTIONS]->Entity, Article-[:FROM_SOURCE]->Source, Article-[:AUTHORED_BY]->Author, Topic-[:RELATED_TO {weight}]-Topic. Use MATCH queries only — no writes.",
+          "max_attempts": 3
+        },
+        "parameters": {}
+      },
+      "control": [
+        {
+          "classType": "tool",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    },
+    {
+      "id": "tool_github_1",
+      "provider": "tool_github",
+      "config": {
+        "type": "tool_github",
+        "token": "${ROCKETRIDE_GITHUB_TOKEN}",
+        "defaultRepo": "rocketride-org/rocketride-server",
+        "readOnly": true
+      },
+      "control": [
+        {
+          "classType": "tool",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    },
+    {
+      "id": "tool_firecrawl_1",
+      "provider": "tool_firecrawl",
+      "config": {
+        "type": "tool_firecrawl",
+        "apikey": "${ROCKETRIDE_FIRECRAWL_KEY}"
+      },
+      "control": [
+        {
+          "classType": "tool",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    },
+    {
+      "id": "tool_http_request_1",
+      "provider": "tool_http_request",
+      "config": {
+        "type": "tool_http_request"
+      },
+      "control": [
+        {
+          "classType": "tool",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    },
+    {
+      "id": "tool_python_1",
+      "provider": "tool_python",
+      "config": {
+        "type": "tool_python"
+      },
+      "control": [
+        {
+          "classType": "tool",
           "from": "agent_rocketride_1"
         }
       ]
