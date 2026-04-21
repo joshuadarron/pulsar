@@ -343,7 +343,7 @@ export default function DashboardWidgets({
                           <span className="text-xs text-gray-500 dark:text-neutral-400">{t.trendScore.toFixed(1)}</span>
                         </div>
                       </div>
-                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800">
+                      <div className="mt-1 h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800">
                         <div
                           className="h-full rounded-full bg-indigo-500"
                           style={{ width: `${(t.trendScore / maxScore) * 100}%` }}

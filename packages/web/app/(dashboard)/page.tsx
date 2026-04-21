@@ -28,7 +28,7 @@ export default async function DashboardPage() {
       "SELECT source_platform, count(*)::text as count FROM articles GROUP BY source_platform ORDER BY count(*) DESC",
     ),
     query<{ sentiment: string; count: string }>(
-      "SELECT COALESCE(sentiment, 'neutral') as sentiment, count(*)::text as count FROM articles GROUP BY sentiment ORDER BY count(*) DESC",
+      "SELECT COALESCE(sentiment, 'neutral') as sentiment, count(*)::text as count FROM articles GROUP BY COALESCE(sentiment, 'neutral') ORDER BY count(*) DESC",
     ),
     query<{ status: string; count: string }>(
       "SELECT status, count(*)::text as count FROM content_drafts GROUP BY status ORDER BY count(*) DESC",
