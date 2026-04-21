@@ -37,6 +37,15 @@
   animation: slide-in-right 0.3s ease-out;
 }
 
+@keyframes pulsar-beacon {
+  0%, 100% { transform: scale(1); opacity: 1; filter: drop-shadow(0 0 0 rgba(124, 58, 237, 0)); }
+  50% { transform: scale(1.2); opacity: 0.8; filter: drop-shadow(0 0 12px rgba(124, 58, 237, 0.6)); }
+}
+
+.animate-pulsar-beacon {
+  animation: pulsar-beacon 1.2s ease-in-out infinite;
+}
+
 @media print {
   nav, .no-print { display: none !important; }
   .print-full { width: 100% !important; max-width: none !important; padding: 0 !important; }

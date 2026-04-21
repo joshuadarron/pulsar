@@ -34,18 +34,29 @@ async function postProcessToJson<T = Record<string, unknown>>(
     // Fall through to post-processing
   }
 
-  // Use the JSON converter pipeline (direct LLM, no agent)
+  // Use the JSON converter pipeline with retries
   const token = await ensureJsonConverter(client);
-  const prompt = `Extract the data from the following text and return it as a JSON object matching this schema:\n${schema}\n\nText to convert:\n${rawResponse.slice(0, 30000)}`;
-  const response = await client.send(token, prompt);
+  const maxAttempts = 3;
+  let lastError: unknown;
 
-  if (response?.answers && response.answers.length > 0) {
-    const answer = response.answers[0];
-    const parsed = typeof answer === "string" ? answer : JSON.stringify(answer);
-    return extractJson<T>(parsed);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const prompt = attempt === 1
+      ? `Convert the following text into a JSON object matching this exact schema. Return ONLY the raw JSON — no markdown, no explanation, no code fences. Start with { and end with }.\n\nSchema:\n${schema}\n\nText to convert:\n${rawResponse.slice(0, 30000)}`
+      : `Your previous response was not valid JSON. Return ONLY a raw JSON object matching this schema. No markdown, no prose, no code fences. The first character must be { and the last must be }.\n\nSchema:\n${schema}\n\nSource text:\n${rawResponse.slice(0, 20000)}`;
+
+    try {
+      const response = await client.send(token, prompt);
+      if (response?.answers && response.answers.length > 0) {
+        const answer = response.answers[0];
+        const parsed = typeof answer === "string" ? answer : JSON.stringify(answer);
+        return extractJson<T>(parsed);
+      }
+    } catch (err) {
+      lastError = err;
+    }
   }
 
-  throw new SyntaxError(`Post-processing failed to extract JSON from: ${rawResponse.slice(0, 100)}...`);
+  throw new SyntaxError(`Post-processing failed after ${maxAttempts} attempts: ${lastError || rawResponse.slice(0, 100)}...`);
 }
 
 async function cleanupJsonConverter(client: Awaited<ReturnType<typeof getClient>>) {

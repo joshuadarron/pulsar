@@ -6,16 +6,20 @@ import KeywordsChart from "./KeywordsChart";
 import TechTable from "./TechTable";
 import OpportunityCards from "./OpportunityCards";
 
-export default function ReportView({ data, reportId }: { data: ReportData; reportId: string }) {
-  const periodStart = new Date(data.period.start).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  const periodEnd = new Date(data.period.end).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+export default function ReportView({ data, reportId, generatedAt }: { data: ReportData; reportId: string; generatedAt?: string }) {
+  const reportDate = new Date(generatedAt || Date.now()).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 
   return (
     <div className="space-y-6">
       {/* Section 1: Header */}
       <div className="report-header rounded-t-lg bg-gradient-to-r from-indigo-600 to-purple-600 p-8 text-white">
         <h1 className="text-2xl font-bold">Pulsar Intelligence Report</h1>
-        <p className="mt-2 text-indigo-100">{periodStart} — {periodEnd}</p>
+        <p className="mt-2 text-indigo-100">{reportDate}</p>
       </div>
 
       {/* Section 2: Key Metrics */}

@@ -21,6 +21,7 @@ export default function Sidebar() {
   const user = session?.user;
   const [unreadCount, setUnreadCount] = useState(0);
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  const [hasRunning, setHasRunning] = useState(false);
 
   useEffect(() => {
     function fetchUnread() {
@@ -41,8 +42,15 @@ export default function Sidebar() {
         })
         .catch(() => {});
     }
+    function fetchRunning() {
+      fetch("/api/runs/trigger")
+        .then((r) => r.json())
+        .then((data) => setHasRunning(Object.keys(data.running || {}).length > 0))
+        .catch(() => {});
+    }
     fetchUnread();
-    const interval = setInterval(fetchUnread, 10000);
+    fetchRunning();
+    const interval = setInterval(() => { fetchUnread(); fetchRunning(); }, 10000);
 
     function onRead() { fetchUnread(); }
     window.addEventListener("notification-read", onRead);
@@ -56,7 +64,7 @@ export default function Sidebar() {
   return (
     <aside className="no-print flex h-screen w-64 flex-col border-r border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
       <div className="flex h-16 items-center gap-2 border-b border-gray-200 dark:border-neutral-800 px-6">
-        <svg className="h-8 w-8" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg className={`h-8 w-8 ${hasRunning ? "animate-pulsar-beacon" : ""}`} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="16" cy="16" r="5" fill="#7c3aed" />
           <circle cx="16" cy="16" r="9" stroke="#7c3aed" strokeWidth="1.5" opacity="0.6" />
           <circle cx="16" cy="16" r="13" stroke="#7c3aed" strokeWidth="1.5" opacity="0.3" />
