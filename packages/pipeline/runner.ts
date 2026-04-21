@@ -405,17 +405,19 @@ async function runContentDrafts(
 
   await logRun(runId, "success", "content-drafts", `Content drafts saved: ${savedCount} of ${Object.keys(drafts).length} platforms`);
 
-  await query(
-    `INSERT INTO notifications (type, title, message, link, reference_id)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [
-      "drafts",
-      "Content Drafts Ready",
-      `${savedCount} platform drafts generated and ready for review.`,
-      "/drafts",
-      reportId,
-    ],
-  );
+  if (savedCount > 0) {
+    await query(
+      `INSERT INTO notifications (type, title, message, link, reference_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        "drafts",
+        "Content Drafts Ready",
+        `${savedCount} platform drafts generated and ready for review.`,
+        "/drafts",
+        reportId,
+      ],
+    );
+  }
 
   return savedCount;
 }
