@@ -4,6 +4,7 @@ node_modules/
 .env
 .env.local
 dist/
+packages/pipeline/pipelines/
 *.tsbuildinfo
 *.log
 .DS_Store
