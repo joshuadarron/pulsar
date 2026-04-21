@@ -19,12 +19,5 @@ export default async function ReportDetailPage({
 
   if (result.rows.length === 0) notFound();
 
-  return (
-    <div>
-      <div className="mb-6 no-print">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">Report Detail</h1>
-      </div>
-      <ReportView data={result.rows[0].report_data} reportId={id} />
-    </div>
-  );
+  return <ReportView data={result.rows[0].report_data} reportId={id} />;
 }

@@ -245,14 +245,29 @@ export default function RunDetailPage() {
   );
 }
 
+const STAT_ICONS: Record<string, { path: string; accent: string; bg: string; ring: string }> = {
+  Duration:           { path: "M12 6v6l4 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z",                                                     accent: "text-indigo-600 dark:text-indigo-400", bg: "bg-indigo-50 dark:bg-indigo-950", ring: "ring-indigo-500/20 dark:ring-indigo-400/20" },
+  Status:             { path: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",                                                    accent: "text-violet-600 dark:text-violet-400", bg: "bg-violet-50 dark:bg-violet-950", ring: "ring-violet-500/20 dark:ring-violet-400/20" },
+  "Articles Scraped": { path: "M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z", accent: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950", ring: "ring-amber-500/20 dark:ring-amber-400/20" },
+  "New Articles":     { path: "M12 4v16m8-8H4",                                                                                    accent: "text-green-600 dark:text-green-400", bg: "bg-green-50 dark:bg-green-950", ring: "ring-green-500/20 dark:ring-green-400/20" },
+};
+
 function StatTile({ label, value, live }: { label: string; value: string; live?: boolean }) {
+  const icon = STAT_ICONS[label] || STAT_ICONS.Duration;
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-4">
-      <p className="text-xs font-medium uppercase text-gray-400 dark:text-neutral-500">{label}</p>
-      <p className="mt-1 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-neutral-100 tabular-nums">
-        {value}
+    <div className="flex flex-col justify-between overflow-hidden rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
+      <div className="flex items-center gap-3">
+        <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${icon.bg} ring-1 ${icon.ring}`}>
+          <svg className={`h-5 w-5 ${icon.accent}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d={icon.path} />
+          </svg>
+        </div>
+        <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-neutral-500">{label}</p>
+      </div>
+      <div className="mt-3 flex items-baseline gap-2">
+        <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-neutral-100">{value}</span>
         {live && <span className="h-2 w-2 animate-pulse rounded-full bg-yellow-500" />}
-      </p>
+      </div>
     </div>
   );
 }

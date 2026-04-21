@@ -40,4 +40,6 @@
 @media print {
   nav, .no-print { display: none !important; }
   .print-full { width: 100% !important; max-width: none !important; padding: 0 !important; }
+  .report-section { break-inside: avoid; margin-bottom: 16px; }
+  .report-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }

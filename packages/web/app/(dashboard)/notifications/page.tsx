@@ -50,55 +50,59 @@ export default function NotificationsPage() {
       <h1 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">Notifications</h1>
       <p className="mt-1 text-gray-500 dark:text-neutral-400">Pipeline reports and content generation alerts</p>
 
-      <div className="mt-6 space-y-3">
+      <div className="mt-6 max-w-3xl space-y-3">
         {notifications.length === 0 ? (
           <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-8 text-center text-gray-400 dark:text-neutral-500">
             No notifications yet. Notifications appear after pipeline runs complete.
           </div>
         ) : (
           notifications.map((n) => {
-            const typeInfo = TYPE_ICONS[n.type] || { icon: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z", color: "text-gray-400" };
-            return (
-              <div
-                key={n.id}
-                onClick={() => !n.read && markAsRead(n.id)}
-                className={`rounded-lg border p-4 transition cursor-pointer ${
-                  n.read
-                    ? "border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900"
-                    : "border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 shadow-sm"
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="relative mt-0.5 flex-shrink-0">
-                    <svg className={`h-5 w-5 ${typeInfo.color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d={typeInfo.icon} />
-                    </svg>
+            const cardClass = `block rounded-lg border p-4 transition cursor-pointer ${
+              n.read
+                ? "border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:border-indigo-300 hover:shadow-sm"
+                : "border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 shadow-sm"
+            }`;
+            const cardContent = (
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-neutral-100">{n.title}</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-neutral-400 line-clamp-2">{n.message}</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <span className={`rounded px-2 py-0.5 text-xs ${
+                      n.type === "report" ? "bg-violet-50 text-violet-600 dark:bg-violet-900 dark:text-violet-300" :
+                      n.type === "drafts" ? "bg-amber-50 text-amber-600 dark:bg-amber-900 dark:text-amber-300" :
+                      "bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-neutral-400"
+                    }`}>
+                      {n.type}
+                    </span>
                     {!n.read && (
-                      <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-indigo-500" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <p className={`text-sm font-semibold ${n.read ? "text-gray-700 dark:text-neutral-300" : "text-gray-900 dark:text-neutral-100"}`}>{n.title}</p>
-                      <span className="flex-shrink-0 text-xs text-gray-400 dark:text-neutral-500">
-                        {new Date(n.created_at).toLocaleString()}
+                      <span className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
+                        Unread
                       </span>
-                    </div>
-                    <p className={`mt-1 text-sm ${n.read ? "text-gray-500 dark:text-neutral-500" : "text-gray-600 dark:text-neutral-400"}`}>{n.message}</p>
-                    {n.link && (
-                      <Link
-                        href={n.link}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!n.read) markAsRead(n.id);
-                        }}
-                        className="mt-2 inline-block text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-                      >
-                        View details
-                      </Link>
                     )}
                   </div>
                 </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-xs text-gray-400 dark:text-neutral-500">
+                    {new Date(n.created_at).toLocaleDateString()}
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-neutral-500">
+                    {new Date(n.created_at).toLocaleTimeString()}
+                  </p>
+                </div>
+              </div>
+            );
+
+            if (n.link) {
+              return (
+                <Link key={n.id} href={n.link} onClick={() => !n.read && markAsRead(n.id)} className={cardClass}>
+                  {cardContent}
+                </Link>
+              );
+            }
+            return (
+              <div key={n.id} onClick={() => !n.read && markAsRead(n.id)} className={cardClass}>
+                {cardContent}
               </div>
             );
           })
