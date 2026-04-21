@@ -97,7 +97,7 @@ The scraper and RocketRide pipelines run on independent schedules. The 04:00 pip
 - PDF export: Puppeteer, invoked server-side on demand via `/api/reports/:id/export/pdf`
 - Charts: Recharts (React, MIT licensed)
 - Scheduling: `node-cron` (two independent schedulers)
-- Auth: NextAuth.js v5 (Google + GitHub)
+- Auth: NextAuth.js v5 (GitHub)
 - Styling: Tailwind CSS
 - Package manager: pnpm
 
@@ -602,9 +602,7 @@ ROCKETRIDE_WS_URL=ws://localhost:5565
 NEXTAUTH_SECRET=
 NEXTAUTH_URL=http://localhost:3000
 
-# OAuth
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
+# OAuth (GitHub only)
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
 
@@ -674,7 +672,7 @@ pnpm dev
 - HTML email notification with link to UI report
 
 ### Phase 3: Core UI
-- Auth (Google + GitHub)
+- Auth (GitHub)
 - Report list + report detail view with all charts rendered from `report_data`
 - Print stylesheet (`?print=true`) for clean PDF rendering
 - On-demand PDF export via Puppeteer (`/api/reports/:id/export/pdf`)

@@ -30,10 +30,6 @@ export const env = {
     url: optional("NEXTAUTH_URL", "http://localhost:3000"),
   },
   oauth: {
-    google: {
-      clientId: optional("GOOGLE_CLIENT_ID", ""),
-      clientSecret: optional("GOOGLE_CLIENT_SECRET", ""),
-    },
     github: {
       clientId: optional("GITHUB_CLIENT_ID", ""),
       clientSecret: optional("GITHUB_CLIENT_SECRET", ""),
@@ -47,12 +43,8 @@ export const env = {
     notifyTo: optional("NOTIFY_EMAIL_TO", ""),
   },
   scraper: {
-    cron1: optional("SCRAPER_CRON_1", "0 0 * * *"),
-    cron2: optional("SCRAPER_CRON_2", "0 12 * * *"),
+    cron: optional("SCRAPER_CRON", "30 5 * * *"),
     maxItemsPerSource: parseInt(optional("SCRAPER_MAX_ITEMS_PER_SOURCE", "100")),
-  },
-  pipeline: {
-    cron: optional("PIPELINE_CRON", "0 4 * * *"),
   },
   trendScoreLambda: parseFloat(optional("TREND_SCORE_LAMBDA", "0.1")),
 } as const;

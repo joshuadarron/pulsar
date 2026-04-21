@@ -42,7 +42,7 @@ Scraper (00:00, 12:00)          Pipeline Scheduler (04:00)
 | Framework | Next.js 15 (App Router) |
 | Databases | PostgreSQL 16 + Neo4j 5.x (Docker Compose) |
 | AI | RocketRide (Claude Sonnet 4.6 via `llm_anthropic`) |
-| Auth | NextAuth.js v5 (Google + GitHub) |
+| Auth | NextAuth.js v5 (GitHub) |
 | Charts | Recharts |
 | PDF | Puppeteer (server-side, on-demand) |
 | Styling | Tailwind CSS |
@@ -90,7 +90,7 @@ cp .env.example .env.local
 
 Fill in:
 - `ROCKETRIDE_APIKEY` and `ROCKETRIDE_ANTHROPIC_KEY` for AI pipelines
-- `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID/SECRET`, `GITHUB_CLIENT_ID/SECRET` for auth
+- `NEXTAUTH_SECRET`, `GITHUB_CLIENT_ID/SECRET` for auth
 - `SMTP_*` and `NOTIFY_EMAIL_TO` for email notifications
 
 ### 4. Run database migrations

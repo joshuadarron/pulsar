@@ -12,7 +12,7 @@ Pulsar — Automated market intelligence and content agent. Scrapes free develop
 - **Framework:** Next.js 15 (App Router)
 - **Databases:** PostgreSQL 16 + Neo4j 5.x (Docker Compose)
 - **AI:** RocketRide (WebSocket on port 5565, pipelines as JSON)
-- **Auth:** NextAuth.js v5 (Google + GitHub)
+- **Auth:** NextAuth.js v5 (GitHub)
 - **Charts:** Recharts
 - **PDF:** Puppeteer (server-side, on-demand)
 - **Styling:** Tailwind CSS
@@ -37,15 +37,15 @@ pnpm dev                      # Start Next.js dev server
 pnpm run scrape               # Manual full scrape
 pnpm run scrape -- --source=X # Scrape single source (hackernews, reddit, etc.)
 pnpm run pipeline             # Manual pipeline run
-pnpm run pipeline-scheduler   # Start the 04:00 RocketRide pipeline scheduler
+pnpm run scrape-scheduler     # Start scheduler (scrape at 5:30am → pipeline after)
 pnpm run db:migrate           # Run database migrations
 ```
 
 ## Architecture
 
-Three independent processes:
-1. **Scraper** (`packages/scraper/`) — Programmatic data collection, no AI. Runs at 00:00 and 12:00. Writes raw data to PostgreSQL, graph relationships to Neo4j.
-2. **Pipeline Scheduler** (`packages/pipeline/`) — Triggers RocketRide pipelines sequentially at 04:00 via WebSocket: trend-report → content-drafts. Sends email notification after completion.
+Two processes + web app:
+1. **Scheduler** (`packages/scraper/`) — Runs daily at 05:30. Scrapes all sources, then automatically triggers the pipeline (trend-report → content-drafts → email notification) sequentially.
+2. **Pipeline** (`packages/pipeline/`) — RocketRide AI pipelines. Can also be triggered manually via `pnpm run pipeline`.
 3. **Next.js App** (`packages/web/`) — UI and API routes. Renders reports from `report_data` JSONB, serves PDF export via Puppeteer.
 
 Shared code lives in `packages/shared/` and is consumed via `@pulsar/shared` subpath exports (e.g., `@pulsar/shared/db/postgres`, `@pulsar/shared/types`).
