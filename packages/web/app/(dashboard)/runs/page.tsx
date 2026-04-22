@@ -15,7 +15,8 @@ interface Run {
   error_log: string | null;
 }
 
-const PAGE_SIZE = 20;
+const ROW_OPTIONS = [10, 15, 25, 50] as const;
+const DEFAULT_PAGE_SIZE = 10;
 
 function formatDuration(startedAt: string, completedAt: string | null): string {
   const start = new Date(startedAt).getTime();
@@ -65,11 +66,24 @@ export default function RunsPage() {
     if (typeof window !== "undefined") return (localStorage.getItem("runs_sortOrder") as SortOrder) || "desc";
     return "desc";
   });
+  const [pageSize, setPageSize] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = parseInt(localStorage.getItem("runs_pageSize") || "");
+      if (ROW_OPTIONS.includes(saved as typeof ROW_OPTIONS[number])) return saved;
+    }
+    return DEFAULT_PAGE_SIZE;
+  });
   const [triggering, setTriggering] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [runningTypes, setRunningTypes] = useState<Record<string, string>>({});
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  function handlePageSizeChange(size: number) {
+    setPageSize(size);
+    localStorage.setItem("runs_pageSize", String(size));
+    setPage(1);
+  }
 
   function handleSort(key: SortKey) {
     let newOrder: SortOrder = "desc";
@@ -87,14 +101,14 @@ export default function RunsPage() {
 
   const fetchRuns = useCallback(() => {
     Promise.all([
-      fetch(`/api/runs?page=${page}&limit=${PAGE_SIZE}&sort=${sortBy}&order=${sortOrder}`).then((r) => r.json()),
+      fetch(`/api/runs?page=${page}&limit=${pageSize}&sort=${sortBy}&order=${sortOrder}`).then((r) => r.json()),
       fetch("/api/runs/trigger").then((r) => r.json()),
     ]).then(([runsData, statusData]) => {
       setRuns(runsData.runs);
       setTotal(runsData.total);
       setRunningTypes(statusData.running);
     });
-  }, [page, sortBy, sortOrder]);
+  }, [page, pageSize, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchRuns();
@@ -122,7 +136,7 @@ export default function RunsPage() {
         // Poll rapidly until the new run appears
         let attempts = 0;
         const poll = setInterval(async () => {
-          const r = await fetch(`/api/runs?page=1&limit=${PAGE_SIZE}&sort=${sortBy}&order=${sortOrder}`);
+          const r = await fetch(`/api/runs?page=1&limit=${pageSize}&sort=${sortBy}&order=${sortOrder}`);
           const data = await r.json();
           setRuns(data.runs);
           setTotal(data.total);
@@ -190,21 +204,21 @@ export default function RunsPage() {
                   onClick={() => router.push(`/runs/${run.id}`)}
                   className="cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800"
                 >
-                  <td className="px-4 py-3 text-sm">
+                  <td className="px-4 py-4 text-sm">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
                       run.run_type === "scrape" ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" : "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
                     }`}>
                       {run.run_type}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400 capitalize">{run.trigger}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">
+                  <td className="px-4 py-4 text-sm text-gray-600 dark:text-neutral-400 capitalize">{run.trigger}</td>
+                  <td className="px-4 py-4 text-sm text-gray-600 dark:text-neutral-400">
                     {new Date(run.started_at).toLocaleString()}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">
+                  <td className="px-4 py-4 text-sm text-gray-600 dark:text-neutral-400">
                     <LiveDuration startedAt={run.started_at} completedAt={run.completed_at} status={run.status} />
                   </td>
-                  <td className="px-4 py-3 text-sm">
+                  <td className="px-4 py-4 text-sm">
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                       run.status === "complete" ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" :
                       run.status === "failed" ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" :
@@ -215,8 +229,8 @@ export default function RunsPage() {
                       {run.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">{run.articles_scraped}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">{run.articles_new}</td>
+                  <td className="px-4 py-4 text-sm text-gray-600 dark:text-neutral-400">{run.articles_scraped}</td>
+                  <td className="px-4 py-4 text-sm text-gray-600 dark:text-neutral-400">{run.articles_new}</td>
                 </tr>
               ))
             )}
@@ -224,12 +238,26 @@ export default function RunsPage() {
         </table>
       </div>
 
-      {/* Pagination */}
-      {total > PAGE_SIZE && (
-        <div className="mt-4 flex items-center justify-between">
-          <p className="text-sm text-gray-500 dark:text-neutral-400">
-            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total} runs
-          </p>
+      {/* Pagination + rows-per-page */}
+      <div className="mt-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-gray-500 dark:text-neutral-400">Rows</label>
+          <select
+            value={pageSize}
+            onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+            className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm text-gray-700 dark:text-neutral-300 focus:border-indigo-500 focus:outline-none"
+          >
+            {ROW_OPTIONS.map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+          {total > 0 && (
+            <p className="text-sm text-gray-500 dark:text-neutral-400">
+              Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total}
+            </p>
+          )}
+        </div>
+        {totalPages > 1 && (
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -249,8 +277,8 @@ export default function RunsPage() {
               Next
             </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
