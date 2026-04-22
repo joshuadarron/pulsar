@@ -156,11 +156,7 @@ export default function ReportView({ data, reportId, generatedAt }: { data: Repo
 			{sections.contentRecommendations?.text && (
 				<div className="report-section rounded-lg border border-gray-200 dark:border-neutral-700 border-l-4 border-l-indigo-500 bg-white dark:bg-neutral-900 p-6">
 					<h2 className="text-xl font-semibold text-gray-900 dark:text-neutral-100">Content Recommendations</h2>
-					<div className="mt-4 space-y-3">
-						{sections.contentRecommendations.text.split("\n\n").map((p, i) => (
-							<p key={i} className="text-sm leading-relaxed text-gray-600 dark:text-neutral-400">{p}</p>
-						))}
-					</div>
+					<ContentRecommendations text={sections.contentRecommendations.text} />
 				</div>
 			)}
 
@@ -201,6 +197,125 @@ export default function ReportView({ data, reportId, generatedAt }: { data: Repo
 					Export PDF
 				</a>
 			</div>
+		</div>
+	);
+}
+
+// ---------------------------------------------------------------------------
+// Content recommendations: parse numbered items into cards with bold handling.
+// Falls back to plain paragraphs if no numbered pattern is detected.
+// ---------------------------------------------------------------------------
+
+interface Recommendation {
+	number: number;
+	title: string;
+	body: string;
+}
+
+function parseRecommendations(text: string): { preamble: string; items: Recommendation[]; postscript: string } {
+	// Split on numbered item headers: **1. "Title" (format)** or **1. "Title"**
+	const itemPattern = /\*\*(\d+)\.\s+(.+?)\*\*/g;
+	const matches = [...text.matchAll(itemPattern)];
+
+	if (matches.length === 0) {
+		return { preamble: text, items: [], postscript: "" };
+	}
+
+	const preamble = text.slice(0, matches[0].index).trim();
+	const items: Recommendation[] = [];
+
+	for (let i = 0; i < matches.length; i++) {
+		const match = matches[i];
+		const bodyStart = match.index! + match[0].length;
+		const bodyEnd = i < matches.length - 1 ? matches[i + 1].index! : text.length;
+		let body = text.slice(bodyStart, bodyEnd).trim();
+
+		// Check if the last item's body contains a prioritization note
+		let postCandidate = "";
+		if (i === matches.length - 1) {
+			const prioMatch = body.match(/\n\n\*\*Prioritization note:\*\*/i);
+			if (prioMatch && prioMatch.index !== undefined) {
+				postCandidate = body.slice(prioMatch.index).trim();
+				body = body.slice(0, prioMatch.index).trim();
+			}
+		}
+
+		items.push({
+			number: parseInt(match[1]),
+			title: match[2].replace(/^[""\u201c]|[""\u201d]$/g, "").trim(),
+			body,
+		});
+
+		if (postCandidate) {
+			return { preamble, items, postscript: postCandidate };
+		}
+	}
+
+	return { preamble, items, postscript: "" };
+}
+
+function renderInlineBold(text: string): React.ReactNode[] {
+	const parts = text.split(/\*\*(.+?)\*\*/g);
+	return parts.map((part, i) =>
+		i % 2 === 1
+			? <strong key={i} className="text-gray-800 dark:text-neutral-200">{part}</strong>
+			: <span key={i}>{part}</span>
+	);
+}
+
+function ContentRecommendations({ text }: { text: string }) {
+	const { preamble, items, postscript } = parseRecommendations(text);
+
+	// Fallback: no numbered items found, render as bold-aware paragraphs
+	if (items.length === 0) {
+		return (
+			<div className="mt-4 space-y-3">
+				{text.split("\n\n").map((p, i) => (
+					<p key={i} className="text-sm leading-relaxed text-gray-600 dark:text-neutral-400">
+						{renderInlineBold(p)}
+					</p>
+				))}
+			</div>
+		);
+	}
+
+	return (
+		<div className="mt-4 space-y-4">
+			{preamble && (
+				<p className="text-sm leading-relaxed text-gray-600 dark:text-neutral-400">
+					{renderInlineBold(preamble)}
+				</p>
+			)}
+
+			{items.map((item) => (
+				<div key={item.number} className="rounded-lg border border-gray-200 dark:border-neutral-700 border-l-4 border-l-indigo-500 bg-white dark:bg-neutral-800 p-4">
+					<div className="flex items-start gap-3">
+						<span className="flex-shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900 text-xs font-bold text-indigo-700 dark:text-indigo-300">
+							{item.number}
+						</span>
+						<div className="min-w-0 flex-1">
+							<p className="text-sm font-semibold text-gray-900 dark:text-neutral-100">{item.title}</p>
+							<div className="mt-2 space-y-2">
+								{item.body.split("\n\n").filter((p) => p.trim()).map((p, i) => (
+									<p key={i} className="text-sm leading-relaxed text-gray-600 dark:text-neutral-400">
+										{renderInlineBold(p)}
+									</p>
+								))}
+							</div>
+						</div>
+					</div>
+				</div>
+			))}
+
+			{postscript && (
+				<div className="rounded-lg bg-gray-50 dark:bg-neutral-800 p-4">
+					{postscript.split("\n\n").filter((p) => p.trim()).map((p, i) => (
+						<p key={i} className="text-sm leading-relaxed text-gray-600 dark:text-neutral-400">
+							{renderInlineBold(p)}
+						</p>
+					))}
+				</div>
+			)}
 		</div>
 	);
 }

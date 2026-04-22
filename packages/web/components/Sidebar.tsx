@@ -64,11 +64,21 @@ export default function Sidebar() {
   return (
     <aside className="no-print flex h-screen w-64 flex-col border-r border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
       <div className="flex h-16 items-center gap-2 border-b border-gray-200 dark:border-neutral-800 px-6">
-        <svg className={`h-8 w-8 ${hasRunning ? "animate-pulsar-beacon" : ""}`} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="16" cy="16" r="5" fill="#7c3aed" />
-          <circle cx="16" cy="16" r="9" stroke="#7c3aed" strokeWidth="1.5" opacity="0.6" />
-          <circle cx="16" cy="16" r="13" stroke="#7c3aed" strokeWidth="1.5" opacity="0.3" />
-        </svg>
+        {hasRunning ? (
+          <Link href="/runs" title="Pipeline running — view run history">
+            <svg className="h-8 w-8 animate-pulsar-beacon cursor-pointer" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="16" cy="16" r="5" fill="#7c3aed" />
+              <circle cx="16" cy="16" r="9" stroke="#7c3aed" strokeWidth="1.5" opacity="0.6" />
+              <circle cx="16" cy="16" r="13" stroke="#7c3aed" strokeWidth="1.5" opacity="0.3" />
+            </svg>
+          </Link>
+        ) : (
+          <svg className="h-8 w-8" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="5" fill="#7c3aed" />
+            <circle cx="16" cy="16" r="9" stroke="#7c3aed" strokeWidth="1.5" opacity="0.6" />
+            <circle cx="16" cy="16" r="13" stroke="#7c3aed" strokeWidth="1.5" opacity="0.3" />
+          </svg>
+        )}
         <span className="text-xl font-bold">Pulsar</span>
       </div>
 
