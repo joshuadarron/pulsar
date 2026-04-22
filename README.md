@@ -1,38 +1,46 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="Pulsar — Automated AI Market Intelligence & Content Agent" width="100%"/>
+  <img src="assets/banner.svg" alt="Pulsar — Market Intelligence Agent" width="100%"/>
 </p>
 
-# Pulsar
+```bash
+git clone https://github.com/JoshuaDarron/pulsar && cd pulsar
+docker-compose up -d              # PostgreSQL + Neo4j
+pnpm install                      # dependencies
+cp .env.example .env.local        # configure secrets (see below)
+pnpm run db:migrate               # create tables
+pnpm run scrape                   # initial data collection
+pnpm dev                          # http://localhost:3000
+```
 
-Automated AI market intelligence and content agent. Scrapes free developer sources twice daily, runs AI analysis via RocketRide pipelines, and outputs trend reports + content drafts for human review.
+Automated market intelligence agent. Scrapes free developer sources, runs AI analysis via RocketRide pipelines, and outputs trend reports + content drafts for human review.
+
+## Setup
+
+### Prerequisites
+
+- Node.js 20+
+- pnpm
+- Docker + Docker Compose
+- RocketRide runtime (port 5565)
+
+### Environment
+
+```bash
+cp .env.example .env.local
+```
+
+Fill in:
+- `ROCKETRIDE_APIKEY` and `ROCKETRIDE_ANTHROPIC_KEY` for AI pipelines
+- `NEXTAUTH_SECRET`, `GITHUB_CLIENT_ID/SECRET` for auth
+- `SMTP_*` and `NOTIFY_EMAIL_TO` for email notifications
 
 ## Architecture
 
-Three independent processes:
+Two processes + web app:
 
-1. **Scraper** — Programmatic data collection from 8 sources (no AI). Runs at 00:00 and 12:00. Writes raw data to PostgreSQL, graph relationships to Neo4j.
-2. **Pipeline Scheduler** — Triggers three RocketRide AI pipelines sequentially at 04:00: summarization → trend-report → content-drafts. Sends email notification after completion.
+1. **Scheduler** — Runs daily at 05:30. Scrapes all sources, then triggers the pipeline (trend-report, content-drafts, email notification) sequentially.
+2. **Pipeline** — RocketRide AI pipelines. Five-section trend report generated in three passes, then content drafts for 7 platforms.
 3. **Next.js App** — Dashboard UI with report visualization, article feed, graph explorer, content drafts review, and on-demand PDF export.
-
-```
-Scraper (00:00, 12:00)          Pipeline Scheduler (04:00)
-       |                                |
-       v                                v
-  +---------+                   +---------------+
-  | HN      |                   | RocketRide    |
-  | Reddit  |  -> PostgreSQL <- | (Claude LLM)  |
-  | GitHub  |  -> Neo4j         |               |
-  | ArXiv   |                   | summarize     |
-  | Hashnode |                   | trend-report  |
-  | Dev.to  |                   | content-drafts|
-  | Medium  |                   +-------+-------+
-  | RSS     |                           |
-  +---------+                     Email + Report
-                                        |
-                                        v
-                                  Next.js UI
-                               (charts, PDF, drafts)
-```
 
 ## Stack
 
@@ -61,149 +69,57 @@ All free, no API keys required for scraping:
 - **Medium** — RSS tag feeds
 - **RSS/Substack** — Configurable feed list
 
-## Setup
-
-### Prerequisites
-
-- Node.js 20+
-- pnpm
-- Docker + Docker Compose
-- RocketRide runtime (port 5565)
-
-### 1. Start databases
-
-```bash
-docker-compose up -d
-```
-
-### 2. Install dependencies
-
-```bash
-pnpm install
-```
-
-### 3. Configure environment
-
-```bash
-cp .env.example .env.local
-```
-
-Fill in:
-- `ROCKETRIDE_APIKEY` and `ROCKETRIDE_ANTHROPIC_KEY` for AI pipelines
-- `NEXTAUTH_SECRET`, `GITHUB_CLIENT_ID/SECRET` for auth
-- `SMTP_*` and `NOTIFY_EMAIL_TO` for email notifications
-
-### 4. Run database migrations
-
-```bash
-pnpm run db:migrate
-```
-
-### 5. Run initial scrape
-
-```bash
-pnpm run scrape
-```
-
-### 6. Start the app
-
-```bash
-pnpm dev
-```
-
 ## Commands
 
 | Command | Description |
 |---|---|
 | `pnpm dev` | Start Next.js dev server |
 | `pnpm run scrape` | Manual full scrape (all sources) |
-| `pnpm run scrape --source=hackernews` | Scrape a single source |
-| `pnpm run pipeline-scheduler` | Start the 04:00 pipeline scheduler |
+| `pnpm run scrape -- --source=hackernews` | Scrape a single source |
+| `pnpm run pipeline` | Manual pipeline run |
+| `pnpm run scrape-scheduler` | Start scheduler (scrape at 5:30am, pipeline after) |
 | `pnpm run db:migrate` | Run database migrations |
 | `pnpm build` | Production build |
 
-## Project Structure
+## Monorepo Structure
 
 ```
-app/                    Next.js App Router pages + API routes
-  (dashboard)/          Authenticated dashboard pages
-    page.tsx            Dashboard overview
-    reports/            Report list + detail with charts
-    drafts/             Content drafts review
-    feed/               Article feed with filters
-    explore/            Force-directed graph explorer
-    runs/               Run history log
-    settings/           Source config + manual triggers
-  api/                  REST API endpoints
-  login/                OAuth login page
-components/
-  report/               Recharts visualization components
-  Sidebar.tsx           Navigation sidebar
-scraper/
-  sources/              Source adapters (one per platform)
-  dedup.ts              SHA-256 URL deduplication
-  extract.ts            Keyword + entity extraction
-  graph-writer.ts       Neo4j graph writer
-  trend-scorer.ts       Exponential decay trend scoring
-pipelines/              RocketRide .pipe definitions
-  summarization.pipe    Article enrichment pipeline
-  trend-report.pipe     Trend analysis pipeline
-  content-drafts.pipe   Content generation pipeline
-pipeline-scheduler/     AI pipeline orchestrator
-  runner.ts             Sequential pipeline execution
-  notify.ts             HTML email notification
-config/
-  env.ts                Centralized env var config
-  sources.ts            Source lists + entity dictionary
-lib/
-  db/                   PostgreSQL + Neo4j clients + migrations
-  auth.ts               NextAuth configuration
-  rocketride.ts         RocketRide SDK wrapper
-  retry.ts              Exponential backoff retry utility
-types/                  Shared TypeScript interfaces
+packages/
+  shared/     @pulsar/shared    — Config, DB clients, types, utilities
+  scraper/    @pulsar/scraper   — Data collection process
+  pipeline/   @pulsar/pipeline  — AI analysis & report generation
+  web/        @pulsar/web       — Next.js app (UI + API routes)
 ```
 
 ## Adding a New Source
 
-1. Create `scraper/sources/mysource.ts` implementing `SourceAdapter`:
+1. Create `packages/scraper/sources/mysource.ts` implementing `SourceAdapter`:
 
 ```typescript
-import type { SourceAdapter, ScrapedItem } from "./types";
+import type { SourceAdapter, ScrapedItem } from "@pulsar/shared/types";
 
 export const mysource: SourceAdapter = async () => {
   // Fetch and return ScrapedItem[]
 };
 ```
 
-2. Register it in `scraper/sources/index.ts`:
+2. Register it in `packages/scraper/sources/index.ts`.
+3. Run with `pnpm run scrape -- --source=mysource`.
 
-```typescript
-import { mysource } from "./mysource";
+## Report Pipeline
 
-export const sources = {
-  // ...existing sources
-  mysource,
-};
-```
+The trend-report agent runs in three passes:
 
-3. Run with `pnpm run scrape --source=mysource`.
-
-## AI Pipelines
-
-Three RocketRide pipelines run sequentially at 04:00:
-
-1. **Summarization** — Enriches unenriched articles with summary, content type, sentiment, topic tags, and entity mentions via Claude.
-2. **Trend Report** — Aggregates Neo4j trend data + PostgreSQL keyword frequencies, sends to Claude for narrative analysis. Saves structured report JSON.
-3. **Content Drafts** — Takes the report + top articles, generates drafts for 7 platforms (Hashnode, Medium, Dev.to, HN, LinkedIn, X, Discord).
-
-## Report Rendering
+1. **Pass 1** — Market landscape, technology trends, developer signals. Each section receives its own data slice and writes analytical text + optional research citations.
+2. **Pass 2** — Content recommendations. Reads pass 1 text outputs only. Produces prioritized content ideas for the downstream content-drafts pipeline.
+3. **Pass 3** — Executive summary. Reads all four prior text outputs. 3-5 sentence synthesis for executives.
 
 The `report_data` JSONB column is the single source of truth:
 
-- **UI** — Full native rendering with Recharts (bar charts, donut, heatmap, sparklines, tables)
-- **Email** — HTML with inline styles, top 5 keywords/topics, link to full report
+- **UI** — Full native rendering with Recharts
+- **Email** — HTML with inline styles, key metrics, section summaries
 - **PDF** — Puppeteer renders `/reports/:id?print=true` with print-optimized CSS
 
 ## License
 
-MIT
+[MIT](LICENSE)

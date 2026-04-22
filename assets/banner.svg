@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#08061a"/>
+      <stop offset="100%" style="stop-color:#110d2b"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:0.18"/>
+      <stop offset="100%" style="stop-color:#08061a;stop-opacity:0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="420" fill="url(#bg)" rx="12"/>
+
+  <!-- Stars — sparse, small -->
+  <g fill="white" opacity="0.45">
+    <circle cx="72" cy="38" r="1"/>
+    <circle cx="195" cy="95" r="0.7"/>
+    <circle cx="340" cy="28" r="0.9"/>
+    <circle cx="485" cy="72" r="0.6"/>
+    <circle cx="610" cy="18" r="1"/>
+    <circle cx="755" cy="58" r="0.7"/>
+    <circle cx="880" cy="32" r="0.8"/>
+    <circle cx="1010" cy="68" r="0.6"/>
+    <circle cx="1140" cy="24" r="0.9"/>
+    <circle cx="110" cy="380" r="0.7"/>
+    <circle cx="290" cy="360" r="0.6"/>
+    <circle cx="520" cy="390" r="0.8"/>
+    <circle cx="730" cy="370" r="0.7"/>
+    <circle cx="940" cy="385" r="0.6"/>
+    <circle cx="1100" cy="365" r="0.8"/>
+    <circle cx="55" cy="200" r="0.5"/>
+    <circle cx="420" cy="185" r="0.6"/>
+    <circle cx="780" cy="195" r="0.5"/>
+    <circle cx="1050" cy="210" r="0.6"/>
+    <circle cx="1165" cy="150" r="0.5"/>
+    <circle cx="160" cy="290" r="0.5"/>
+    <circle cx="650" cy="310" r="0.6"/>
+    <circle cx="990" cy="280" r="0.5"/>
+  </g>
+
+  <!-- Ambient glow behind logo -->
+  <circle cx="600" cy="155" r="200" fill="url(#glow)"/>
+
+  <!-- Logo: concentric rings (matches icon.svg) -->
+  <circle cx="600" cy="155" r="42" stroke="#7c3aed" stroke-width="2" fill="none" opacity="0.2"/>
+  <circle cx="600" cy="155" r="30" stroke="#7c3aed" stroke-width="2" fill="none" opacity="0.45"/>
+  <circle cx="600" cy="155" r="18" stroke="#7c3aed" stroke-width="2" fill="none" opacity="0.7"/>
+  <circle cx="600" cy="155" r="8" fill="#7c3aed"/>
+  <circle cx="600" cy="155" r="3.5" fill="white" opacity="0.9"/>
+
+  <!-- Title -->
+  <text x="600" y="260" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="48" font-weight="700" fill="white" text-anchor="middle" letter-spacing="-1">Pulsar</text>
+
+  <!-- Subtitle -->
+  <text x="600" y="292" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="15" fill="rgba(167,139,250,0.7)" text-anchor="middle" letter-spacing="3.5" text-transform="uppercase">MARKET INTELLIGENCE AGENT</text>
+
+  <!-- Thin separator line -->
+  <line x1="520" y1="315" x2="680" y2="315" stroke="rgba(124,58,237,0.2)" stroke-width="1"/>
+
+  <!-- Stack line -->
+  <text x="600" y="345" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="12" fill="rgba(255,255,255,0.35)" text-anchor="middle" letter-spacing="1">Next.js  ·  RocketRide  ·  PostgreSQL  ·  Neo4j  ·  Claude</text>
+</svg>
