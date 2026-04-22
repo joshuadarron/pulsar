@@ -37,14 +37,14 @@ cp .env.example .env.local
 
 5. Open `.env.local` in your editor and fill in the following values
 ```
-ROCKETRIDE_APIKEY=your-rocketride-api-key
-ROCKETRIDE_ANTHROPIC_KEY=your-anthropic-api-key
-NEXTAUTH_SECRET=any-random-secret-string
-GITHUB_CLIENT_ID=your-github-oauth-client-id
-GITHUB_CLIENT_SECRET=your-github-oauth-client-secret
-SMTP_USER=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-NOTIFY_EMAIL_TO=recipient@example.com
+ROCKETRIDE_APIKEY=
+ROCKETRIDE_ANTHROPIC_KEY=
+NEXTAUTH_SECRET=
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+SMTP_USER=
+SMTP_PASSWORD=
+NOTIFY_EMAIL_TO=
 ```
 
 6. Run database migrations
