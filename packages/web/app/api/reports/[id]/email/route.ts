@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { query } from '@pulsar/shared/db/postgres';
 import { env } from '@pulsar/shared/config/env';
@@ -27,6 +26,9 @@ export async function GET(
 	const generatedAt = result.rows[0].generated_at;
 	const reportUrl = `${env.nextauth.url}/reports/${id}`;
 	const pdfUrl = `${env.nextauth.url}/api/reports/${id}/export/pdf`;
+
+	// Dynamic import avoids Next.js static-analysis block on react-dom/server in route handlers
+	const { renderToStaticMarkup } = await import('react-dom/server');
 
 	const body = renderToStaticMarkup(
 		createElement(ReportTemplate, {

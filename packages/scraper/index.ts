@@ -19,9 +19,27 @@ export async function scrape(sourceFilter?: string, trigger: "scheduled" | "manu
   let totalScraped = 0;
   let totalNew = 0;
 
-  const adapters = sourceFilter
-    ? { [sourceFilter]: sources[sourceFilter] }
-    : sources;
+  // Check for disabled sources in settings
+  let disabledSources: Set<string> = new Set();
+  try {
+    const settingsResult = await query<{ value: string }>(
+      "SELECT value FROM settings WHERE key = 'disabled_sources'",
+    );
+    if (settingsResult.rows[0]) {
+      disabledSources = new Set(JSON.parse(settingsResult.rows[0].value));
+    }
+  } catch {
+    // settings table may not exist yet — treat all sources as enabled
+  }
+
+  let adapters: Record<string, typeof sources[keyof typeof sources]>;
+  if (sourceFilter) {
+    adapters = { [sourceFilter]: sources[sourceFilter] };
+  } else {
+    adapters = Object.fromEntries(
+      Object.entries(sources).filter(([name]) => !disabledSources.has(name)),
+    );
+  }
 
   if (sourceFilter && !sources[sourceFilter]) {
     await logRun(runId, "error", "init", `Unknown source: ${sourceFilter}. Available: ${Object.keys(sources).join(", ")}`);

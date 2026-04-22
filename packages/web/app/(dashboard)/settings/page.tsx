@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { redditSubreddits, rssSources, substackPublications, mediumTags, arxivCategories, githubSearchQueries } from "@pulsar/shared/config/sources";
+import { redditSubreddits, rssSources, substackPublications, mediumTags, arxivCategories, githubSearchQueries, hashnodeTag } from "@pulsar/shared/config/sources";
 import { useTheme } from "@/components/ThemeProvider";
 
 interface Subscriber {
@@ -31,11 +31,24 @@ export default function SettingsPage() {
   const [newName, setNewName] = useState("");
   const [subError, setSubError] = useState("");
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [disabledSources, setDisabledSources] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetch("/api/subscribers").then((r) => r.json()).then((d) => setSubscribers(d.subscribers));
+    fetch("/api/settings/sources").then((r) => r.json()).then((d) => setDisabledSources(new Set(d.disabled)));
     fetchSchedules();
   }, []);
+
+  async function toggleSource(name: string) {
+    const next = new Set(disabledSources);
+    if (next.has(name)) next.delete(name); else next.add(name);
+    setDisabledSources(next);
+    await fetch("/api/settings/sources", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ disabled: [...next] }),
+    });
+  }
 
   function fetchSchedules() {
     fetch("/api/settings/schedule").then((r) => r.json()).then((d) => setSchedules(d.schedules));
@@ -272,15 +285,17 @@ export default function SettingsPage() {
       {/* Source Configuration */}
       <section className="mt-8">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">Data Sources</h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">Configured in config/sources.ts</p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">Toggle sources on or off for scheduled scrapes</p>
 
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <SourceCard title="Reddit Subreddits" items={redditSubreddits.map((s) => `r/${s}`)} />
-          <SourceCard title="GitHub Search Queries" items={githubSearchQueries} />
-          <SourceCard title="ArXiv Categories" items={arxivCategories} />
-          <SourceCard title="Medium Tags" items={mediumTags} />
-          <SourceCard title="RSS Feeds" items={rssSources.map((s) => s.name)} />
-          <SourceCard title="Substack Publications" items={substackPublications.map((s) => s.name)} />
+          <SourceCard name="hackernews" title="Hacker News" items={["Algolia Search API"]} enabled={!disabledSources.has("hackernews")} onToggle={toggleSource} />
+          <SourceCard name="reddit" title="Reddit" items={redditSubreddits.map((s) => `r/${s}`)} enabled={!disabledSources.has("reddit")} onToggle={toggleSource} />
+          <SourceCard name="github" title="GitHub" items={githubSearchQueries} enabled={!disabledSources.has("github")} onToggle={toggleSource} />
+          <SourceCard name="arxiv" title="ArXiv" items={arxivCategories} enabled={!disabledSources.has("arxiv")} onToggle={toggleSource} />
+          <SourceCard name="hashnode" title="Hashnode" items={[`Tag: ${hashnodeTag}`]} enabled={!disabledSources.has("hashnode")} onToggle={toggleSource} />
+          <SourceCard name="devto" title="Dev.to" items={["Public REST API"]} enabled={!disabledSources.has("devto")} onToggle={toggleSource} />
+          <SourceCard name="medium" title="Medium" items={mediumTags} enabled={!disabledSources.has("medium")} onToggle={toggleSource} />
+          <SourceCard name="rss" title="RSS / Substack" items={[...rssSources.map((s) => s.name), ...substackPublications.map((s) => s.name)]} enabled={!disabledSources.has("rss")} onToggle={toggleSource} />
         </div>
       </section>
     </div>
@@ -365,10 +380,24 @@ function ScheduleRow({
   );
 }
 
-function SourceCard({ title, items }: { title: string; items: string[] }) {
+function SourceCard({ name, title, items, enabled, onToggle }: { name: string; title: string; items: string[]; enabled: boolean; onToggle: (name: string) => void }) {
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-4">
-      <h3 className="text-sm font-semibold text-gray-700 dark:text-neutral-300">{title}</h3>
+    <div className={`rounded-lg border p-4 transition ${enabled ? "border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900" : "border-gray-100 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-950 opacity-60"}`}>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-neutral-300">{title}</h3>
+        <button
+          onClick={() => onToggle(name)}
+          role="switch"
+          aria-checked={enabled}
+          className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
+            enabled ? "bg-indigo-600" : "bg-gray-200 dark:bg-neutral-700"
+          }`}
+        >
+          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+            enabled ? "translate-x-4" : "translate-x-0.5"
+          } mt-0.5`} />
+        </button>
+      </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {items.map((item) => (
           <span key={item} className="rounded bg-gray-100 dark:bg-neutral-800 px-2 py-0.5 text-xs text-gray-600 dark:text-neutral-400">
