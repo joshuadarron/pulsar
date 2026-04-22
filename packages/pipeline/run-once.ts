@@ -11,7 +11,8 @@ import pool from "@pulsar/shared/db/postgres";
 
 async function main() {
   try {
-    await runAllPipelines("manual");
+    const trigger = process.argv.includes("--scheduled") ? "scheduled" : "manual";
+    await runAllPipelines(trigger);
   } catch (err) {
     console.error("[Pipeline] Failed:", err);
     process.exit(1);

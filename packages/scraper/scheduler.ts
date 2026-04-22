@@ -32,7 +32,7 @@ cron.schedule(env.scraper.cron, async () => {
 });
 
 function triggerPipeline() {
-  const child = spawn("pnpm", ["--filter", "@pulsar/pipeline", "run", "pipeline"], {
+  const child = spawn("pnpm", ["--filter", "@pulsar/pipeline", "run", "pipeline", "--", "--scheduled"], {
     stdio: "inherit",
     detached: false,
   });
