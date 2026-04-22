@@ -1,6 +1,8 @@
 import nodemailer from 'nodemailer';
 import { env } from '@pulsar/shared/config/env';
 import { query } from '@pulsar/shared/db/postgres';
+import { renderReportEmail } from './lib/render-email.js';
+import type { ReportData } from '@pulsar/shared/types';
 
 export async function sendReportEmail(reportId: string): Promise<void> {
 	if (!env.smtp.user || !env.smtp.password) {
@@ -21,22 +23,26 @@ export async function sendReportEmail(reportId: string): Promise<void> {
 		return;
 	}
 
-	// Fetch pre-rendered email HTML from the web API (single template source of truth)
-	const emailUrl = `${env.nextauth.url}/api/reports/${reportId}/email`;
-	const response = await fetch(emailUrl);
-	if (!response.ok) {
-		throw new Error(`Failed to fetch email HTML: ${response.status} ${response.statusText}`);
-	}
-	const html = await response.text();
-
-	// Get generated date for subject line
-	const result = await query<{ generated_at: string }>(
-		'SELECT generated_at FROM reports WHERE id = $1',
+	// Get report data and render email using the shared template
+	const result = await query<{ report_data: ReportData; generated_at: string }>(
+		'SELECT report_data, generated_at FROM reports WHERE id = $1',
 		[reportId],
 	);
-	const generatedAt = result.rows[0]
-		? new Date(result.rows[0].generated_at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-		: new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+	if (result.rows.length === 0) return;
+
+	const reportData = result.rows[0].report_data;
+	const generatedAt = result.rows[0].generated_at;
+	const reportUrl = `${env.nextauth.url}/reports/${reportId}`;
+	const pdfUrl = `${env.nextauth.url}/api/reports/${reportId}/export/pdf`;
+
+	const html = renderReportEmail(reportData, reportId, generatedAt, reportUrl, pdfUrl);
+
+	const formattedDate = new Date(generatedAt).toLocaleDateString('en-US', {
+		weekday: 'long',
+		month: 'long',
+		day: 'numeric',
+		year: 'numeric',
+	});
 
 	const transporter = nodemailer.createTransport({
 		host: env.smtp.host,
@@ -51,7 +57,7 @@ export async function sendReportEmail(reportId: string): Promise<void> {
 	await transporter.sendMail({
 		from: `"Pulsar" <${env.smtp.user}>`,
 		to: recipients.join(', '),
-		subject: `Pulsar: Market Analysis Report — ${generatedAt}`,
+		subject: `Pulsar: Market Analysis Report — ${formattedDate}`,
 		html,
 	});
 
