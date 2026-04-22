@@ -40,9 +40,7 @@ export async function sendReportEmail(reportId: string): Promise<void> {
 	const report = result.rows[0].report_data;
 	const sections = report.sections;
 	const meta = report.reportMetadata;
-	const generatedAt = new Date(result.rows[0].generated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-	const periodStart = new Date(meta.periodStart).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-	const periodEnd = new Date(meta.periodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+	const generatedAt = new Date(result.rows[0].generated_at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 	const reportUrl = `${env.nextauth.url}/reports/${reportId}`;
 	const pdfUrl = `${env.nextauth.url}/api/reports/${reportId}/export/pdf`;
 
@@ -123,8 +121,8 @@ export async function sendReportEmail(reportId: string): Promise<void> {
 
 			<!-- Header -->
 			<div style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 28px 24px; border-radius: 12px 12px 0 0;">
-				<h1 style="color: white; margin: 0; font-size: 24px; font-weight: 700;">Pulsar Intelligence Report</h1>
-				<p style="color: rgba(255,255,255,0.8); margin: 8px 0 0; font-size: 14px;">${periodStart} to ${periodEnd}</p>
+				<h1 style="color: white; margin: 0; font-size: 24px; font-weight: 700;">Pulsar: Market Analysis Report</h1>
+				<p style="color: rgba(255,255,255,0.8); margin: 8px 0 0; font-size: 14px;">${generatedAt}</p>
 			</div>
 
 			<div style="background: white; border: 1px solid #e5e7eb; border-top: none; padding: 0; border-radius: 0 0 12px 12px;">
@@ -231,7 +229,7 @@ export async function sendReportEmail(reportId: string): Promise<void> {
 	await transporter.sendMail({
 		from: `"Pulsar" <${env.smtp.user}>`,
 		to: recipients.join(', '),
-		subject: `Pulsar Intelligence Report — ${generatedAt}`,
+		subject: `Pulsar: Market Analysis Report — ${generatedAt}`,
 		html,
 	});
 

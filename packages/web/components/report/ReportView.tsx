@@ -27,7 +27,7 @@ export default function ReportView({ data, reportId, generatedAt }: { data: Repo
 		<div className="space-y-6">
 			{/* Header */}
 			<div className="report-header rounded-t-lg bg-gradient-to-r from-indigo-600 to-purple-600 p-8 text-white">
-				<h1 className="text-2xl font-bold">Pulsar Intelligence Report</h1>
+				<h1 className="text-2xl font-bold">Pulsar: Market Analysis Report</h1>
 				<p className="mt-2 text-indigo-100">{reportDate}</p>
 			</div>
 
