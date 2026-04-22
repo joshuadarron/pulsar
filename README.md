@@ -6,7 +6,14 @@ Automated market intelligence agent. Scrapes free developer sources, runs AI ana
 
 ## Setup
 
-Requires Node.js 20+, pnpm, Docker + Docker Compose, and a RocketRide runtime (port 5565).
+### Prerequisites
+
+- Node.js 20+
+- pnpm
+- Docker + Docker Compose
+- RocketRide runtime (port 5565)
+
+### Steps
 
 1. Clone the repo
 ```bash
@@ -23,23 +30,34 @@ docker-compose up -d
 pnpm install
 ```
 
-4. Configure environment secrets
+4. Create your environment file
 ```bash
 cp .env.example .env.local
 ```
-Fill in `ROCKETRIDE_APIKEY`, `ROCKETRIDE_ANTHROPIC_KEY`, `NEXTAUTH_SECRET`, `GITHUB_CLIENT_ID/SECRET`, and `SMTP_*` for email notifications.
 
-5. Run database migrations
+5. Open `.env.local` in your editor and fill in the following values
+```
+ROCKETRIDE_APIKEY=your-rocketride-api-key
+ROCKETRIDE_ANTHROPIC_KEY=your-anthropic-api-key
+NEXTAUTH_SECRET=any-random-secret-string
+GITHUB_CLIENT_ID=your-github-oauth-client-id
+GITHUB_CLIENT_SECRET=your-github-oauth-client-secret
+SMTP_USER=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+NOTIFY_EMAIL_TO=recipient@example.com
+```
+
+6. Run database migrations
 ```bash
 pnpm run db:migrate
 ```
 
-6. Run initial data collection
+7. Run initial data collection
 ```bash
 pnpm run scrape
 ```
 
-7. Start the app
+8. Start the app
 ```bash
 pnpm dev
 ```
