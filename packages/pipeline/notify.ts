@@ -3,6 +3,15 @@ import { env } from '@pulsar/shared/config/env';
 import { query } from '@pulsar/shared/db/postgres';
 import type { ReportData } from '@pulsar/shared/types';
 
+/** Convert newline-separated text to HTML paragraphs. */
+function textToHtml(text: string, style: string): string {
+	return text
+		.split('\n\n')
+		.filter((p) => p.trim())
+		.map((p) => `<p style="${style};margin:0 0 12px;">${p.trim()}</p>`)
+		.join('');
+}
+
 export async function sendReportEmail(reportId: string): Promise<void> {
 	if (!env.smtp.user || !env.smtp.password) {
 		console.log('[Notify] SMTP not configured, skipping email.');
@@ -37,6 +46,9 @@ export async function sendReportEmail(reportId: string): Promise<void> {
 	const reportUrl = `${env.nextauth.url}/reports/${reportId}`;
 	const pdfUrl = `${env.nextauth.url}/api/reports/${reportId}/export/pdf`;
 
+	const bodyStyle = 'line-height:1.7;font-size:14px;color:#374151';
+	const summaryStyle = 'line-height:1.7;font-size:15px;color:#374151';
+
 	// Metrics
 	const metrics = [
 		{ label: 'Articles', value: meta.articleCount },
@@ -59,7 +71,7 @@ export async function sendReportEmail(reportId: string): Promise<void> {
 
 	// Tech table
 	const technologies = sections.marketLandscape?.data?.technologies ?? [];
-	const techTable = technologies.slice(0, 5).map((t, i) =>
+	const techTable = technologies.slice(0, 8).map((t, i) =>
 		`<tr><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;">${i + 1}</td><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;">${t.name}</td><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;">${t.type}</td><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;text-align:right;">${t.mentionCount}</td></tr>`,
 	).join('');
 
@@ -71,13 +83,35 @@ export async function sendReportEmail(reportId: string): Promise<void> {
 
 	// Emerging topics
 	const emerging = sections.technologyTrends?.data?.emergingTopics ?? [];
-	const emergingTopics = emerging.length > 0
-		? `<p style="margin-top:16px;font-size:14px;line-height:1.7;color:#374151;">Emerging themes: ${emerging.map((t) => `<strong style="background:#fef3c7;padding:2px 6px;border-radius:4px;">${t}</strong>`).join(', ')}.</p>`
+	const emergingHtml = emerging.length > 0
+		? `<p style="${bodyStyle};margin:16px 0 0;">Emerging themes: ${emerging.map((t) => `<strong style="background:#fef3c7;padding:2px 6px;border-radius:4px;">${t}</strong>`).join(', ')}.</p>`
 		: '';
+
+	// Sentiment breakdown bar (matches UI)
+	let sentimentHtml = '';
+	const sb = sections.developerSignals?.data?.sentimentBreakdown;
+	if (sb) {
+		const total = sb.positive + sb.negative + sb.neutral;
+		if (total > 0) {
+			const pPct = Math.round((sb.positive / total) * 100);
+			const nPct = Math.round((sb.neutral / total) * 100);
+			const negPct = Math.round((sb.negative / total) * 100);
+			sentimentHtml = `
+				<table style="width:100%;border-collapse:collapse;margin:12px 0;" cellpadding="0" cellspacing="0">
+					<tr>
+						<td style="width:${pPct}%;height:12px;background:#10b981;${pPct > 0 ? 'border-radius:6px 0 0 6px;' : ''}"></td>
+						<td style="width:${nPct}%;height:12px;background:#9ca3af;"></td>
+						<td style="width:${negPct}%;height:12px;background:#ef4444;${negPct > 0 ? 'border-radius:0 6px 6px 0;' : ''}"></td>
+					</tr>
+				</table>
+				<p style="font-size:12px;color:#6b7280;margin:0;">${pPct}% positive, ${nPct}% neutral, ${negPct}% negative</p>
+			`;
+		}
+	}
 
 	// Source list
 	const sources = sections.marketLandscape?.data?.sourceDistribution ?? [];
-	const sourceRows = sources
+	const sourceRows = [...sources]
 		.sort((a, b) => b.articleCount - a.articleCount)
 		.map((s) => `<tr><td style="padding:4px 8px;font-size:13px;color:#6b7280;">${s.source}</td><td style="padding:4px 8px;font-size:13px;color:#6b7280;text-align:right;">${s.articleCount}</td></tr>`)
 		.join('');
@@ -103,15 +137,15 @@ export async function sendReportEmail(reportId: string): Promise<void> {
 				<!-- Executive Summary -->
 				<div style="padding: 24px;">
 					<h2 style="font-size: 18px; margin: 0 0 12px; color: #111827;">Executive Summary</h2>
-					<p style="line-height: 1.7; font-size: 15px; color: #374151; margin: 0;">${sections.executiveSummary?.text ?? ''}</p>
+					${sections.executiveSummary?.text ? textToHtml(sections.executiveSummary.text, summaryStyle) : ''}
 				</div>
 
 				<!-- Market Landscape -->
 				<div style="padding: 0 24px 24px;">
 					<h2 style="font-size: 18px; margin: 0 0 12px; color: #111827;">Market Landscape</h2>
-					${sections.marketLandscape?.text ? `<p style="line-height:1.7;font-size:14px;color:#374151;margin:0 0 16px;">${sections.marketLandscape.text.split('\n\n')[0]}</p>` : ''}
+					${sections.marketLandscape?.text ? textToHtml(sections.marketLandscape.text, bodyStyle) : ''}
 					${techTable ? `
-						<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px;">
+						<table style="width:100%;border-collapse:collapse;font-size:13px;margin:16px 0;">
 							<tr style="border-bottom:2px solid #e5e7eb;">
 								<th style="text-align:left;padding:6px 8px;font-size:11px;text-transform:uppercase;color:#9ca3af;">#</th>
 								<th style="text-align:left;padding:6px 8px;font-size:11px;text-transform:uppercase;color:#9ca3af;">Technology</th>
@@ -121,15 +155,15 @@ export async function sendReportEmail(reportId: string): Promise<void> {
 							${techTable}
 						</table>
 					` : ''}
-					${entitySentence ? `<p style="line-height:1.7;font-size:14px;color:#374151;margin:0;">Key entities: ${entitySentence}.</p>` : ''}
+					${entitySentence ? `<p style="${bodyStyle};margin:0;">Key entities: ${entitySentence}.</p>` : ''}
 				</div>
 
 				<!-- Technology Trends -->
 				<div style="padding: 0 24px 24px;">
 					<h2 style="font-size: 18px; margin: 0 0 12px; color: #111827;">Technology Trends</h2>
-					${sections.technologyTrends?.text ? `<p style="line-height:1.7;font-size:14px;color:#374151;margin:0 0 16px;">${sections.technologyTrends.text.split('\n\n')[0]}</p>` : ''}
+					${sections.technologyTrends?.text ? textToHtml(sections.technologyTrends.text, bodyStyle) : ''}
 					${keywordsTable ? `
-						<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px;">
+						<table style="width:100%;border-collapse:collapse;font-size:13px;margin:16px 0;">
 							<tr style="border-bottom:2px solid #e5e7eb;">
 								<th style="text-align:left;padding:6px 8px;font-size:11px;text-transform:uppercase;color:#9ca3af;">Keyword</th>
 								<th style="text-align:right;padding:6px 8px;font-size:11px;text-transform:uppercase;color:#9ca3af;">7d</th>
@@ -139,22 +173,23 @@ export async function sendReportEmail(reportId: string): Promise<void> {
 							${keywordsTable}
 						</table>
 					` : ''}
-					${emergingTopics}
+					${emergingHtml}
 				</div>
 
 				<!-- Developer Signals -->
 				${sections.developerSignals?.text ? `
 					<div style="padding: 0 24px 24px;">
 						<h2 style="font-size: 18px; margin: 0 0 12px; color: #111827;">Developer Signals</h2>
-						<p style="line-height:1.7;font-size:14px;color:#374151;margin:0;">${sections.developerSignals.text.split('\n\n')[0]}</p>
+						${textToHtml(sections.developerSignals.text, bodyStyle)}
+						${sentimentHtml}
 					</div>
 				` : ''}
 
 				<!-- Content Recommendations -->
 				${sections.contentRecommendations?.text ? `
-					<div style="padding: 0 24px 24px;">
+					<div style="padding: 0 24px 24px;border-left:4px solid #6366f1;">
 						<h2 style="font-size: 18px; margin: 0 0 12px; color: #111827;">Content Recommendations</h2>
-						<p style="line-height:1.7;font-size:14px;color:#374151;margin:0;">${sections.contentRecommendations.text.split('\n\n')[0]}</p>
+						${textToHtml(sections.contentRecommendations.text, bodyStyle)}
 					</div>
 				` : ''}
 

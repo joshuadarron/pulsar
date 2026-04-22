@@ -1,10 +1,59 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { redditSubreddits, rssSources, substackPublications, mediumTags, arxivCategories, githubSearchQueries } from "@pulsar/shared/config/sources";
 import { useTheme } from "@/components/ThemeProvider";
 
+interface Subscriber {
+  id: string;
+  email: string;
+  name: string | null;
+  active: boolean;
+  created_at: string;
+}
+
 export default function SettingsPage() {
   const { theme, toggle } = useTheme();
+  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
+  const [newEmail, setNewEmail] = useState("");
+  const [newName, setNewName] = useState("");
+  const [subError, setSubError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/subscribers").then((r) => r.json()).then((d) => setSubscribers(d.subscribers));
+  }, []);
+
+  async function addSubscriber() {
+    setSubError("");
+    const res = await fetch("/api/subscribers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: newEmail, name: newName }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      setSubError(data.error || "Failed to add");
+      return;
+    }
+    setNewEmail("");
+    setNewName("");
+    const refreshed = await fetch("/api/subscribers").then((r) => r.json());
+    setSubscribers(refreshed.subscribers);
+  }
+
+  async function toggleSubscriber(id: string, active: boolean) {
+    await fetch("/api/subscribers", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, active }),
+    });
+    setSubscribers((prev) => prev.map((s) => s.id === id ? { ...s, active } : s));
+  }
+
+  async function removeSubscriber(id: string) {
+    await fetch(`/api/subscribers?id=${id}`, { method: "DELETE" });
+    setSubscribers((prev) => prev.filter((s) => s.id !== id));
+  }
 
   return (
     <div>
@@ -47,6 +96,81 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* Email Subscribers */}
+      <section className="mt-8">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">Report Subscribers</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">Manage who receives the daily intelligence report email</p>
+
+        <div className="mt-4 max-w-3xl space-y-4">
+          {/* Add subscriber form */}
+          <div className="flex gap-2">
+            <input
+              type="email"
+              placeholder="Email address"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addSubscriber()}
+              className="flex-1 rounded-lg border border-gray-300 dark:border-neutral-600 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none dark:bg-neutral-900 dark:text-neutral-100"
+            />
+            <input
+              type="text"
+              placeholder="Name (optional)"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addSubscriber()}
+              className="w-40 rounded-lg border border-gray-300 dark:border-neutral-600 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none dark:bg-neutral-900 dark:text-neutral-100"
+            />
+            <button
+              onClick={addSubscriber}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              Add
+            </button>
+          </div>
+          {subError && <p className="text-sm text-red-600 dark:text-red-400">{subError}</p>}
+
+          {/* Subscriber list */}
+          {subscribers.length === 0 ? (
+            <p className="text-sm text-gray-400 dark:text-neutral-500">No subscribers yet. Add an email to receive report notifications.</p>
+          ) : (
+            <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 divide-y divide-gray-100 dark:divide-neutral-800">
+              {subscribers.map((sub) => (
+                <div key={sub.id} className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <button
+                      onClick={() => toggleSubscriber(sub.id, !sub.active)}
+                      role="switch"
+                      aria-checked={sub.active}
+                      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
+                        sub.active ? "bg-indigo-600" : "bg-gray-200 dark:bg-neutral-700"
+                      }`}
+                    >
+                      <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        sub.active ? "translate-x-4" : "translate-x-0.5"
+                      } mt-0.5`} />
+                    </button>
+                    <div className="min-w-0">
+                      <p className={`text-sm truncate ${sub.active ? "text-gray-900 dark:text-neutral-100" : "text-gray-400 dark:text-neutral-500 line-through"}`}>
+                        {sub.email}
+                      </p>
+                      {sub.name && <p className="text-xs text-gray-400 dark:text-neutral-500">{sub.name}</p>}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeSubscriber(sub.id)}
+                    className="flex-shrink-0 text-gray-400 hover:text-red-500 dark:hover:text-red-400"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* Source Configuration */}
       <section className="mt-8">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">Data Sources</h2>
@@ -76,19 +200,14 @@ export default function SettingsPage() {
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
               <tr>
-                <td className="px-4 py-3 text-sm font-medium">Scraper (run 1)</td>
-                <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">00:00 daily</td>
-                <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">All sources</td>
-              </tr>
-              <tr>
-                <td className="px-4 py-3 text-sm font-medium">Scraper (run 2)</td>
-                <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">12:00 daily</td>
+                <td className="px-4 py-3 text-sm font-medium">Scraper</td>
+                <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">05:30 daily</td>
                 <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">All sources</td>
               </tr>
               <tr>
                 <td className="px-4 py-3 text-sm font-medium">AI Pipelines</td>
-                <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">04:00 daily</td>
-                <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">Summarize → Report → Drafts</td>
+                <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">After scrape</td>
+                <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">Report → Drafts → Email</td>
               </tr>
             </tbody>
           </table>

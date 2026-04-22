@@ -85,12 +85,24 @@ async function runSection(
 	await client.terminate(token);
 
 	const raw = response?.answers?.[0];
+
+	// If RocketRide already parsed the response into an object with a text field, use it
+	if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+		const obj = raw as Record<string, unknown>;
+		if (typeof obj.text === 'string') {
+			return {
+				text: obj.text,
+				...(Array.isArray(obj.research) ? { research: obj.research as ResearchCitation[] } : {}),
+			};
+		}
+	}
+
+	// Otherwise parse from string (handles JSON, Python-style dicts, markdown fences)
+	const str = typeof raw === 'string' ? raw : JSON.stringify(raw ?? '{}');
 	try {
-		return extractJson<SectionResponse>(typeof raw === 'string' ? raw : JSON.stringify(raw ?? '{}'));
+		return extractJson<SectionResponse>(str);
 	} catch {
-		// If JSON parsing fails, treat the entire response as text
-		const text = typeof raw === 'string' ? raw : (raw ? JSON.stringify(raw) : '');
-		return { text: text.trim() || 'Analysis could not be generated for this section.' };
+		return { text: str.trim() || 'Analysis could not be generated for this section.' };
 	}
 }
 
