@@ -2,37 +2,47 @@
   <img src="assets/banner.svg" alt="Pulsar — Market Intelligence Agent" width="100%"/>
 </p>
 
-```bash
-git clone https://github.com/JoshuaDarron/pulsar && cd pulsar
-docker-compose up -d              # PostgreSQL + Neo4j
-pnpm install                      # dependencies
-cp .env.example .env.local        # configure secrets (see below)
-pnpm run db:migrate               # create tables
-pnpm run scrape                   # initial data collection
-pnpm dev                          # http://localhost:3000
-```
-
 Automated market intelligence agent. Scrapes free developer sources, runs AI analysis via RocketRide pipelines, and outputs trend reports + content drafts for human review.
 
 ## Setup
 
-### Prerequisites
+Requires Node.js 20+, pnpm, Docker + Docker Compose, and a RocketRide runtime (port 5565).
 
-- Node.js 20+
-- pnpm
-- Docker + Docker Compose
-- RocketRide runtime (port 5565)
+1. Clone the repo
+```bash
+git clone https://github.com/JoshuaDarron/pulsar && cd pulsar
+```
 
-### Environment
+2. Start PostgreSQL and Neo4j
+```bash
+docker-compose up -d
+```
 
+3. Install dependencies
+```bash
+pnpm install
+```
+
+4. Configure environment secrets
 ```bash
 cp .env.example .env.local
 ```
+Fill in `ROCKETRIDE_APIKEY`, `ROCKETRIDE_ANTHROPIC_KEY`, `NEXTAUTH_SECRET`, `GITHUB_CLIENT_ID/SECRET`, and `SMTP_*` for email notifications.
 
-Fill in:
-- `ROCKETRIDE_APIKEY` and `ROCKETRIDE_ANTHROPIC_KEY` for AI pipelines
-- `NEXTAUTH_SECRET`, `GITHUB_CLIENT_ID/SECRET` for auth
-- `SMTP_*` and `NOTIFY_EMAIL_TO` for email notifications
+5. Run database migrations
+```bash
+pnpm run db:migrate
+```
+
+6. Run initial data collection
+```bash
+pnpm run scrape
+```
+
+7. Start the app
+```bash
+pnpm dev
+```
 
 ## Architecture
 
