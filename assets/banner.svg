@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#08061a"/>
@@ -11,7 +11,7 @@
   </defs>
 
   <!-- Background -->
-  <rect width="1200" height="620" fill="url(#bg)" rx="12"/>
+  <rect width="1200" height="420" fill="url(#bg)" rx="12"/>
 
   <!-- Stars — sparse, small -->
   <g fill="white" opacity="0.45">
@@ -24,41 +24,41 @@
     <circle cx="880" cy="32" r="0.8"/>
     <circle cx="1010" cy="68" r="0.6"/>
     <circle cx="1140" cy="24" r="0.9"/>
-    <circle cx="110" cy="570" r="0.7"/>
-    <circle cx="290" cy="550" r="0.6"/>
-    <circle cx="520" cy="590" r="0.8"/>
-    <circle cx="730" cy="560" r="0.7"/>
-    <circle cx="940" cy="580" r="0.6"/>
-    <circle cx="1100" cy="555" r="0.8"/>
-    <circle cx="55" cy="300" r="0.5"/>
-    <circle cx="420" cy="280" r="0.6"/>
-    <circle cx="780" cy="295" r="0.5"/>
-    <circle cx="1050" cy="310" r="0.6"/>
-    <circle cx="1165" cy="200" r="0.5"/>
-    <circle cx="160" cy="440" r="0.5"/>
-    <circle cx="650" cy="470" r="0.6"/>
-    <circle cx="990" cy="420" r="0.5"/>
+    <circle cx="110" cy="380" r="0.7"/>
+    <circle cx="290" cy="360" r="0.6"/>
+    <circle cx="520" cy="390" r="0.8"/>
+    <circle cx="730" cy="370" r="0.7"/>
+    <circle cx="940" cy="385" r="0.6"/>
+    <circle cx="1100" cy="365" r="0.8"/>
+    <circle cx="55" cy="200" r="0.5"/>
+    <circle cx="420" cy="185" r="0.6"/>
+    <circle cx="780" cy="195" r="0.5"/>
+    <circle cx="1050" cy="210" r="0.6"/>
+    <circle cx="1165" cy="150" r="0.5"/>
+    <circle cx="160" cy="290" r="0.5"/>
+    <circle cx="650" cy="310" r="0.6"/>
+    <circle cx="990" cy="280" r="0.5"/>
   </g>
 
   <!-- Ambient glow behind logo -->
-  <circle cx="600" cy="200" r="200" fill="url(#glow)"/>
+  <circle cx="600" cy="110" r="200" fill="url(#glow)"/>
 
   <!-- Logo: concentric rings (matches icon.svg) -->
-  <circle cx="600" cy="200" r="42" stroke="#7c3aed" stroke-width="2" fill="none" opacity="0.2"/>
-  <circle cx="600" cy="200" r="30" stroke="#7c3aed" stroke-width="2" fill="none" opacity="0.45"/>
-  <circle cx="600" cy="200" r="18" stroke="#7c3aed" stroke-width="2" fill="none" opacity="0.7"/>
-  <circle cx="600" cy="200" r="8" fill="#7c3aed"/>
-  <circle cx="600" cy="200" r="3.5" fill="white" opacity="0.9"/>
+  <circle cx="600" cy="110" r="42" stroke="#7c3aed" stroke-width="2" fill="none" opacity="0.2"/>
+  <circle cx="600" cy="110" r="30" stroke="#7c3aed" stroke-width="2" fill="none" opacity="0.45"/>
+  <circle cx="600" cy="110" r="18" stroke="#7c3aed" stroke-width="2" fill="none" opacity="0.7"/>
+  <circle cx="600" cy="110" r="8" fill="#7c3aed"/>
+  <circle cx="600" cy="110" r="3.5" fill="white" opacity="0.9"/>
 
   <!-- Title -->
-  <text x="600" y="360" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="144" font-weight="700" fill="white" text-anchor="middle" letter-spacing="-3">Pulsar</text>
+  <text x="600" y="250" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="96" font-weight="700" fill="white" text-anchor="middle" letter-spacing="-2">Pulsar</text>
 
   <!-- Subtitle -->
-  <text x="600" y="420" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="45" fill="rgba(167,139,250,0.7)" text-anchor="middle" letter-spacing="3.5" text-transform="uppercase">MARKET INTELLIGENCE AGENT</text>
+  <text x="600" y="295" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="30" fill="rgba(167,139,250,0.7)" text-anchor="middle" letter-spacing="3.5" text-transform="uppercase">MARKET INTELLIGENCE AGENT</text>
 
   <!-- Thin separator line -->
-  <line x1="380" y1="455" x2="820" y2="455" stroke="rgba(124,58,237,0.2)" stroke-width="1"/>
+  <line x1="420" y1="325" x2="780" y2="325" stroke="rgba(124,58,237,0.2)" stroke-width="1"/>
 
   <!-- Stack line -->
-  <text x="600" y="500" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="12" fill="rgba(255,255,255,0.35)" text-anchor="middle" letter-spacing="1">Next.js  ·  RocketRide  ·  PostgreSQL  ·  Neo4j  ·  Claude</text>
+  <text x="600" y="365" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="24" fill="rgba(255,255,255,0.35)" text-anchor="middle" letter-spacing="1">Next.js  ·  RocketRide  ·  PostgreSQL  ·  Neo4j  ·  Claude</text>
 </svg>
