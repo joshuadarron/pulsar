@@ -166,14 +166,14 @@ export default function RunsPage() {
             disabled={triggering !== null || "scrape" in runningTypes}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {triggering === "scrape" ? "Triggering..." : "scrape" in runningTypes ? "Scrape Running..." : "Run Scrape Now"}
+            {triggering === "scrape" ? "Triggering..." : "scrape" in runningTypes ? "Scrape Running..." : "Run Scrape"}
           </button>
           <button
             onClick={() => trigger("pipeline")}
             disabled={triggering !== null || "pipeline" in runningTypes}
             className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
           >
-            {triggering === "pipeline" ? "Triggering..." : "pipeline" in runningTypes ? "Pipeline Running..." : "Run Pipeline Now"}
+            {triggering === "pipeline" ? "Triggering..." : "pipeline" in runningTypes ? "Report Running..." : "Run Report"}
           </button>
         </div>
       </div>

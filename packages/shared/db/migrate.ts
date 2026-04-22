@@ -120,6 +120,49 @@ async function migratePostgres() {
     CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications (read, created_at DESC)
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS subscribers (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      email TEXT UNIQUE NOT NULL,
+      name TEXT,
+      active BOOLEAN DEFAULT true,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS schedules (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      type TEXT NOT NULL,
+      hour INT NOT NULL,
+      minute INT NOT NULL,
+      days INT[] NOT NULL DEFAULT '{1,2,3,4,5}',
+      active BOOLEAN DEFAULT true,
+      created_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+
+  // Seed defaults if table is empty
+  await query(`
+    INSERT INTO schedules (type, hour, minute, days)
+    SELECT 'scrape', 5, 30, '{1,2,3,4,5}'
+    WHERE NOT EXISTS (SELECT 1 FROM schedules WHERE type = 'scrape')
+  `);
+
+  await query(`
+    INSERT INTO schedules (type, hour, minute, days)
+    SELECT 'pipeline', 6, 0, '{1,2,3,4,5}'
+    WHERE NOT EXISTS (SELECT 1 FROM schedules WHERE type = 'pipeline')
+  `);
+
   console.log("PostgreSQL migrations complete.");
 }
 

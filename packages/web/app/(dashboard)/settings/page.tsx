@@ -12,16 +12,57 @@ interface Subscriber {
   created_at: string;
 }
 
+interface Schedule {
+  id: string;
+  type: "scrape" | "pipeline";
+  hour: number;
+  minute: number;
+  days: number[];
+  active: boolean;
+}
+
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEKDAYS = [1, 2, 3, 4, 5];
+
 export default function SettingsPage() {
   const { theme, toggle } = useTheme();
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
   const [subError, setSubError] = useState("");
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
 
   useEffect(() => {
     fetch("/api/subscribers").then((r) => r.json()).then((d) => setSubscribers(d.subscribers));
+    fetchSchedules();
   }, []);
+
+  function fetchSchedules() {
+    fetch("/api/settings/schedule").then((r) => r.json()).then((d) => setSchedules(d.schedules));
+  }
+
+  async function addSchedule(type: "scrape" | "pipeline") {
+    await fetch("/api/settings/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, hour: 6, minute: 0, days: WEEKDAYS }),
+    });
+    fetchSchedules();
+  }
+
+  async function updateSchedule(id: string, updates: Partial<Pick<Schedule, "hour" | "minute" | "days" | "active">>) {
+    await fetch("/api/settings/schedule", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...updates }),
+    });
+    setSchedules((prev) => prev.map((s) => s.id === id ? { ...s, ...updates } : s));
+  }
+
+  async function removeSchedule(id: string) {
+    await fetch(`/api/settings/schedule?id=${id}`, { method: "DELETE" });
+    setSchedules((prev) => prev.filter((s) => s.id !== id));
+  }
 
   async function addSubscriber() {
     setSubError("");
@@ -54,6 +95,9 @@ export default function SettingsPage() {
     await fetch(`/api/subscribers?id=${id}`, { method: "DELETE" });
     setSubscribers((prev) => prev.filter((s) => s.id !== id));
   }
+
+  const scrapeSchedules = schedules.filter((s) => s.type === "scrape");
+  const pipelineSchedules = schedules.filter((s) => s.type === "pipeline");
 
   return (
     <div>
@@ -99,10 +143,9 @@ export default function SettingsPage() {
       {/* Email Subscribers */}
       <section className="mt-8">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">Report Subscribers</h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">Manage who receives the daily intelligence report email</p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">Manage who receives the intelligence report email</p>
 
         <div className="mt-4 max-w-3xl space-y-4">
-          {/* Add subscriber form */}
           <div className="flex gap-2">
             <input
               type="email"
@@ -129,7 +172,6 @@ export default function SettingsPage() {
           </div>
           {subError && <p className="text-sm text-red-600 dark:text-red-400">{subError}</p>}
 
-          {/* Subscriber list */}
           {subscribers.length === 0 ? (
             <p className="text-sm text-gray-400 dark:text-neutral-500">No subscribers yet. Add an email to receive report notifications.</p>
           ) : (
@@ -171,6 +213,62 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* Schedules */}
+      <section className="mt-8">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">Schedules</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">Configure when scrapes and report pipelines run</p>
+
+        <div className="mt-4 space-y-6 max-w-3xl">
+          {/* Scrape Schedules */}
+          <div>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-neutral-300">Scrape</h3>
+              <button
+                onClick={() => addSchedule("scrape")}
+                className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                + Add schedule
+              </button>
+            </div>
+            {scrapeSchedules.length === 0 ? (
+              <p className="mt-2 text-sm text-gray-400 dark:text-neutral-500">No scrape schedules configured.</p>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {scrapeSchedules.map((s) => (
+                  <ScheduleRow key={s.id} schedule={s} onUpdate={updateSchedule} onRemove={removeSchedule} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Pipeline Schedules */}
+          <div>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-neutral-300">Report / Content</h3>
+              <button
+                onClick={() => addSchedule("pipeline")}
+                className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                + Add schedule
+              </button>
+            </div>
+            {pipelineSchedules.length === 0 ? (
+              <p className="mt-2 text-sm text-gray-400 dark:text-neutral-500">No pipeline schedules configured.</p>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {pipelineSchedules.map((s) => (
+                  <ScheduleRow key={s.id} schedule={s} onUpdate={updateSchedule} onRemove={removeSchedule} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          <p className="text-xs text-gray-400 dark:text-neutral-500">
+            Changes take effect on the next scheduled cycle. Scrape collects data from all sources. Pipeline generates the trend report, content drafts, and sends the email notification.
+          </p>
+        </div>
+      </section>
+
       {/* Source Configuration */}
       <section className="mt-8">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">Data Sources</h2>
@@ -185,34 +283,84 @@ export default function SettingsPage() {
           <SourceCard title="Substack Publications" items={substackPublications.map((s) => s.name)} />
         </div>
       </section>
+    </div>
+  );
+}
 
-      {/* Schedule Info */}
-      <section className="mt-8">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">Schedules</h2>
-        <div className="mt-3 overflow-hidden rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
-          <table className="min-w-full">
-            <thead className="bg-gray-50 dark:bg-neutral-800">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400">Process</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400">Schedule</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400">Notes</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
-              <tr>
-                <td className="px-4 py-3 text-sm font-medium">Scraper</td>
-                <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">05:30 daily</td>
-                <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">All sources</td>
-              </tr>
-              <tr>
-                <td className="px-4 py-3 text-sm font-medium">AI Pipelines</td>
-                <td className="px-4 py-3 text-sm text-gray-600 dark:text-neutral-400">After scrape</td>
-                <td className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400">Report → Drafts → Email</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+function ScheduleRow({
+  schedule,
+  onUpdate,
+  onRemove,
+}: {
+  schedule: Schedule;
+  onUpdate: (id: string, updates: Partial<Pick<Schedule, "hour" | "minute" | "days" | "active">>) => void;
+  onRemove: (id: string) => void;
+}) {
+  const timeValue = `${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}`;
+
+  function handleTimeChange(value: string) {
+    const [h, m] = value.split(":").map(Number);
+    onUpdate(schedule.id, { hour: h, minute: m });
+  }
+
+  function toggleDay(day: number) {
+    const next = schedule.days.includes(day)
+      ? schedule.days.filter((d) => d !== day)
+      : [...schedule.days, day].sort();
+    if (next.length === 0) return;
+    onUpdate(schedule.id, { days: next });
+  }
+
+  return (
+    <div className={`flex items-center gap-3 rounded-lg border p-3 ${
+      schedule.active
+        ? "border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900"
+        : "border-gray-100 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-950 opacity-60"
+    }`}>
+      <button
+        onClick={() => onUpdate(schedule.id, { active: !schedule.active })}
+        role="switch"
+        aria-checked={schedule.active}
+        className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
+          schedule.active ? "bg-indigo-600" : "bg-gray-200 dark:bg-neutral-700"
+        }`}
+      >
+        <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+          schedule.active ? "translate-x-4" : "translate-x-0.5"
+        } mt-0.5`} />
+      </button>
+
+      <input
+        type="time"
+        value={timeValue}
+        onChange={(e) => handleTimeChange(e.target.value)}
+        className="rounded border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1.5 text-sm text-gray-900 dark:text-neutral-100 focus:border-indigo-500 focus:outline-none"
+      />
+
+      <div className="flex gap-1">
+        {DAY_LABELS.map((label, i) => (
+          <button
+            key={i}
+            onClick={() => toggleDay(i)}
+            className={`h-7 w-7 rounded text-xs font-medium transition ${
+              schedule.days.includes(i)
+                ? "bg-indigo-600 text-white"
+                : "bg-gray-100 dark:bg-neutral-800 text-gray-400 dark:text-neutral-500 hover:bg-gray-200 dark:hover:bg-neutral-700"
+            }`}
+          >
+            {label.charAt(0)}
+          </button>
+        ))}
+      </div>
+
+      <button
+        onClick={() => onRemove(schedule.id)}
+        className="ml-auto flex-shrink-0 text-gray-400 hover:text-red-500 dark:hover:text-red-400"
+      >
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
     </div>
   );
 }
