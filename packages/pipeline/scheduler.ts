@@ -5,9 +5,10 @@ import { disconnectClient } from "./lib/rocketride.js";
 import { env } from "@pulsar/shared/config/env";
 
 export function startPipelineScheduler() {
-  console.log(`[Pipeline Scheduler] Started. Cron: ${env.pipeline.cron}`);
+  const schedule = env.scraper.cron;
+  console.log(`[Pipeline Scheduler] Started. Cron: ${schedule}`);
 
-  cron.schedule(env.pipeline.cron, async () => {
+  cron.schedule(schedule, async () => {
     console.log(`[Pipeline Scheduler] Triggered at ${new Date().toISOString()}`);
 
     try {

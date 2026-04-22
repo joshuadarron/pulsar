@@ -47,8 +47,8 @@ export default function DashboardWidgets({
   recentRuns,
   successRate,
 }: DashboardWidgetsProps) {
-  const topKeywords = latestReport?.report_data?.trendingKeywords?.slice(0, 5) || [];
-  const topTopics = latestReport?.report_data?.trendingTopics?.slice(0, 5) || [];
+  const topKeywords = latestReport?.report_data?.sections?.technologyTrends?.data?.keywords?.slice(0, 5) || [];
+  const topTopics = latestReport?.report_data?.sections?.technologyTrends?.data?.topics?.slice(0, 5) || [];
 
   return (
     <>
@@ -135,14 +135,14 @@ export default function DashboardWidgets({
           {latestReport ? (
             <div className="mt-3">
               <p className="text-xs text-gray-400 dark:text-neutral-500">
-                {new Date(latestReport.generated_at).toLocaleDateString()} &middot; {latestReport.report_data.articleCount} articles analyzed
+                {new Date(latestReport.generated_at).toLocaleDateString()} &middot; {latestReport.report_data.reportMetadata?.articleCount ?? 0} articles analyzed
               </p>
               <p className="mt-2 text-sm leading-relaxed text-gray-700 dark:text-neutral-300 line-clamp-3">
-                {latestReport.report_data.executiveSummary}
+                {latestReport.report_data.sections?.executiveSummary?.text ?? ''}
               </p>
-              {latestReport.report_data.emergingTopics?.length > 0 && (
+              {(latestReport.report_data.sections?.technologyTrends?.data?.emergingTopics?.length ?? 0) > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  {latestReport.report_data.emergingTopics.slice(0, 5).map((t) => (
+                  {latestReport.report_data.sections.technologyTrends.data.emergingTopics.slice(0, 5).map((t: string) => (
                     <span key={t} className="rounded-full bg-amber-100 dark:bg-amber-900 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
                       {t}
                     </span>
