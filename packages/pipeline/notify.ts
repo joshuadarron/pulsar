@@ -8,8 +8,68 @@ function textToHtml(text: string, style: string): string {
 	return text
 		.split('\n\n')
 		.filter((p) => p.trim())
-		.map((p) => `<p style="${style};margin:0 0 12px;">${p.trim()}</p>`)
+		.map((p) => `<p style="${style};margin:0 0 12px;">${inlineBold(p.trim())}</p>`)
 		.join('');
+}
+
+/** Convert **bold** markers to <strong> tags. */
+function inlineBold(text: string): string {
+	return text.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#111827;">$1</strong>');
+}
+
+/** Parse numbered content recommendations into styled HTML cards. */
+function recommendationsToHtml(text: string, style: string): string {
+	const itemPattern = /\*\*(\d+)\.\s+(.+?)\*\*/g;
+	const matches = [...text.matchAll(itemPattern)];
+
+	if (matches.length === 0) return textToHtml(text, style);
+
+	const parts: string[] = [];
+
+	// Preamble
+	const preamble = text.slice(0, matches[0].index).trim();
+	if (preamble) {
+		parts.push(`<p style="${style};margin:0 0 16px;">${inlineBold(preamble)}</p>`);
+	}
+
+	for (let i = 0; i < matches.length; i++) {
+		const match = matches[i];
+		const num = match[1];
+		const title = match[2].replace(/^["\u201c]|["\u201d]$/g, '').trim();
+		const bodyStart = match.index! + match[0].length;
+		const bodyEnd = i < matches.length - 1 ? matches[i + 1].index! : text.length;
+		let body = text.slice(bodyStart, bodyEnd).trim();
+
+		// Extract prioritization note from last item
+		let postscript = '';
+		if (i === matches.length - 1) {
+			const prioMatch = body.match(/\n\n\*\*Prioritization note:\*\*/i);
+			if (prioMatch && prioMatch.index !== undefined) {
+				postscript = body.slice(prioMatch.index).trim();
+				body = body.slice(0, prioMatch.index).trim();
+			}
+		}
+
+		const bodyHtml = body
+			.split('\n\n')
+			.filter((p) => p.trim())
+			.map((p) => `<p style="${style};margin:8px 0 0;">${inlineBold(p.trim())}</p>`)
+			.join('');
+
+		parts.push(`
+			<div style="border-left:4px solid #6366f1;padding:12px 16px;margin-bottom:12px;background:#fafafa;border-radius:0 8px 8px 0;">
+				<div style="display:inline-block;background:#e0e7ff;color:#4338ca;font-size:12px;font-weight:700;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;margin-bottom:8px;">${num}</div>
+				<p style="font-size:14px;font-weight:600;color:#111827;margin:0 0 4px;">${title}</p>
+				${bodyHtml}
+			</div>
+		`);
+
+		if (postscript) {
+			parts.push(`<div style="background:#f9fafb;padding:12px 16px;border-radius:8px;margin-top:8px;">${textToHtml(postscript, style)}</div>`);
+		}
+	}
+
+	return parts.join('');
 }
 
 export async function sendReportEmail(reportId: string): Promise<void> {
@@ -185,9 +245,9 @@ export async function sendReportEmail(reportId: string): Promise<void> {
 
 				<!-- Content Recommendations -->
 				${sections.contentRecommendations?.text ? `
-					<div style="padding: 0 24px 24px;border-left:4px solid #6366f1;">
+					<div style="padding: 0 24px 24px;">
 						<h2 style="font-size: 18px; margin: 0 0 12px; color: #111827;">Content Recommendations</h2>
-						${textToHtml(sections.contentRecommendations.text, bodyStyle)}
+						${recommendationsToHtml(sections.contentRecommendations.text, bodyStyle)}
 					</div>
 				` : ''}
 
