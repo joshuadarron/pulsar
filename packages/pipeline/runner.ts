@@ -332,15 +332,13 @@ async function runTrendReport(
 		`Data gathered: ${articleCount} articles, ${techData.topics.length} topics, ${marketData.entities.length} entities, ${sourcesCount} sources`,
 	);
 
-	// --- Pass 1: sections 1, 2, 3 in parallel ---
+	// --- Pass 1: sections 1, 2, 3 (sequential — RocketRide runs one pipeline at a time) ---
 	checkCancelled(runId);
-	await logRun(runId, 'info', 'trend-report', 'Pass 1: generating market_landscape, technology_trends, developer_signals (parallel)...');
+	await logRun(runId, 'info', 'trend-report', 'Pass 1: generating market_landscape, technology_trends, developer_signals...');
 
-	const [marketResponse, techResponse, signalsResponse] = await Promise.all([
-		runSection(client, runId, 'marketLandscape', marketData),
-		runSection(client, runId, 'technologyTrends', techData),
-		runSection(client, runId, 'developerSignals', signalsData),
-	]);
+	const marketResponse = await runSection(client, runId, 'marketLandscape', marketData);
+	const techResponse = await runSection(client, runId, 'technologyTrends', techData);
+	const signalsResponse = await runSection(client, runId, 'developerSignals', signalsData);
 
 	await logRun(runId, 'info', 'trend-report', 'Pass 1 complete.');
 

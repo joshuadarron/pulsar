@@ -60,7 +60,7 @@ export interface Report {
 // Report data contract — stored as JSONB in reports.report_data
 //
 // Five-section structure with three generation passes:
-//   Pass 1 (parallel): marketLandscape, technologyTrends, developerSignals
+//   Pass 1 (sequential): marketLandscape, technologyTrends, developerSignals
 //   Pass 2: contentRecommendations (reads pass 1 text only)
 //   Pass 3: executiveSummary (reads all prior text)
 //
