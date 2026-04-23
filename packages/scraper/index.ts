@@ -8,12 +8,23 @@ import { withRetry } from "./lib/retry.js";
 import { logRun } from "@pulsar/shared/run-logger";
 
 export async function scrape(sourceFilter?: string, trigger: "scheduled" | "manual" = "manual") {
-  // Create run record
-  const runResult = await query<{ id: string }>(
-    "INSERT INTO runs (trigger, run_type) VALUES ($1, 'scrape') RETURNING id",
-    [trigger],
-  );
-  const runId = runResult.rows[0].id;
+  // Atomic DB-level lock: the unique partial index on (run_type) WHERE status = 'running'
+  // ensures only one scrape can be active at a time. If another is running, the INSERT
+  // fails with a unique violation (23505) and we skip.
+  let runId: string;
+  try {
+    const runResult = await query<{ id: string }>(
+      "INSERT INTO runs (trigger, run_type) VALUES ($1, 'scrape') RETURNING id",
+      [trigger],
+    );
+    runId = runResult.rows[0].id;
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === '23505') {
+      console.log("[Scraper] Skipped — another scrape is already running.");
+      return;
+    }
+    throw err;
+  }
   await logRun(runId, "info", "init", `Scrape run started (trigger: ${trigger})`);
 
   let totalScraped = 0;

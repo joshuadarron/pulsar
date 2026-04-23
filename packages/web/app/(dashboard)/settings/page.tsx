@@ -31,6 +31,7 @@ export default function SettingsPage() {
   const [newName, setNewName] = useState("");
   const [subError, setSubError] = useState("");
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [scheduleError, setScheduleError] = useState("");
   const [disabledSources, setDisabledSources] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -55,20 +56,33 @@ export default function SettingsPage() {
   }
 
   async function addSchedule(type: "scrape" | "pipeline") {
-    await fetch("/api/settings/schedule", {
+    setScheduleError("");
+    const res = await fetch("/api/settings/schedule", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type, hour: 6, minute: 0, days: WEEKDAYS }),
     });
+    if (!res.ok) {
+      const data = await res.json();
+      setScheduleError(data.error || "Failed to add schedule");
+      return;
+    }
     fetchSchedules();
   }
 
   async function updateSchedule(id: string, updates: Partial<Pick<Schedule, "hour" | "minute" | "days" | "active">>) {
-    await fetch("/api/settings/schedule", {
+    setScheduleError("");
+    const res = await fetch("/api/settings/schedule", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, ...updates }),
     });
+    if (!res.ok) {
+      const data = await res.json();
+      setScheduleError(data.error || "Failed to update schedule");
+      fetchSchedules();
+      return;
+    }
     setSchedules((prev) => prev.map((s) => s.id === id ? { ...s, ...updates } : s));
   }
 
@@ -230,6 +244,7 @@ export default function SettingsPage() {
       <section className="mt-8">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">Schedules</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">Configure when scrapes and report pipelines run</p>
+        {scheduleError && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{scheduleError}</p>}
 
         <div className="mt-4 space-y-6 max-w-3xl">
           {/* Scrape Schedules */}

@@ -26,6 +26,11 @@ async function migratePostgres() {
   `);
 
   await query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS runs_one_active_per_type
+    ON runs (run_type) WHERE status = 'running'
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS run_logs (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       run_id UUID REFERENCES runs(id) ON DELETE CASCADE,
@@ -148,6 +153,11 @@ async function migratePostgres() {
       active BOOLEAN DEFAULT true,
       created_at TIMESTAMPTZ DEFAULT now()
     )
+  `);
+
+  await query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS schedules_unique_time
+    ON schedules (type, hour, minute, days)
   `);
 
   // Seed defaults if table is empty

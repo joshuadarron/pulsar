@@ -19,6 +19,82 @@ const PIPELINES_DIR = path.resolve(fileURLToPath(import.meta.url), '../pipelines
 const TREND_REPORT_PIPE = path.join(PIPELINES_DIR, 'trend-report.pipe');
 
 // ---------------------------------------------------------------------------
+// RocketRide package context (fetched once per run for positioning data)
+// ---------------------------------------------------------------------------
+
+interface PackageContext {
+	label: string;
+	url: string;
+	name: string;
+	version: string;
+	summary: string;
+	stats?: Record<string, number>;
+}
+
+type PackageFetcher = () => Promise<PackageContext | null>;
+
+function pypi(label: string, pkg: string): PackageFetcher {
+	return async () => {
+		const res = await fetch(`https://pypi.org/pypi/${pkg}/json`, { signal: AbortSignal.timeout(10_000) });
+		if (!res.ok) return null;
+		const info = (await res.json()).info;
+		return { label, url: `https://pypi.org/project/${pkg}/`, name: info.name, version: info.version, summary: info.summary };
+	};
+}
+
+function npm(label: string, pkg: string): PackageFetcher {
+	return async () => {
+		const res = await fetch(`https://registry.npmjs.org/${pkg}`, { signal: AbortSignal.timeout(10_000) });
+		if (!res.ok) return null;
+		const data = await res.json();
+		const latest = data['dist-tags']?.latest ?? '';
+		const meta = latest ? data.versions?.[latest] : null;
+		return { label, url: `https://www.npmjs.com/package/${pkg}`, name: data.name, version: latest, summary: meta?.description ?? data.description ?? '' };
+	};
+}
+
+function vscMarketplace(label: string, extensionId: string): PackageFetcher {
+	return async () => {
+		const res = await fetch('https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'Accept': 'application/json;api-version=6.0-preview.1' },
+			body: JSON.stringify({ filters: [{ criteria: [{ filterType: 7, value: extensionId }] }], flags: 914 }),
+			signal: AbortSignal.timeout(10_000),
+		});
+		if (!res.ok) return null;
+		const ext = (await res.json()).results?.[0]?.extensions?.[0];
+		if (!ext) return null;
+		const stats: Record<string, number> = {};
+		for (const s of ext.statistics ?? []) stats[s.statisticName] = s.value;
+		return { label, url: `https://marketplace.visualstudio.com/items?itemName=${extensionId}`, name: ext.displayName, version: ext.versions?.[0]?.version ?? '', summary: ext.shortDescription ?? '', stats };
+	};
+}
+
+function openVsx(label: string, namespace: string, name: string): PackageFetcher {
+	return async () => {
+		const res = await fetch(`https://open-vsx.org/api/${namespace}/${name}`, { signal: AbortSignal.timeout(10_000) });
+		if (!res.ok) return null;
+		const data = await res.json();
+		return { label, url: `https://open-vsx.org/extension/${namespace}/${name}`, name: data.displayName ?? data.name, version: data.version, summary: data.description ?? '' };
+	};
+}
+
+const ROCKETRIDE_PACKAGES: PackageFetcher[] = [
+	pypi('rocketride (Python SDK)', 'rocketride'),
+	pypi('rocketride-mcp (MCP server)', 'rocketride-mcp'),
+	npm('rocketride (TypeScript SDK)', 'rocketride'),
+	vscMarketplace('rocketride (VS Code extension)', 'RocketRide.rocketride'),
+	openVsx('rocketride (Open VSX extension)', 'RocketRide', 'rocketride'),
+];
+
+async function fetchPackageContext(): Promise<PackageContext[]> {
+	const settled = await Promise.allSettled(ROCKETRIDE_PACKAGES.map((fn) => fn()));
+	return settled
+		.filter((r): r is PromiseFulfilledResult<PackageContext | null> => r.status === 'fulfilled' && r.value !== null)
+		.map((r) => r.value!);
+}
+
+// ---------------------------------------------------------------------------
 // Pipeline token tracking (for cancellation)
 // ---------------------------------------------------------------------------
 
@@ -324,10 +400,11 @@ async function runTrendReport(
 	// --- Gather data for all three pass-1 sections ---
 	await logRun(runId, 'info', 'trend-report', 'Querying databases for section data...');
 
-	const [marketData, techData, signalsData] = await Promise.all([
+	const [marketData, techData, signalsData, rocketridePackages] = await Promise.all([
 		gatherMarketLandscapeData(),
 		gatherTechnologyTrendsData(),
 		gatherDeveloperSignalsData(),
+		fetchPackageContext(),
 	]);
 
 	// Article count + source count for metadata
@@ -348,9 +425,9 @@ async function runTrendReport(
 	checkCancelled(runId);
 	await logRun(runId, 'info', 'trend-report', 'Pass 1: generating market_landscape, technology_trends, developer_signals...');
 
-	const marketResponse = await runSection(client, runId, 'marketLandscape', marketData);
-	const techResponse = await runSection(client, runId, 'technologyTrends', techData);
-	const signalsResponse = await runSection(client, runId, 'developerSignals', signalsData);
+	const marketResponse = await runSection(client, runId, 'marketLandscape', { ...marketData, rocketridePackages });
+	const techResponse = await runSection(client, runId, 'technologyTrends', { ...techData, rocketridePackages });
+	const signalsResponse = await runSection(client, runId, 'developerSignals', { ...signalsData, rocketridePackages });
 
 	await logRun(runId, 'info', 'trend-report', 'Pass 1 complete.');
 
@@ -362,6 +439,7 @@ async function runTrendReport(
 		marketLandscape: marketResponse.text,
 		technologyTrends: techResponse.text,
 		developerSignals: signalsResponse.text,
+		rocketridePackages,
 	};
 	const contentResponse = await runSection(client, runId, 'contentRecommendations', pass2Input);
 
@@ -427,6 +505,13 @@ async function runTrendReport(
 
 	const reportId = reportResult.rows[0].id;
 	await logRun(runId, 'success', 'trend-report', `Trend report saved: ${reportId}`);
+
+	try {
+		await sendReportEmail(reportId);
+		await logRun(runId, 'info', 'email', 'Report email sent');
+	} catch (emailErr) {
+		await logRun(runId, 'warn', 'email', `Failed to send email: ${emailErr}`);
+	}
 
 	await query(
 		`INSERT INTO notifications (type, title, message, link, reference_id)
@@ -614,12 +699,23 @@ async function runContentDrafts(
 // ---------------------------------------------------------------------------
 
 export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'scheduled') {
-	// Create pipeline run
-	const runResult = await query<{ id: string }>(
-		"INSERT INTO runs (trigger, run_type) VALUES ($1, 'pipeline') RETURNING id",
-		[trigger],
-	);
-	const runId = runResult.rows[0].id;
+	// Atomic DB-level lock: the unique partial index on (run_type) WHERE status = 'running'
+	// ensures only one pipeline can be active at a time. If another is running, the INSERT
+	// fails with a unique violation (23505) and we skip.
+	let runId: string;
+	try {
+		const runResult = await query<{ id: string }>(
+			"INSERT INTO runs (trigger, run_type) VALUES ($1, 'pipeline') RETURNING id",
+			[trigger],
+		);
+		runId = runResult.rows[0].id;
+	} catch (err: unknown) {
+		if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === '23505') {
+			console.log('[Pipeline] Skipped — another pipeline is already running.');
+			return { runId: null, reportId: null };
+		}
+		throw err;
+	}
 
 	let client: Awaited<ReturnType<typeof getClient>> | null = null;
 	try {
@@ -641,16 +737,6 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 		);
 
 		await logRun(runId, 'success', 'complete', 'All pipelines complete');
-
-		// Send email notification
-		if (reportId) {
-			try {
-				await sendReportEmail(reportId);
-				await logRun(runId, 'info', 'email', 'Report email sent');
-			} catch (emailErr) {
-				await logRun(runId, 'warn', 'email', `Failed to send email: ${emailErr}`);
-			}
-		}
 
 		activeRuns.delete(runId);
 		return { runId, reportId };
