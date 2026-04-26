@@ -534,59 +534,6 @@ async function runTrendReport(
 
 const DRAFT_PLATFORMS = ['hashnode', 'medium', 'devto', 'hackernews', 'linkedin', 'twitter', 'discord'];
 
-function extractSection(text: string, marker: string, nextMarker?: string): string {
-	const start = text.indexOf(marker);
-	if (start === -1) return '';
-	const contentStart = start + marker.length;
-	const end = nextMarker ? text.indexOf(nextMarker, contentStart) : -1;
-	return (end > -1 ? text.slice(contentStart, end) : text.slice(contentStart)).trim();
-}
-
-function parseDraftSections(answer: unknown): Record<string, string> {
-	const raw = typeof answer === 'string' ? answer : (answer ? JSON.stringify(answer) : '');
-	const drafts: Record<string, string> = {};
-
-	for (let i = 0; i < DRAFT_PLATFORMS.length; i++) {
-		const platform = DRAFT_PLATFORMS[i];
-		const marker = `=== ${platform.toUpperCase()} ===`;
-		const nextMarker = i < DRAFT_PLATFORMS.length - 1 ? `=== ${DRAFT_PLATFORMS[i + 1].toUpperCase()} ===` : undefined;
-		const content = extractSection(raw, marker, nextMarker);
-		if (content) drafts[platform] = content;
-	}
-
-	// Fallback: split by platform name headers
-	if (Object.keys(drafts).length === 0) {
-		for (let i = 0; i < DRAFT_PLATFORMS.length; i++) {
-			const platform = DRAFT_PLATFORMS[i];
-			const patterns = [
-				new RegExp(`^#+\\s*${platform}\\b`, 'im'),
-				new RegExp(`^\\*\\*${platform}\\*\\*`, 'im'),
-				new RegExp(`^${platform}:`, 'im'),
-			];
-			for (const pattern of patterns) {
-				const match = raw.match(pattern);
-				if (match && match.index !== undefined) {
-					const start = match.index + match[0].length;
-					let end = raw.length;
-					for (const next of DRAFT_PLATFORMS) {
-						if (next === platform) continue;
-						for (const np of [new RegExp(`^#+\\s*${next}\\b`, 'im'), new RegExp(`^\\*\\*${next}\\*\\*`, 'im'), new RegExp(`^${next}:`, 'im')]) {
-							const nm = raw.slice(start).match(np);
-							if (nm && nm.index !== undefined && start + nm.index < end) {
-								end = start + nm.index;
-							}
-						}
-					}
-					drafts[platform] = raw.slice(start, end).trim();
-					break;
-				}
-			}
-		}
-	}
-
-	return drafts;
-}
-
 async function runContentDrafts(
 	client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
@@ -611,6 +558,9 @@ async function runContentDrafts(
 
 	await logRun(runId, 'info', 'content-drafts', `Using ${articlesResult.rows.length} top articles for draft generation`);
 
+	// Fetch RocketRide package context (same as trend report)
+	const rocketridePackages = await fetchPackageContext();
+
 	// Content-drafts receives the content_recommendations text and supporting context
 	const payload = {
 		report: {
@@ -620,6 +570,7 @@ async function runContentDrafts(
 			emergingTopics: sections.technologyTrends.data.emergingTopics,
 		},
 		topArticles: articlesResult.rows,
+		rocketridePackages,
 	};
 
 	// Send to RocketRide
@@ -641,7 +592,32 @@ async function runContentDrafts(
 
 	await client.terminate(token);
 
-	const drafts = parseDraftSections(response?.answers?.[0]);
+	// Parse JSON responses from fan-out: each drafter returns {"platform": "content"}
+	// response.answers is an array with one entry per drafter agent
+	const answers = response?.answers ?? [];
+	const drafts: Record<string, string> = {};
+
+	for (const answer of Array.isArray(answers) ? answers : [answers]) {
+		// If RocketRide already parsed the answer into an object, extract platform keys
+		if (answer && typeof answer === 'object' && !Array.isArray(answer)) {
+			const obj = answer as Record<string, unknown>;
+			for (const p of DRAFT_PLATFORMS) {
+				if (typeof obj[p] === 'string') drafts[p] = obj[p] as string;
+			}
+			continue;
+		}
+
+		// Otherwise extract JSON from string
+		const str = typeof answer === 'string' ? answer : JSON.stringify(answer ?? '{}');
+		try {
+			const parsed = extractJson<Record<string, string>>(str);
+			for (const p of DRAFT_PLATFORMS) {
+				if (typeof parsed[p] === 'string') drafts[p] = parsed[p];
+			}
+		} catch {
+			await logRun(runId, 'warn', 'content-drafts', `Could not parse drafter answer. Raw (first 300 chars): ${str.slice(0, 300)}`);
+		}
+	}
 
 	// Save each draft
 	const platformMapping: Record<string, { contentType: string }> = {
