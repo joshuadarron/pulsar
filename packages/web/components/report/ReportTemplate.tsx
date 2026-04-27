@@ -16,6 +16,7 @@ import type {
 	SourceDistribution,
 	EvaluationSummary,
 } from "@pulsar/shared/types";
+import PulsarLogo from "../PulsarLogo";
 
 type V = "ui" | "email";
 
@@ -570,22 +571,38 @@ export default function ReportTemplate({ data, variant: v, reportId, generatedAt
 		<>
 			{/* Header */}
 			<div {...cx(v,
-				"report-header rounded-t-lg bg-gradient-to-r from-indigo-600 to-purple-600 p-8 text-white",
-				{ background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)", padding: "28px 24px", borderRadius: "12px 12px 0 0" }
+				"report-header flex items-center justify-between gap-4 rounded-t-lg bg-gradient-to-r from-indigo-600 to-purple-600 p-8 text-white",
+				{ background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)", padding: "28px 24px", borderRadius: "12px 12px 0 0", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }
 			)}>
-				<h1 {...cx(v, "text-2xl font-bold", { color: "white", margin: 0, fontSize: "24px", fontWeight: 700 })}>
-					Pulsar: Market Analysis Report
-				</h1>
-				<p {...cx(v, "mt-2 text-indigo-100", { color: "rgba(255,255,255,0.8)", margin: "8px 0 0", fontSize: "14px" })}>
-					{reportDate}
-				</p>
+				<div>
+					<h1 {...cx(v, "text-2xl font-bold", { color: "white", margin: 0, fontSize: "24px", fontWeight: 700 })}>
+						Pulsar: Market Analysis Report
+					</h1>
+					<p {...cx(v, "mt-2 text-indigo-100", { color: "rgba(255,255,255,0.8)", margin: "8px 0 0", fontSize: "14px" })}>
+						{reportDate}
+					</p>
+				</div>
+				<PulsarLogo
+					className={v === "ui" ? "h-12 w-12 flex-shrink-0" : undefined}
+					color="white"
+					{...(v === "email" ? { width: 48, height: 48, style: { flexShrink: 0 } } : {})}
+				/>
 			</div>
 
-			{/* Export PDF */}
+			{/* Export PDF, circular floating button with hover tooltip (UI only) */}
 			{v === "ui" && (
-				<div className="no-print flex justify-end gap-3">
-					<a href={`/api/reports/${reportId}/export/pdf`} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+				<div className="no-print group fixed bottom-6 right-6 z-40">
+					<span className="pointer-events-none absolute right-full top-1/2 mr-3 -translate-y-1/2 whitespace-nowrap rounded-md bg-gray-900 dark:bg-neutral-700 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
 						Export PDF
+					</span>
+					<a
+						href={`/api/reports/${reportId}/export/pdf`}
+						aria-label="Export PDF"
+						className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg transition hover:bg-indigo-700"
+					>
+						<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+							<path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+						</svg>
 					</a>
 				</div>
 			)}
