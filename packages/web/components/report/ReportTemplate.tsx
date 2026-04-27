@@ -14,6 +14,7 @@ import type {
 	TrendingTechnology,
 	EntityProminence,
 	SourceDistribution,
+	EvaluationSummary,
 } from "@pulsar/shared/types";
 
 type V = "ui" | "email";
@@ -25,6 +26,8 @@ interface ReportTemplateProps {
 	generatedAt?: string;
 	reportUrl?: string;
 	pdfUrl?: string;
+	evaluationSummary?: EvaluationSummary;
+	evalsUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -407,6 +410,86 @@ function ContentRecommendationsSection({ v, text }: { v: V; text: string }) {
 	);
 }
 
+function EvaluationSummarySection({ v, summary, evalsUrl }: { v: V; summary: EvaluationSummary; evalsUrl?: string }) {
+	const r = summary.reportScore;
+	const draftRowsHaveAny = summary.draftScores.length > 0;
+
+	if (v === "email") {
+		return (
+			<>
+				<div style={{ fontSize: "13px", color: "#374151", marginBottom: "12px" }}>
+					Trend report quality: <strong style={{ color: "#111827" }}>{r.total} / {r.max}</strong>
+					{r.lowestDim && (
+						<span style={{ color: "#6b7280" }}> (lowest: {r.lowestDim.name} {r.lowestDim.score}/5)</span>
+					)}
+				</div>
+				{draftRowsHaveAny && (
+					<table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", margin: "8px 0" }}>
+						<thead>
+							<tr style={{ borderBottom: "2px solid #e5e7eb" }}>
+								<th style={{ padding: "6px 8px", textAlign: "left", fontSize: "11px", textTransform: "uppercase", color: "#9ca3af" }}>Platform</th>
+								<th style={{ padding: "6px 8px", textAlign: "right", fontSize: "11px", textTransform: "uppercase", color: "#9ca3af" }}>LLM</th>
+								<th style={{ padding: "6px 8px", textAlign: "right", fontSize: "11px", textTransform: "uppercase", color: "#9ca3af" }}>Sub-checks</th>
+								<th style={{ padding: "6px 8px", textAlign: "left", fontSize: "11px", textTransform: "uppercase", color: "#9ca3af" }}>Failed</th>
+							</tr>
+						</thead>
+						<tbody>
+							{summary.draftScores.map((d) => (
+								<tr key={d.platform}>
+									<td style={{ padding: "6px 8px", borderBottom: "1px solid #f3f4f6" }}>{d.platform}</td>
+									<td style={{ padding: "6px 8px", borderBottom: "1px solid #f3f4f6", textAlign: "right" }}>{d.llmScore}/{d.llmMax}</td>
+									<td style={{ padding: "6px 8px", borderBottom: "1px solid #f3f4f6", textAlign: "right" }}>{d.subChecksPassed}/{d.subChecksTotal}</td>
+									<td style={{ padding: "6px 8px", borderBottom: "1px solid #f3f4f6", color: "#b91c1c", fontSize: "12px" }}>
+										{d.failedSubChecks.length > 0 ? d.failedSubChecks.join(", ") : ""}
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				)}
+				{evalsUrl && (
+					<p style={{ fontSize: "12px", color: "#6b7280", margin: "8px 0 0" }}>
+						View detailed scores: <a href={evalsUrl} style={{ color: "#4f46e5" }}>{evalsUrl}</a>
+					</p>
+				)}
+			</>
+		);
+	}
+
+	return (
+		<div className="mt-4 space-y-3">
+			<p className="text-sm text-gray-700 dark:text-neutral-300">
+				Trend report quality: <strong className="text-gray-900 dark:text-neutral-100">{r.total} / {r.max}</strong>
+				{r.lowestDim && (
+					<span className="text-gray-500 dark:text-neutral-400"> (lowest: {r.lowestDim.name} {r.lowestDim.score}/5)</span>
+				)}
+			</p>
+			{draftRowsHaveAny && (
+				<table className="w-full text-sm">
+					<thead>
+						<tr className="border-b border-gray-200 dark:border-neutral-700">
+							<th className="pb-2 text-left text-xs font-medium uppercase text-gray-400 dark:text-neutral-500">Platform</th>
+							<th className="pb-2 text-right text-xs font-medium uppercase text-gray-400 dark:text-neutral-500">LLM</th>
+							<th className="pb-2 text-right text-xs font-medium uppercase text-gray-400 dark:text-neutral-500">Sub-checks</th>
+							<th className="pb-2 text-left text-xs font-medium uppercase text-gray-400 dark:text-neutral-500">Failed</th>
+						</tr>
+					</thead>
+					<tbody>
+						{summary.draftScores.map((d) => (
+							<tr key={d.platform} className="border-b border-gray-100 dark:border-neutral-800 last:border-0">
+								<td className="py-2 font-medium text-gray-900 dark:text-neutral-100">{d.platform}</td>
+								<td className="py-2 text-right tabular-nums text-gray-700 dark:text-neutral-300">{d.llmScore}/{d.llmMax}</td>
+								<td className="py-2 text-right tabular-nums text-gray-700 dark:text-neutral-300">{d.subChecksPassed}/{d.subChecksTotal}</td>
+								<td className="py-2 text-xs text-red-600 dark:text-red-400">{d.failedSubChecks.join(", ")}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			)}
+		</div>
+	);
+}
+
 function SourcesTable({ v, data }: { v: V; data: SourceDistribution[] }) {
 	const sorted = [...data].sort((a, b) => b.articleCount - a.articleCount);
 
@@ -459,7 +542,7 @@ function SourcesTable({ v, data }: { v: V; data: SourceDistribution[] }) {
 // Main template
 // ---------------------------------------------------------------------------
 
-export default function ReportTemplate({ data, variant: v, reportId, generatedAt, reportUrl, pdfUrl }: ReportTemplateProps) {
+export default function ReportTemplate({ data, variant: v, reportId, generatedAt, reportUrl, pdfUrl, evaluationSummary, evalsUrl }: ReportTemplateProps) {
 	const reportDate = new Date(generatedAt || Date.now()).toLocaleDateString("en-US", {
 		weekday: "long",
 		month: "long",
@@ -592,6 +675,14 @@ export default function ReportTemplate({ data, variant: v, reportId, generatedAt
 				)
 			)}
 
+			{/* Evaluation Summary (optional) */}
+			{evaluationSummary && sectionWrap(
+				<>
+					{sectionTitle("Evaluation Summary")}
+					<EvaluationSummarySection v={v} summary={evaluationSummary} evalsUrl={evalsUrl} />
+				</>
+			)}
+
 			{/* Data Sources */}
 			{sections.marketLandscape?.data?.sourceDistribution?.length > 0 && (
 				<SourcesTable v={v} data={sections.marketLandscape.data.sourceDistribution} />
@@ -600,12 +691,17 @@ export default function ReportTemplate({ data, variant: v, reportId, generatedAt
 			{/* CTA — email gets buttons, UI gets export link */}
 			{v === "email" && reportUrl && (
 				<div style={{ padding: "16px 24px 28px", textAlign: "center" }}>
-					<a href={reportUrl} style={{ display: "inline-block", background: "#4f46e5", color: "white", padding: "12px 32px", borderRadius: "8px", textDecoration: "none", fontWeight: 600, marginRight: "12px" }}>
+					<a href={reportUrl} style={{ display: "inline-block", background: "#4f46e5", color: "white", padding: "12px 24px", borderRadius: "8px", textDecoration: "none", fontWeight: 600, marginRight: "8px" }}>
 						View Full Report
 					</a>
 					{pdfUrl && (
-						<a href={pdfUrl} style={{ display: "inline-block", background: "#f3f4f6", color: "#374151", padding: "12px 32px", borderRadius: "8px", textDecoration: "none", fontWeight: 600 }}>
+						<a href={pdfUrl} style={{ display: "inline-block", background: "#f3f4f6", color: "#374151", padding: "12px 24px", borderRadius: "8px", textDecoration: "none", fontWeight: 600, marginRight: "8px" }}>
 							Download PDF
+						</a>
+					)}
+					{evalsUrl && (
+						<a href={evalsUrl} style={{ display: "inline-block", background: "#f3f4f6", color: "#374151", padding: "12px 24px", borderRadius: "8px", textDecoration: "none", fontWeight: 600 }}>
+							View Scores
 						</a>
 					)}
 				</div>

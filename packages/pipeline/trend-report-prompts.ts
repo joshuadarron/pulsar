@@ -95,6 +95,7 @@ Analyze competitive movement across adjacent AI runtimes and orchestration tools
 - \`entities\`: ranked by mention volume. Look for shifts in type (tool vs. model vs. company) and clusters of related entities.
 - \`technologies\`: adoption signals. Compare tool vs. model vs. language representation.
 - \`sourceDistribution\`: where conversation is happening. Only notable if a source is disproportionately high or newly present.
+- \`entityImportance\`: top 20 entities ranked by PageRank-weighted importance over the article co-mention graph. Rank 1 is the most important. Use this to ground claims about which entities are central in the market this period. When entityImportance is available, prefer it over raw mention counts. Weighted importance is the stronger signal because it accounts for how often an entity is co-mentioned with other prominent entities.
 
 Use research tools to verify claims about specific releases, repo activity, or positioning changes you observe in the data.
 
@@ -134,6 +135,7 @@ Analyze topic-level rise and fall across the reporting period. Your input data c
 - \`velocityOutliers\`: these are spikes worth calling out. Compare spike to baseline to gauge magnitude.
 - \`topicCoOccurrence\`: reveals thematic clusters. If two topics co-occur strongly, they should be analyzed together.
 - \`emergingTopics\`: newly trending. Explain what each one is if it would be unfamiliar to a DevRel audience.
+- \`topicClusters\`: Louvain-detected communities of related topics that co-occur in articles. Clusters are sorted by size (descending). Each cluster's \`topics\` field shows up to the top 20 topics in that cluster sorted by trendScore. Use clusters to ground analysis of what is grouping together this period (e.g., a single cluster combining "agents", "tool use", and "MCP" tells a different story than three separate trends). Cluster IDs are arbitrary numeric labels, refer to a cluster by its dominant topics, never by ID.
 
 Use research tools to add context on what triggered specific spikes or trend shifts.
 
@@ -171,6 +173,7 @@ Analyze pain points, feature gaps, and the voices driving conversation. Your inp
 - \`sentimentBreakdown\`: the overall mood of the developer ecosystem this period. Look for shifts from previous patterns.
 - \`topAuthors\`: who is driving conversation. Use research tools to check what they have been writing about if the data alone is insufficient.
 - \`topDiscussions\`: articles with the most engagement. The title and source give you enough to identify themes. Use research tools to read the actual content if needed.
+- \`emergingEntities\`: entities that broke into the top 10 of PageRank-weighted importance this week and were not in the top 25 the prior week, with at least a 2x increase in mention count. This is a forward-looking signal: entities gaining traction, not entities already established. If any are present, lead the section with the most prominent emergence and explain what is driving the rise (use research tools to add context if the entity name alone is not enough). If the array is empty, do not invent emergence, write the section as you do today.
 
 ### Worked example
 

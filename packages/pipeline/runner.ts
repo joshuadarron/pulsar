@@ -1,6 +1,10 @@
 import { getClient, disconnectClient } from './lib/rocketride.js';
 import { sendReportEmail } from './notify.js';
 import { extractJson } from './lib/parse-json.js';
+import { runValidators, VALIDATOR_SUITES } from './lib/evals/validators.js';
+import { persistValidation } from './lib/evals/persist.js';
+import { runEvaluations } from './lib/evals/runner.js';
+import { extractPredictions } from './lib/evals/extract.js';
 import { SECTION_PROMPTS } from './trend-report-prompts.js';
 import { query } from '@pulsar/shared/db/postgres';
 import { getSession } from '@pulsar/shared/db/neo4j';
@@ -11,6 +15,10 @@ import type {
 	TechnologyTrendsData,
 	DeveloperSignalsData,
 	ResearchCitation,
+	GraphSnapshot,
+	GraphSnapshotCluster,
+	GraphSnapshotEntity,
+	EmergingEntity,
 } from '@pulsar/shared/types';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -18,6 +26,23 @@ import { fileURLToPath } from 'url';
 const PIPELINES_DIR = path.resolve(fileURLToPath(import.meta.url), '../pipelines');
 const TREND_REPORT_PIPE = path.join(PIPELINES_DIR, 'trend-report.pipe');
 const ROCKETRIDE_CONTEXT_PIPE = path.join(PIPELINES_DIR, 'rocketride-context.pipe');
+const GRAPH_SNAPSHOT_PIPE = path.join(PIPELINES_DIR, 'graph-snapshot.pipe');
+
+const MAX_SNAPSHOT_AGE_HOURS = 48;
+
+async function validateAndPersist(runId: string, pipelineName: string, output: unknown): Promise<void> {
+	const suite = VALIDATOR_SUITES[pipelineName];
+	if (!suite) return;
+	try {
+		const result = runValidators(suite, output);
+		await persistValidation(runId, pipelineName, result);
+		if (!result.passed) {
+			await logRun(runId, 'warn', 'validation', `${pipelineName} validation failures: ${result.error_summary}`);
+		}
+	} catch (err) {
+		await logRun(runId, 'warn', 'validation', `${pipelineName} validator threw: ${err}`);
+	}
+}
 
 // ---------------------------------------------------------------------------
 // RocketRide product context (fetched once per run via rocketride-context.pipe)
@@ -67,6 +92,157 @@ async function fetchRocketRideContext(
 		console.error('[Runner] Failed to fetch RocketRide context:', err);
 		return null;
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Graph snapshot pipeline (deterministic GDS Louvain + PageRank computation)
+// Computed once per run, persisted to graph_snapshots, consumed by trend report.
+// ---------------------------------------------------------------------------
+
+interface GraphSnapshotEnvelope {
+	topic_clusters: GraphSnapshotCluster[];
+	entity_importance: GraphSnapshotEntity[];
+	metadata: Record<string, unknown>;
+}
+
+async function runGraphSnapshot(
+	client: Awaited<ReturnType<typeof getClient>>,
+	runId: string,
+): Promise<string | null> {
+	try {
+		await logRun(runId, 'info', 'graph-snapshot', 'Computing graph snapshot (Louvain + PageRank)...');
+
+		const result = await client.use({ filepath: GRAPH_SNAPSHOT_PIPE });
+		const token = result.token;
+		setActiveToken(runId, client, token);
+
+		const response = await client.send(token, '{}', {}, 'application/json');
+		await client.terminate(token);
+
+		const raw = response?.answers?.[0];
+		if (!raw) {
+			await logRun(runId, 'warn', 'graph-snapshot', 'Snapshot pipeline returned no answer');
+			return null;
+		}
+
+		let envelope: GraphSnapshotEnvelope;
+		if (typeof raw === 'object' && !Array.isArray(raw)) {
+			envelope = raw as unknown as GraphSnapshotEnvelope;
+		} else {
+			const str = typeof raw === 'string' ? raw : JSON.stringify(raw);
+			envelope = extractJson<GraphSnapshotEnvelope>(str);
+		}
+
+		await validateAndPersist(runId, 'graph-snapshot.pipe', envelope);
+
+		if (!Array.isArray(envelope.topic_clusters) || !Array.isArray(envelope.entity_importance)) {
+			await logRun(
+				runId,
+				'warn',
+				'graph-snapshot',
+				'Snapshot envelope missing required arrays, skipping insert',
+			);
+			return null;
+		}
+
+		const insertResult = await query<{ id: string }>(
+			`INSERT INTO graph_snapshots (run_id, topic_clusters, entity_importance, metadata)
+			 VALUES ($1, $2, $3, $4) RETURNING id`,
+			[
+				runId,
+				JSON.stringify(envelope.topic_clusters),
+				JSON.stringify(envelope.entity_importance),
+				JSON.stringify(envelope.metadata ?? {}),
+			],
+		);
+
+		const snapshotId = insertResult.rows[0].id;
+		await logRun(
+			runId,
+			'success',
+			'graph-snapshot',
+			`Snapshot saved: ${snapshotId} (${envelope.topic_clusters.length} clusters, ${envelope.entity_importance.length} entities)`,
+		);
+		return snapshotId;
+	} catch (err) {
+		await logRun(runId, 'warn', 'graph-snapshot', `Snapshot failed (soft fail): ${err}`);
+		return null;
+	}
+}
+
+async function warnIfSnapshotStale(runId: string): Promise<void> {
+	const result = await query<{ computed_at: Date }>(
+		'SELECT computed_at FROM graph_snapshots ORDER BY computed_at DESC LIMIT 1',
+	);
+	if (result.rows.length === 0) {
+		await logRun(
+			runId,
+			'warn',
+			'graph-snapshot',
+			'No graph snapshots exist yet, trend report will run without algorithm-derived fields',
+		);
+		return;
+	}
+	const ageMs = Date.now() - new Date(result.rows[0].computed_at).getTime();
+	const ageHours = ageMs / (1000 * 60 * 60);
+	if (ageHours > MAX_SNAPSHOT_AGE_HOURS) {
+		await logRun(
+			runId,
+			'warn',
+			'graph-snapshot',
+			`Latest graph snapshot is ${ageHours.toFixed(1)}h old (>${MAX_SNAPSHOT_AGE_HOURS}h), trend report fields may be stale`,
+		);
+	}
+}
+
+async function loadGraphSnapshots(): Promise<{
+	current: GraphSnapshot | null;
+	weekAgo: GraphSnapshot | null;
+}> {
+	const currentResult = await query<GraphSnapshot>(
+		`SELECT id, run_id, computed_at, topic_clusters, entity_importance, metadata
+		 FROM graph_snapshots ORDER BY computed_at DESC LIMIT 1`,
+	);
+	const weekAgoResult = await query<GraphSnapshot>(
+		`SELECT id, run_id, computed_at, topic_clusters, entity_importance, metadata
+		 FROM graph_snapshots WHERE computed_at <= now() - interval '7 days'
+		 ORDER BY computed_at DESC LIMIT 1`,
+	);
+	return {
+		current: currentResult.rows[0] ?? null,
+		weekAgo: weekAgoResult.rows[0] ?? null,
+	};
+}
+
+function computeEmergingEntities(
+	current: GraphSnapshot | null,
+	weekAgo: GraphSnapshot | null,
+): EmergingEntity[] {
+	if (!current || !weekAgo) return [];
+	const weekAgoByName = new Map(weekAgo.entity_importance.map((e) => [e.name, e]));
+	return current.entity_importance
+		.filter((e) => e.pagerank_rank <= 10)
+		.filter((e) => {
+			const prior = weekAgoByName.get(e.name);
+			const wasNotTop25 = !prior || prior.pagerank_rank > 25;
+			const priorMentions = prior?.mention_count ?? 0;
+			const grew2x = e.mention_count >= priorMentions * 2;
+			return wasNotTop25 && grew2x;
+		})
+		.map((e) => {
+			const prior = weekAgoByName.get(e.name);
+			return {
+				name: e.name,
+				type: e.type,
+				current_rank: e.pagerank_rank,
+				prior_rank: prior?.pagerank_rank ?? null,
+				current_mentions: e.mention_count,
+				prior_mentions: prior?.mention_count ?? 0,
+				mention_growth_multiplier: prior?.mention_count
+					? e.mention_count / prior.mention_count
+					: null,
+			};
+		});
 }
 
 // ---------------------------------------------------------------------------
@@ -376,11 +552,23 @@ async function runTrendReport(
 	// --- Gather data for all three pass-1 sections ---
 	await logRun(runId, 'info', 'trend-report', 'Querying databases for section data...');
 
-	const [marketData, techData, signalsData] = await Promise.all([
+	const [marketData, techData, signalsData, snapshots] = await Promise.all([
 		gatherMarketLandscapeData(),
 		gatherTechnologyTrendsData(),
 		gatherDeveloperSignalsData(),
+		loadGraphSnapshots(),
 	]);
+
+	const topClusters = (snapshots.current?.topic_clusters ?? []).slice(0, 10);
+	const topEntities = (snapshots.current?.entity_importance ?? []).slice(0, 20);
+	const emergingEntities = computeEmergingEntities(snapshots.current, snapshots.weekAgo);
+
+	await logRun(
+		runId,
+		'info',
+		'trend-report',
+		`Graph snapshot fields: ${topClusters.length} clusters, ${topEntities.length} entities, ${emergingEntities.length} emerging`,
+	);
 
 	// Article count + source count for metadata
 	const countResult = await query<{ count: string }>(
@@ -400,9 +588,21 @@ async function runTrendReport(
 	checkCancelled(runId);
 	await logRun(runId, 'info', 'trend-report', 'Pass 1: generating market_landscape, technology_trends, developer_signals...');
 
-	const marketResponse = await runSection(client, runId, 'marketLandscape', { ...marketData, rocketrideContext });
-	const techResponse = await runSection(client, runId, 'technologyTrends', { ...techData, rocketrideContext });
-	const signalsResponse = await runSection(client, runId, 'developerSignals', { ...signalsData, rocketrideContext });
+	const marketResponse = await runSection(client, runId, 'marketLandscape', {
+		...marketData,
+		entityImportance: topEntities,
+		rocketrideContext,
+	});
+	const techResponse = await runSection(client, runId, 'technologyTrends', {
+		...techData,
+		topicClusters: topClusters,
+		rocketrideContext,
+	});
+	const signalsResponse = await runSection(client, runId, 'developerSignals', {
+		...signalsData,
+		emergingEntities,
+		rocketrideContext,
+	});
 
 	await logRun(runId, 'info', 'trend-report', 'Pass 1 complete.');
 
@@ -471,6 +671,8 @@ async function runTrendReport(
 		},
 	};
 
+	await validateAndPersist(runId, 'trend-report.pipe', reportData);
+
 	// --- Save report ---
 	const reportResult = await query<{ id: string }>(
 		`INSERT INTO reports (run_id, period_start, period_end, report_data, article_count)
@@ -480,13 +682,6 @@ async function runTrendReport(
 
 	const reportId = reportResult.rows[0].id;
 	await logRun(runId, 'success', 'trend-report', `Trend report saved: ${reportId}`);
-
-	try {
-		await sendReportEmail(reportId);
-		await logRun(runId, 'info', 'email', 'Report email sent');
-	} catch (emailErr) {
-		await logRun(runId, 'warn', 'email', `Failed to send email: ${emailErr}`);
-	}
 
 	await query(
 		`INSERT INTO notifications (type, title, message, link, reference_id)
@@ -621,6 +816,8 @@ async function runContentDrafts(
 		}
 	}
 
+	await validateAndPersist(runId, 'content-drafts.pipe', drafts);
+
 	// Save each draft
 	const platformMapping: Record<string, { contentType: string }> = {
 		hashnode: { contentType: 'article' },
@@ -701,9 +898,18 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 		client = await getClient();
 		await logRun(runId, 'info', 'init', 'Connected to RocketRide');
 
+		// Compute graph snapshot first (deterministic GDS algorithms over Neo4j)
+		const snapshotId = await runGraphSnapshot(client, runId);
+		if (!snapshotId) {
+			await warnIfSnapshotStale(runId);
+		}
+
 		// Fetch RocketRide product context once for both pipelines
 		await logRun(runId, 'info', 'context', 'Fetching RocketRide product context...');
 		const rocketrideContext = await fetchRocketRideContext(client);
+		if (rocketrideContext) {
+			await validateAndPersist(runId, 'rocketride-context.pipe', rocketrideContext);
+		}
 		await logRun(
 			runId,
 			rocketrideContext ? 'info' : 'warn',
@@ -713,12 +919,41 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 				: 'Failed to fetch RocketRide context, proceeding without it',
 		);
 
-		// Sequential pipeline execution: trend report then content drafts
+		// Sequential pipeline execution: trend report, predictions extraction, content drafts
 		const reportId = await runTrendReport(client, runId, rocketrideContext);
 		let draftCount = 0;
 
 		if (reportId) {
+			// Phase D.2: extract time-bounded predictions from the finished report
+			const reportRow = await query<{ report_data: ReportData }>(
+				'SELECT report_data FROM reports WHERE id = $1',
+				[reportId],
+			);
+			if (reportRow.rows.length > 0) {
+				await extractPredictions(client, runId, reportId, reportRow.rows[0].report_data);
+			}
+
 			draftCount = await runContentDrafts(client, runId, reportId, rocketrideContext);
+		}
+
+		// Phase D.1: LLM-graded evaluations (Haiku) over the report and each draft
+		let evaluationSummary = null;
+		if (reportId) {
+			try {
+				evaluationSummary = await runEvaluations(client, runId, reportId);
+			} catch (evalErr) {
+				await logRun(runId, 'warn', 'evaluations', `Evaluations failed (soft fail): ${evalErr}`);
+			}
+		}
+
+		// Send report email last so it can include eval scores
+		if (reportId) {
+			try {
+				await sendReportEmail(reportId, evaluationSummary ?? undefined);
+				await logRun(runId, 'info', 'email', 'Report email sent');
+			} catch (emailErr) {
+				await logRun(runId, 'warn', 'email', `Failed to send email: ${emailErr}`);
+			}
 		}
 
 		await query(

@@ -2,9 +2,9 @@ import nodemailer from 'nodemailer';
 import { env } from '@pulsar/shared/config/env';
 import { query } from '@pulsar/shared/db/postgres';
 import { renderReportEmail } from './lib/render-email.js';
-import type { ReportData } from '@pulsar/shared/types';
+import type { ReportData, EvaluationSummary } from '@pulsar/shared/types';
 
-export async function sendReportEmail(reportId: string): Promise<void> {
+export async function sendReportEmail(reportId: string, evaluationSummary?: EvaluationSummary): Promise<void> {
 	if (!env.smtp.user || !env.smtp.password) {
 		console.log('[Notify] SMTP not configured, skipping email.');
 		return;
@@ -24,18 +24,20 @@ export async function sendReportEmail(reportId: string): Promise<void> {
 	}
 
 	// Get report data and render email using the shared template
-	const result = await query<{ report_data: ReportData; generated_at: string }>(
-		'SELECT report_data, generated_at FROM reports WHERE id = $1',
+	const result = await query<{ report_data: ReportData; generated_at: string; run_id: string }>(
+		'SELECT report_data, generated_at, run_id FROM reports WHERE id = $1',
 		[reportId],
 	);
 	if (result.rows.length === 0) return;
 
 	const reportData = result.rows[0].report_data;
 	const generatedAt = result.rows[0].generated_at;
+	const runId = result.rows[0].run_id;
 	const reportUrl = `${env.nextauth.url}/reports/${reportId}`;
 	const pdfUrl = `${env.nextauth.url}/api/reports/${reportId}/export/pdf`;
+	const evalsUrl = `${env.nextauth.url}/evals/${runId}`;
 
-	const html = renderReportEmail(reportData, reportId, generatedAt, reportUrl, pdfUrl);
+	const html = renderReportEmail(reportData, reportId, generatedAt, reportUrl, pdfUrl, evaluationSummary, evalsUrl);
 
 	const formattedDate = new Date(generatedAt).toLocaleDateString('en-US', {
 		weekday: 'long',
@@ -57,7 +59,7 @@ export async function sendReportEmail(reportId: string): Promise<void> {
 	await transporter.sendMail({
 		from: `"Pulsar" <${env.smtp.user}>`,
 		to: recipients.join(', '),
-		subject: `Pulsar: Market Analysis Report — ${formattedDate}`,
+		subject: `Pulsar: Market Analysis Report (${formattedDate})`,
 		html,
 	});
 

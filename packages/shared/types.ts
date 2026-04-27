@@ -248,3 +248,121 @@ export interface Run {
 	articlesNew: number;
 	errorLog?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Graph snapshot — stored as JSONB in graph_snapshots, computed once per
+// pipeline run via gds.louvain (Topics) and gds.pageRank (Entities).
+// Emergence is derived at trend-report time by diffing two snapshots.
+// ---------------------------------------------------------------------------
+
+export interface GraphSnapshotClusterTopic {
+	name: string;
+	trend_score: number;
+}
+
+export interface GraphSnapshotCluster {
+	cluster_id: number;
+	topic_count: number;
+	topics: GraphSnapshotClusterTopic[];
+}
+
+export interface GraphSnapshotEntity {
+	name: string;
+	type: string;
+	pagerank_score: number;
+	pagerank_rank: number;
+	mention_count: number;
+}
+
+export interface GraphSnapshot {
+	id: string;
+	run_id: string | null;
+	computed_at: string;
+	topic_clusters: GraphSnapshotCluster[];
+	entity_importance: GraphSnapshotEntity[];
+	metadata: Record<string, unknown>;
+}
+
+export interface EmergingEntity {
+	name: string;
+	type: string;
+	current_rank: number;
+	prior_rank: number | null;
+	current_mentions: number;
+	prior_mentions: number;
+	mention_growth_multiplier: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Phase D: Evaluation framework
+// pipeline_validations, evaluations, report_predictions, retrospective_grades
+// ---------------------------------------------------------------------------
+
+export interface ValidationCheck {
+	check_name: string;
+	passed: boolean;
+	detail?: string;
+}
+
+export interface PipelineValidation {
+	id: string;
+	run_id: string;
+	pipeline_name: string;
+	validated_at: string;
+	passed: boolean;
+	checks: ValidationCheck[];
+	error_summary: string | null;
+}
+
+export type EvaluationTargetType = 'trend_report' | 'content_draft';
+
+export interface Evaluation {
+	id: string;
+	run_id: string;
+	target_type: EvaluationTargetType;
+	target_id: string | null;
+	dimension: string;
+	score: number | null;
+	passed: boolean | null;
+	rationale: string | null;
+	judge_model: string;
+	judged_at: string;
+}
+
+export type PredictionType = 'emergence' | 'cluster_growth' | 'entity_importance' | 'general';
+
+export interface ReportPrediction {
+	id: string;
+	report_id: string;
+	prediction_text: string;
+	predicted_entities: string[];
+	predicted_topics: string[];
+	prediction_type: PredictionType;
+	extracted_at: string;
+}
+
+export type RetrospectiveOutcome = 'confirmed' | 'partially_confirmed' | 'refuted' | 'inconclusive';
+
+export interface RetrospectiveGrade {
+	id: string;
+	prediction_id: string;
+	graded_at: string;
+	outcome: RetrospectiveOutcome;
+	evidence_summary: string;
+	judge_model: string;
+	evidence_data: Record<string, unknown> | null;
+}
+
+export interface DraftEvalSummary {
+	platform: string;
+	llmScore: number;
+	llmMax: number;
+	subChecksPassed: number;
+	subChecksTotal: number;
+	failedSubChecks: string[];
+}
+
+export interface EvaluationSummary {
+	reportScore: { total: number; max: number; lowestDim: { name: string; score: number } | null };
+	draftScores: DraftEvalSummary[];
+}

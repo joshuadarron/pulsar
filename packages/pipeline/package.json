@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "pipeline": "tsx run-once.ts",
-    "pipeline-scheduler": "tsx index.ts"
+    "pipeline-scheduler": "tsx index.ts",
+    "retrospective": "tsx run-retrospective.ts"
   },
   "dependencies": {
     "@pulsar/shared": "workspace:*",

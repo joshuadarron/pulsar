@@ -26,6 +26,7 @@ process.on("uncaughtException", (err: Error & { code?: string }) => {
 
 let scrapeRunning = false;
 let pipelineRunning = false;
+let retrospectiveRunning = false;
 
 const RELOAD_INTERVAL_MS = 60_000;
 
@@ -110,6 +111,34 @@ function registerPipeline(cronExpr: string) {
   activeTasks.push(task);
 }
 
+function triggerRetrospective() {
+  if (retrospectiveRunning) {
+    console.log("[Scheduler] Retrospective skipped, previous run still in progress.");
+    return;
+  }
+  retrospectiveRunning = true;
+  console.log(`[Scheduler] Retrospective triggered at ${new Date().toISOString()}`);
+  const child = spawn(
+    "pnpm",
+    ["--filter", "@pulsar/pipeline", "run", "retrospective", "--", "--scheduled"],
+    { stdio: "inherit", detached: false },
+  );
+  child.on("close", (code) => {
+    retrospectiveRunning = false;
+    if (code === 0) {
+      console.log("[Scheduler] Retrospective complete.");
+    } else {
+      console.error(`[Scheduler] Retrospective exited with code ${code}`);
+    }
+  });
+}
+
+function registerRetrospective(cronExpr: string) {
+  console.log(`[Scheduler] Retrospective registered: ${cronExpr}`);
+  const task = cron.schedule(cronExpr, () => triggerRetrospective());
+  activeTasks.push(task);
+}
+
 function scheduleFingerprint(schedules: ScheduleRow[]): string {
   return JSON.stringify(
     schedules.map((s) => `${s.type}:${s.hour}:${s.minute}:${s.days.join(",")}`)
@@ -122,6 +151,7 @@ function applySchedules(schedules: ScheduleRow[]) {
 
   const scrapeSchedules = schedules.filter((s) => s.type === "scrape");
   const pipelineSchedules = schedules.filter((s) => s.type === "pipeline");
+  const retrospectiveSchedules = schedules.filter((s) => s.type === "retrospective");
 
   if (scrapeSchedules.length === 0) {
     console.log(`[Scheduler] No scrape schedules in DB, using env: ${env.scraper.cron}`);
@@ -136,7 +166,13 @@ function applySchedules(schedules: ScheduleRow[]) {
     registerPipeline(toCron(s.hour, s.minute, s.days));
   }
 
-  console.log(`[Scheduler] ${scrapeSchedules.length || 1} scrape + ${pipelineSchedules.length} pipeline schedule(s) active.`);
+  for (const s of retrospectiveSchedules) {
+    registerRetrospective(toCron(s.hour, s.minute, s.days));
+  }
+
+  console.log(
+    `[Scheduler] ${scrapeSchedules.length || 1} scrape + ${pipelineSchedules.length} pipeline + ${retrospectiveSchedules.length} retrospective schedule(s) active.`,
+  );
 }
 
 let lastFingerprint = "";

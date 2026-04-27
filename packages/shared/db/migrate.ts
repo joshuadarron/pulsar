@@ -160,6 +160,111 @@ async function migratePostgres() {
     ON schedules (type, hour, minute, days)
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS graph_snapshots (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      run_id UUID REFERENCES runs(id) ON DELETE SET NULL,
+      computed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      topic_clusters JSONB NOT NULL,
+      entity_importance JSONB NOT NULL,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_graph_snapshots_computed_at
+    ON graph_snapshots (computed_at DESC)
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS pipeline_validations (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      run_id UUID NOT NULL,
+      pipeline_name TEXT NOT NULL,
+      validated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      passed BOOLEAN NOT NULL,
+      checks JSONB NOT NULL,
+      error_summary TEXT
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_pipeline_validations_run_id
+    ON pipeline_validations (run_id)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_pipeline_validations_validated_at
+    ON pipeline_validations (validated_at DESC)
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS evaluations (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      run_id UUID NOT NULL,
+      target_type TEXT NOT NULL,
+      target_id TEXT,
+      dimension TEXT NOT NULL,
+      score INTEGER,
+      passed BOOLEAN,
+      rationale TEXT,
+      judge_model TEXT NOT NULL,
+      judged_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_evaluations_run_id ON evaluations (run_id)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_evaluations_target_type_judged_at
+    ON evaluations (target_type, judged_at DESC)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_evaluations_dimension ON evaluations (dimension)
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS report_predictions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      report_id UUID NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+      prediction_text TEXT NOT NULL,
+      predicted_entities TEXT[],
+      predicted_topics TEXT[],
+      prediction_type TEXT NOT NULL,
+      extracted_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_report_predictions_report_id
+    ON report_predictions (report_id)
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS retrospective_grades (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      prediction_id UUID NOT NULL REFERENCES report_predictions(id) ON DELETE CASCADE,
+      graded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      outcome TEXT NOT NULL,
+      evidence_summary TEXT NOT NULL,
+      judge_model TEXT NOT NULL,
+      evidence_data JSONB
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_retrospective_grades_prediction_id
+    ON retrospective_grades (prediction_id)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_retrospective_grades_graded_at
+    ON retrospective_grades (graded_at DESC)
+  `);
+
   // Seed defaults if table is empty
   await query(`
     INSERT INTO schedules (type, hour, minute, days)
@@ -171,6 +276,12 @@ async function migratePostgres() {
     INSERT INTO schedules (type, hour, minute, days)
     SELECT 'pipeline', 6, 0, '{1,2,3,4,5}'
     WHERE NOT EXISTS (SELECT 1 FROM schedules WHERE type = 'pipeline')
+  `);
+
+  await query(`
+    INSERT INTO schedules (type, hour, minute, days)
+    SELECT 'retrospective', 7, 0, '{1,2,3,4,5}'
+    WHERE NOT EXISTS (SELECT 1 FROM schedules WHERE type = 'retrospective')
   `);
 
   console.log("PostgreSQL migrations complete.");

@@ -1,0 +1,322 @@
+import type { ValidationCheck, ReportData } from '@pulsar/shared/types';
+
+export type ValidatorResult = { passed: boolean; detail?: string };
+
+export type Validator = {
+	name: string;
+	description: string;
+	check: (output: unknown) => ValidatorResult;
+};
+
+export type ValidatorSuite = {
+	pipelineName: string;
+	validators: Validator[];
+};
+
+export type ValidationRun = {
+	passed: boolean;
+	checks: ValidationCheck[];
+	error_summary: string | null;
+};
+
+export function runValidators(suite: ValidatorSuite, output: unknown): ValidationRun {
+	const checks: ValidationCheck[] = suite.validators.map((v) => {
+		try {
+			const r = v.check(output);
+			return { check_name: v.name, passed: r.passed, detail: r.detail };
+		} catch (err) {
+			return {
+				check_name: v.name,
+				passed: false,
+				detail: `validator threw: ${err instanceof Error ? err.message : String(err)}`,
+			};
+		}
+	});
+	const failed = checks.filter((c) => !c.passed);
+	return {
+		passed: failed.length === 0,
+		checks,
+		error_summary: failed.length === 0 ? null : failed.map((c) => `${c.check_name}: ${c.detail ?? 'failed'}`).join('; '),
+	};
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function isObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function nonEmptyString(value: unknown): boolean {
+	return typeof value === 'string' && value.trim().length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Suite: rocketride-context.pipe
+// Output shape: { packages: { pypi, npm, vscode, openvsx }, sites: { ... }, fetched_at }
+// ---------------------------------------------------------------------------
+
+export const ROCKETRIDE_CONTEXT_SUITE: ValidatorSuite = {
+	pipelineName: 'rocketride-context.pipe',
+	validators: [
+		{
+			name: 'has_packages',
+			description: 'packages.{pypi,npm,vscode,openvsx} keys exist',
+			check: (out) => {
+				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
+				const pkgs = out.packages;
+				if (!isObject(pkgs)) return { passed: false, detail: 'packages missing or not object' };
+				const required = ['pypi', 'npm', 'vscode', 'openvsx'];
+				const missing = required.filter((k) => !(k in pkgs));
+				return missing.length === 0
+					? { passed: true }
+					: { passed: false, detail: `missing keys: ${missing.join(', ')}` };
+			},
+		},
+		{
+			name: 'has_sites',
+			description: 'sites.{marketing,docs_index,github_readme,founder_article} keys exist',
+			check: (out) => {
+				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
+				const sites = out.sites;
+				if (!isObject(sites)) return { passed: false, detail: 'sites missing or not object' };
+				const required = ['marketing', 'docs_index', 'github_readme', 'founder_article'];
+				const missing = required.filter((k) => !(k in sites));
+				return missing.length === 0
+					? { passed: true }
+					: { passed: false, detail: `missing keys: ${missing.join(', ')}` };
+			},
+		},
+		{
+			name: 'has_fetched_at',
+			description: 'fetched_at ISO 8601 timestamp present',
+			check: (out) => {
+				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
+				const ts = out.fetched_at;
+				if (typeof ts !== 'string') return { passed: false, detail: 'fetched_at not a string' };
+				const parsed = Date.parse(ts);
+				return Number.isFinite(parsed)
+					? { passed: true }
+					: { passed: false, detail: `not a valid ISO timestamp: ${ts}` };
+			},
+		},
+		{
+			name: 'at_least_one_package_non_null',
+			description: 'catches total HTTP failure',
+			check: (out) => {
+				if (!isObject(out) || !isObject(out.packages)) return { passed: false, detail: 'packages object missing' };
+				const anyPresent = Object.values(out.packages).some((v) => v !== null && v !== undefined);
+				return anyPresent ? { passed: true } : { passed: false, detail: 'all packages null' };
+			},
+		},
+		{
+			name: 'at_least_one_site_non_null',
+			description: 'catches total Firecrawl failure',
+			check: (out) => {
+				if (!isObject(out) || !isObject(out.sites)) return { passed: false, detail: 'sites object missing' };
+				const anyPresent = Object.values(out.sites).some((v) => nonEmptyString(v));
+				return anyPresent ? { passed: true } : { passed: false, detail: 'all sites null or empty' };
+			},
+		},
+	],
+};
+
+// ---------------------------------------------------------------------------
+// Suite: graph-snapshot.pipe
+// Output shape: { topic_clusters: [...], entity_importance: [...], metadata: {...} }
+// ---------------------------------------------------------------------------
+
+export const GRAPH_SNAPSHOT_SUITE: ValidatorSuite = {
+	pipelineName: 'graph-snapshot.pipe',
+	validators: [
+		{
+			name: 'topic_clusters_non_empty',
+			description: 'at least 1 cluster',
+			check: (out) => {
+				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
+				const clusters = out.topic_clusters;
+				if (!Array.isArray(clusters)) return { passed: false, detail: 'topic_clusters not an array' };
+				return clusters.length >= 1
+					? { passed: true, detail: `${clusters.length} clusters` }
+					: { passed: false, detail: 'no clusters' };
+			},
+		},
+		{
+			name: 'entity_importance_non_empty',
+			description: 'at least 1 entity',
+			check: (out) => {
+				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
+				const entities = out.entity_importance;
+				if (!Array.isArray(entities)) return { passed: false, detail: 'entity_importance not an array' };
+				return entities.length >= 1
+					? { passed: true, detail: `${entities.length} entities` }
+					: { passed: false, detail: 'no entities' };
+			},
+		},
+		{
+			name: 'pagerank_ranks_sequential',
+			description: 'ranks are 1, 2, 3 with no gaps',
+			check: (out) => {
+				if (!isObject(out) || !Array.isArray(out.entity_importance)) {
+					return { passed: false, detail: 'entity_importance not an array' };
+				}
+				const entities = out.entity_importance as { pagerank_rank?: unknown }[];
+				if (entities.length === 0) return { passed: true };
+				for (let i = 0; i < entities.length; i++) {
+					const rank = entities[i].pagerank_rank;
+					if (rank !== i + 1) {
+						return { passed: false, detail: `expected rank ${i + 1}, got ${String(rank)} at index ${i}` };
+					}
+				}
+				return { passed: true };
+			},
+		},
+		{
+			name: 'metadata_complete',
+			description: 'gds_version, total_topics_clustered, total_entities_ranked all present',
+			check: (out) => {
+				if (!isObject(out)) return { passed: false, detail: 'metadata not an object' };
+				const metadata = out.metadata;
+				if (!isObject(metadata)) return { passed: false, detail: 'metadata not an object' };
+				const required = ['gds_version', 'total_topics_clustered', 'total_entities_ranked'];
+				const missing = required.filter((k) => !(k in metadata));
+				return missing.length === 0
+					? { passed: true }
+					: { passed: false, detail: `missing keys: ${missing.join(', ')}` };
+			},
+		},
+	],
+};
+
+// ---------------------------------------------------------------------------
+// Suite: trend-report.pipe
+// Output shape: ReportData (sections: {marketLandscape, technologyTrends, ...})
+// ---------------------------------------------------------------------------
+
+export const TREND_REPORT_SUITE: ValidatorSuite = {
+	pipelineName: 'trend-report.pipe',
+	validators: [
+		{
+			name: 'executive_summary_non_empty',
+			description: 'sections.executiveSummary.text non-empty',
+			check: (out) => {
+				const data = out as Partial<ReportData>;
+				const text = data?.sections?.executiveSummary?.text;
+				return nonEmptyString(text)
+					? { passed: true }
+					: { passed: false, detail: 'executiveSummary.text empty or missing' };
+			},
+		},
+		{
+			name: 'all_pass_1_sections_present',
+			description: 'marketLandscape, technologyTrends, developerSignals all non-null with text',
+			check: (out) => {
+				const data = out as Partial<ReportData>;
+				const sections = data?.sections;
+				if (!sections) return { passed: false, detail: 'sections missing' };
+				const missing: string[] = [];
+				if (!nonEmptyString(sections.marketLandscape?.text)) missing.push('marketLandscape');
+				if (!nonEmptyString(sections.technologyTrends?.text)) missing.push('technologyTrends');
+				if (!nonEmptyString(sections.developerSignals?.text)) missing.push('developerSignals');
+				return missing.length === 0
+					? { passed: true }
+					: { passed: false, detail: `missing or empty: ${missing.join(', ')}` };
+			},
+		},
+		{
+			name: 'content_recommendations_non_empty',
+			description: 'sections.contentRecommendations.text non-empty',
+			check: (out) => {
+				const data = out as Partial<ReportData>;
+				const text = data?.sections?.contentRecommendations?.text;
+				return nonEmptyString(text)
+					? { passed: true }
+					: { passed: false, detail: 'contentRecommendations.text empty or missing' };
+			},
+		},
+		{
+			name: 'report_data_jsonb_valid',
+			description: 'parses, has reportMetadata and sections top-level keys',
+			check: (out) => {
+				if (!isObject(out)) return { passed: false, detail: 'not an object' };
+				const missing = ['reportMetadata', 'sections'].filter((k) => !(k in out));
+				return missing.length === 0
+					? { passed: true }
+					: { passed: false, detail: `missing top-level keys: ${missing.join(', ')}` };
+			},
+		},
+	],
+};
+
+// ---------------------------------------------------------------------------
+// Suite: content-drafts.pipe
+// Output shape: Record<platform, body> assembled in runContentDrafts
+// ---------------------------------------------------------------------------
+
+const DRAFT_PLATFORMS = ['hashnode', 'medium', 'devto', 'hackernews', 'linkedin', 'twitter', 'discord'];
+const EM_DASH_RE = /—/;
+const JSON_FENCE_RE = /```json/i;
+
+export const CONTENT_DRAFTS_SUITE: ValidatorSuite = {
+	pipelineName: 'content-drafts.pipe',
+	validators: [
+		{
+			name: 'at_least_5_of_7_drafts',
+			description: 'tolerance per Phase A',
+			check: (out) => {
+				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
+				const present = DRAFT_PLATFORMS.filter((p) => nonEmptyString(out[p]));
+				return present.length >= 5
+					? { passed: true, detail: `${present.length}/7 drafts present` }
+					: { passed: false, detail: `only ${present.length}/7 drafts present` };
+			},
+		},
+		{
+			name: 'each_draft_non_empty',
+			description: 'every draft body has non-zero length',
+			check: (out) => {
+				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
+				const empties = DRAFT_PLATFORMS.filter((p) => p in out && !nonEmptyString(out[p]));
+				return empties.length === 0
+					? { passed: true }
+					: { passed: false, detail: `empty drafts: ${empties.join(', ')}` };
+			},
+		},
+		{
+			name: 'no_em_dashes',
+			description: 'project hard rule: no em-dashes in drafts',
+			check: (out) => {
+				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
+				const offenders = DRAFT_PLATFORMS.filter((p) => typeof out[p] === 'string' && EM_DASH_RE.test(out[p] as string));
+				return offenders.length === 0
+					? { passed: true }
+					: { passed: false, detail: `em-dashes found in: ${offenders.join(', ')}` };
+			},
+		},
+		{
+			name: 'no_json_fence_leakage',
+			description: 'no ```json fences in drafts (collector failure mode)',
+			check: (out) => {
+				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
+				const offenders = DRAFT_PLATFORMS.filter(
+					(p) => typeof out[p] === 'string' && JSON_FENCE_RE.test(out[p] as string),
+				);
+				return offenders.length === 0
+					? { passed: true }
+					: { passed: false, detail: `json fence leakage in: ${offenders.join(', ')}` };
+			},
+		},
+	],
+};
+
+// ---------------------------------------------------------------------------
+// Registry
+// ---------------------------------------------------------------------------
+
+export const VALIDATOR_SUITES: Record<string, ValidatorSuite> = {
+	'rocketride-context.pipe': ROCKETRIDE_CONTEXT_SUITE,
+	'graph-snapshot.pipe': GRAPH_SNAPSHOT_SUITE,
+	'trend-report.pipe': TREND_REPORT_SUITE,
+	'content-drafts.pipe': CONTENT_DRAFTS_SUITE,
+};

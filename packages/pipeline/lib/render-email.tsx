@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ReportTemplate from '@pulsar/web/report-template';
-import type { ReportData } from '@pulsar/shared/types';
+import type { ReportData, EvaluationSummary } from '@pulsar/shared/types';
 
 export function renderReportEmail(
 	data: ReportData,
@@ -9,6 +9,8 @@ export function renderReportEmail(
 	generatedAt: string,
 	reportUrl: string,
 	pdfUrl: string,
+	evaluationSummary?: EvaluationSummary,
+	evalsUrl?: string,
 ): string {
 	const body = renderToStaticMarkup(
 		createElement(ReportTemplate, {
@@ -18,6 +20,8 @@ export function renderReportEmail(
 			generatedAt,
 			reportUrl,
 			pdfUrl,
+			evaluationSummary,
+			evalsUrl,
 		}),
 	);
 
@@ -28,7 +32,7 @@ export function renderReportEmail(
 		${body}
 	</div>
 	<p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 24px;">
-		Pulsar — Automated Market Intelligence
+		Pulsar, Automated Market Intelligence
 	</p>
 </body>
 </html>`;
