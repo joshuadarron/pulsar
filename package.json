@@ -12,5 +12,10 @@
     "pipeline": "pnpm --filter @pulsar/pipeline pipeline",
     "pipeline-scheduler": "pnpm --filter @pulsar/pipeline pipeline-scheduler",
     "db:migrate": "pnpm --filter @pulsar/shared db:migrate"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "puppeteer"
+    ]
   }
 }
