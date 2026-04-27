@@ -85,7 +85,7 @@ export async function scrape(sourceFilter?: string, trigger: "scheduled" | "manu
         const text = `${item.title} ${item.rawContent}`;
         const keywords = extractKeywords(text, 10);
         const entities = extractEntities(text);
-        const category = categorizeSource(item.sourcePlatform);
+        const category = categorizeSource(item.sourcePlatform, item.sourceCategory);
         const sentiment = analyzeSentiment(text);
         const contentType = classifyContentType(item.title, item.sourcePlatform);
         const summary = extractSummary(item.title, item.rawContent);

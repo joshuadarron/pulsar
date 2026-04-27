@@ -25,6 +25,39 @@ export const rssSources = [
   { name: "Ars Technica", url: "https://feeds.arstechnica.com/arstechnica/index" },
 ];
 
+export const aiLabFeeds = [
+  // Group A: confirmed RSS/Atom feeds
+  { name: "Google DeepMind", url: "https://deepmind.google/blog/rss.xml", category: "ai-lab" as const },
+  { name: "Google Research", url: "https://research.google/blog/rss/", category: "ai-lab" as const },
+  { name: "Microsoft Research", url: "https://www.microsoft.com/en-us/research/blog/feed/", category: "ai-lab" as const },
+  { name: "Hugging Face", url: "https://huggingface.co/blog/feed.xml", category: "ai-lab" as const },
+  { name: "Apple ML Research", url: "https://machinelearning.apple.com/rss.xml", category: "ai-lab" as const },
+  { name: "NVIDIA Deep Learning", url: "https://developer.nvidia.com/blog/category/deep-learning/feed/", category: "ai-lab" as const },
+  { name: "Berkeley BAIR", url: "https://bair.berkeley.edu/blog/feed.xml", category: "ai-lab" as const },
+  { name: "arXiv cs.AI", url: "http://export.arxiv.org/rss/cs.AI", category: "ai-lab" as const },
+  { name: "arXiv cs.CL", url: "http://export.arxiv.org/rss/cs.CL", category: "ai-lab" as const },
+  { name: "arXiv cs.LG", url: "http://export.arxiv.org/rss/cs.LG", category: "ai-lab" as const },
+  // Group B: verified working
+  { name: "OpenAI", url: "https://openai.com/news/rss.xml", category: "ai-lab" as const },
+  // TODO: no RSS feed available, needs custom adapter or skip
+  // { name: "Meta AI", url: "https://ai.meta.com/blog" },
+  // { name: "Allen Institute for AI", url: "https://allenai.org/blog" },
+  // { name: "IBM Research", url: "https://research.ibm.com/blog" },
+  // { name: "Stanford HAI", url: "https://hai.stanford.edu/news" },  // serves Next.js payload, not XML
+  // { name: "Anthropic News", url: "https://www.anthropic.com/news" },
+  // { name: "Anthropic Research", url: "https://www.anthropic.com/research" },
+  // { name: "Anthropic Alignment", url: "https://alignment.anthropic.com/" },
+  // { name: "Perplexity", url: "https://www.perplexity.ai/hub" },
+  // { name: "Cohere", url: "https://cohere.com/blog" },
+  // { name: "Mistral AI", url: "https://mistral.ai/news" },
+  // { name: "Stability AI", url: "https://stability.ai/news" },
+  // { name: "AI21 Labs", url: "https://www.ai21.com/blog" },
+  // { name: "Salesforce AI Research", url: "https://blog.salesforceairesearch.com" },
+  // { name: "Qwen", url: "https://qwenlm.github.io" },
+  // { name: "xAI", url: "https://x.ai/news" },
+  // { name: "DeepSeek", url: "https://api-docs.deepseek.com/news/news" },
+];
+
 export const substackPublications = [
   { name: "ByteByteGo", url: "https://blog.bytebytego.com/feed" },
   { name: "The Pragmatic Engineer", url: "https://newsletter.pragmaticengineer.com/feed" },

@@ -1,15 +1,23 @@
 import RSSParser from "rss-parser";
 import type { SourceAdapter, ScrapedItem } from "./types";
-import { rssSources, substackPublications } from "@pulsar/shared/config/sources";
+import { rssSources, substackPublications, aiLabFeeds } from "@pulsar/shared/config/sources";
 import { env } from "@pulsar/shared/config/env";
 
 const parser = new RSSParser();
 
+interface FeedSource {
+  name: string;
+  url: string;
+  platform: string;
+  category?: string;
+}
+
 export const rss: SourceAdapter = async () => {
   const max = env.scraper.maxItemsPerSource;
-  const allFeeds = [
-    ...rssSources.map((s) => ({ ...s, platform: "rss" as const })),
-    ...substackPublications.map((s) => ({ ...s, platform: "substack" as const })),
+  const allFeeds: FeedSource[] = [
+    ...rssSources.map((s) => ({ ...s, platform: "rss" })),
+    ...substackPublications.map((s) => ({ ...s, platform: "substack" })),
+    ...aiLabFeeds.map((s) => ({ ...s, platform: "rss" })),
   ];
   const perFeed = Math.ceil(max / allFeeds.length);
   const items: ScrapedItem[] = [];
@@ -28,6 +36,7 @@ export const rss: SourceAdapter = async () => {
           author: entry.creator,
           sourceName: source.name,
           sourcePlatform: source.platform,
+          ...(source.category ? { sourceCategory: source.category } : {}),
         });
       }
     } catch (err) {

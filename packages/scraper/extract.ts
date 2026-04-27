@@ -32,7 +32,8 @@ export function extractEntities(text: string): EntityMention[] {
   return found;
 }
 
-export function categorizeSource(sourcePlatform: string): string {
+export function categorizeSource(sourcePlatform: string, categoryOverride?: string): string {
+  if (categoryOverride) return categoryOverride;
   const categories: Record<string, string> = {
     hackernews: "community",
     reddit: "community",

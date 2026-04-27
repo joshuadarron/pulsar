@@ -8,6 +8,7 @@ export interface ScrapedItem {
 	commentCount?: number;
 	sourceName: string;
 	sourcePlatform: string;
+	sourceCategory?: string;
 }
 
 export type SourceAdapter = () => Promise<ScrapedItem[]>;
