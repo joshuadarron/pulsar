@@ -17,81 +17,56 @@ import { fileURLToPath } from 'url';
 
 const PIPELINES_DIR = path.resolve(fileURLToPath(import.meta.url), '../pipelines');
 const TREND_REPORT_PIPE = path.join(PIPELINES_DIR, 'trend-report.pipe');
+const ROCKETRIDE_CONTEXT_PIPE = path.join(PIPELINES_DIR, 'rocketride-context.pipe');
 
 // ---------------------------------------------------------------------------
-// RocketRide package context (fetched once per run for positioning data)
+// RocketRide product context (fetched once per run via rocketride-context.pipe)
 // ---------------------------------------------------------------------------
 
-interface PackageContext {
-	label: string;
-	url: string;
-	name: string;
-	version: string;
-	summary: string;
-	stats?: Record<string, number>;
-}
-
-type PackageFetcher = () => Promise<PackageContext | null>;
-
-function pypi(label: string, pkg: string): PackageFetcher {
-	return async () => {
-		const res = await fetch(`https://pypi.org/pypi/${pkg}/json`, { signal: AbortSignal.timeout(10_000) });
-		if (!res.ok) return null;
-		const info = (await res.json()).info;
-		return { label, url: `https://pypi.org/project/${pkg}/`, name: info.name, version: info.version, summary: info.summary };
+interface RocketRideContext {
+	packages: {
+		pypi: { name: string; version: string; summary: string; homepage: string } | null;
+		npm: { name: string; version: string; description: string } | null;
+		vscode: { id: string; version: string; installs: number; rating: number } | null;
+		openvsx: { id: string; version: string; downloads: number } | null;
 	};
-}
-
-function npm(label: string, pkg: string): PackageFetcher {
-	return async () => {
-		const res = await fetch(`https://registry.npmjs.org/${pkg}`, { signal: AbortSignal.timeout(10_000) });
-		if (!res.ok) return null;
-		const data = await res.json();
-		const latest = data['dist-tags']?.latest ?? '';
-		const meta = latest ? data.versions?.[latest] : null;
-		return { label, url: `https://www.npmjs.com/package/${pkg}`, name: data.name, version: latest, summary: meta?.description ?? data.description ?? '' };
+	sites: {
+		marketing: string | null;
+		docs_index: string | null;
+		github_readme: string | null;
+		founder_article: string | null;
 	};
+	fetched_at: string;
 }
 
-function vscMarketplace(label: string, extensionId: string): PackageFetcher {
-	return async () => {
-		const res = await fetch('https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json', 'Accept': 'application/json;api-version=6.0-preview.1' },
-			body: JSON.stringify({ filters: [{ criteria: [{ filterType: 7, value: extensionId }] }], flags: 914 }),
-			signal: AbortSignal.timeout(10_000),
-		});
-		if (!res.ok) return null;
-		const ext = (await res.json()).results?.[0]?.extensions?.[0];
-		if (!ext) return null;
-		const stats: Record<string, number> = {};
-		for (const s of ext.statistics ?? []) stats[s.statisticName] = s.value;
-		return { label, url: `https://marketplace.visualstudio.com/items?itemName=${extensionId}`, name: ext.displayName, version: ext.versions?.[0]?.version ?? '', summary: ext.shortDescription ?? '', stats };
-	};
-}
+async function fetchRocketRideContext(
+	client: Awaited<ReturnType<typeof getClient>>,
+): Promise<RocketRideContext | null> {
+	try {
+		const result = await client.use({ filepath: ROCKETRIDE_CONTEXT_PIPE });
+		const response = await client.send(result.token, '{}', {}, 'application/json');
+		await client.terminate(result.token);
 
-function openVsx(label: string, namespace: string, name: string): PackageFetcher {
-	return async () => {
-		const res = await fetch(`https://open-vsx.org/api/${namespace}/${name}`, { signal: AbortSignal.timeout(10_000) });
-		if (!res.ok) return null;
-		const data = await res.json();
-		return { label, url: `https://open-vsx.org/extension/${namespace}/${name}`, name: data.displayName ?? data.name, version: data.version, summary: data.description ?? '' };
-	};
-}
+		const raw = response?.answers?.[0];
+		if (!raw) return null;
 
-const ROCKETRIDE_PACKAGES: PackageFetcher[] = [
-	pypi('rocketride (Python SDK)', 'rocketride'),
-	pypi('rocketride-mcp (MCP server)', 'rocketride-mcp'),
-	npm('rocketride (TypeScript SDK)', 'rocketride'),
-	vscMarketplace('rocketride (VS Code extension)', 'RocketRide.rocketride'),
-	openVsx('rocketride (Open VSX extension)', 'RocketRide', 'rocketride'),
-];
+		let ctx: RocketRideContext;
+		if (typeof raw === 'object' && !Array.isArray(raw)) {
+			ctx = raw as unknown as RocketRideContext;
+		} else {
+			const str = typeof raw === 'string' ? raw : JSON.stringify(raw);
+			ctx = extractJson<RocketRideContext>(str);
+		}
 
-async function fetchPackageContext(): Promise<PackageContext[]> {
-	const settled = await Promise.allSettled(ROCKETRIDE_PACKAGES.map((fn) => fn()));
-	return settled
-		.filter((r): r is PromiseFulfilledResult<PackageContext | null> => r.status === 'fulfilled' && r.value !== null)
-		.map((r) => r.value!);
+		// Ensure fetched_at is set (agent may omit it)
+		if (!ctx.fetched_at) {
+			ctx.fetched_at = new Date().toISOString();
+		}
+		return ctx;
+	} catch (err) {
+		console.error('[Runner] Failed to fetch RocketRide context:', err);
+		return null;
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -394,17 +369,17 @@ async function gatherDeveloperSignalsData(): Promise<DeveloperSignalsData> {
 async function runTrendReport(
 	client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
+	rocketrideContext: RocketRideContext | null,
 ): Promise<string | null> {
 	await logRun(runId, 'info', 'trend-report', 'Starting trend report pipeline...');
 
 	// --- Gather data for all three pass-1 sections ---
 	await logRun(runId, 'info', 'trend-report', 'Querying databases for section data...');
 
-	const [marketData, techData, signalsData, rocketridePackages] = await Promise.all([
+	const [marketData, techData, signalsData] = await Promise.all([
 		gatherMarketLandscapeData(),
 		gatherTechnologyTrendsData(),
 		gatherDeveloperSignalsData(),
-		fetchPackageContext(),
 	]);
 
 	// Article count + source count for metadata
@@ -425,9 +400,9 @@ async function runTrendReport(
 	checkCancelled(runId);
 	await logRun(runId, 'info', 'trend-report', 'Pass 1: generating market_landscape, technology_trends, developer_signals...');
 
-	const marketResponse = await runSection(client, runId, 'marketLandscape', { ...marketData, rocketridePackages });
-	const techResponse = await runSection(client, runId, 'technologyTrends', { ...techData, rocketridePackages });
-	const signalsResponse = await runSection(client, runId, 'developerSignals', { ...signalsData, rocketridePackages });
+	const marketResponse = await runSection(client, runId, 'marketLandscape', { ...marketData, rocketrideContext });
+	const techResponse = await runSection(client, runId, 'technologyTrends', { ...techData, rocketrideContext });
+	const signalsResponse = await runSection(client, runId, 'developerSignals', { ...signalsData, rocketrideContext });
 
 	await logRun(runId, 'info', 'trend-report', 'Pass 1 complete.');
 
@@ -439,7 +414,7 @@ async function runTrendReport(
 		marketLandscape: marketResponse.text,
 		technologyTrends: techResponse.text,
 		developerSignals: signalsResponse.text,
-		rocketridePackages,
+		rocketrideContext,
 	};
 	const contentResponse = await runSection(client, runId, 'contentRecommendations', pass2Input);
 
@@ -538,6 +513,7 @@ async function runContentDrafts(
 	client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
 	reportId: string,
+	rocketrideContext: RocketRideContext | null,
 ) {
 	await logRun(runId, 'info', 'content-drafts', 'Starting content drafts pipeline...');
 
@@ -558,8 +534,32 @@ async function runContentDrafts(
 
 	await logRun(runId, 'info', 'content-drafts', `Using ${articlesResult.rows.length} top articles for draft generation`);
 
-	// Fetch RocketRide package context (same as trend report)
-	const rocketridePackages = await fetchPackageContext();
+	// Gather enrichment data for drafters
+	const [quotesResult, statsResult] = await Promise.all([
+		query<{ body: string }>(
+			`SELECT body FROM content_drafts
+			 WHERE status = 'approved'
+			 ORDER BY created_at DESC LIMIT 3`,
+		).catch(() => ({ rows: [] as { body: string }[] })),
+		query<{ source_platform: string; article_count: string; avg_score: string; total_comments: string }>(
+			`SELECT source_platform, count(*) AS article_count,
+			        avg(score)::numeric(10,2) AS avg_score,
+			        sum(comment_count) AS total_comments
+			 FROM articles
+			 WHERE published_at > now() - interval '7 days'
+			 GROUP BY source_platform ORDER BY article_count DESC`,
+		).catch(() => ({ rows: [] as { source_platform: string; article_count: string; avg_score: string; total_comments: string }[] })),
+	]);
+
+	const quotes = quotesResult.rows.map((r) => r.body);
+	const dataPoints = {
+		platformStats: statsResult.rows.map((r) => ({
+			platform: r.source_platform,
+			articleCount: parseInt(r.article_count),
+			avgScore: parseFloat(r.avg_score),
+			totalComments: parseInt(r.total_comments),
+		})),
+	};
 
 	// Content-drafts receives the content_recommendations text and supporting context
 	const payload = {
@@ -570,7 +570,9 @@ async function runContentDrafts(
 			emergingTopics: sections.technologyTrends.data.emergingTopics,
 		},
 		topArticles: articlesResult.rows,
-		rocketridePackages,
+		rocketrideContext,
+		quotes,
+		dataPoints,
 	};
 
 	// Send to RocketRide
@@ -699,12 +701,24 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 		client = await getClient();
 		await logRun(runId, 'info', 'init', 'Connected to RocketRide');
 
+		// Fetch RocketRide product context once for both pipelines
+		await logRun(runId, 'info', 'context', 'Fetching RocketRide product context...');
+		const rocketrideContext = await fetchRocketRideContext(client);
+		await logRun(
+			runId,
+			rocketrideContext ? 'info' : 'warn',
+			'context',
+			rocketrideContext
+				? `RocketRide context fetched (${rocketrideContext.fetched_at})`
+				: 'Failed to fetch RocketRide context, proceeding without it',
+		);
+
 		// Sequential pipeline execution: trend report then content drafts
-		const reportId = await runTrendReport(client, runId);
+		const reportId = await runTrendReport(client, runId, rocketrideContext);
 		let draftCount = 0;
 
 		if (reportId) {
-			draftCount = await runContentDrafts(client, runId, reportId);
+			draftCount = await runContentDrafts(client, runId, reportId, rocketrideContext);
 		}
 
 		await query(
