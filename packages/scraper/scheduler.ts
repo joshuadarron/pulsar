@@ -13,6 +13,17 @@ import { env } from "@pulsar/shared/config/env";
 // Fixed advisory lock ID for the scheduler singleton
 const SCHEDULER_LOCK_ID = 73952;
 
+// When reclaiming a stale advisory lock via pg_terminate_backend, the killed
+// pool connection emits two unhandled errors: 57P01 (admin_shutdown) from
+// PostgreSQL, then "Connection terminated unexpectedly" from the socket close.
+// Both fire on the raw Client before the pool can intercept them.
+let reclaimingLock = false;
+process.on("uncaughtException", (err: Error & { code?: string }) => {
+  if (reclaimingLock && (err.code === "57P01" || err.message?.includes("terminated unexpectedly"))) return;
+  console.error("[Scheduler] Uncaught exception:", err);
+  process.exit(1);
+});
+
 let scrapeRunning = false;
 let pipelineRunning = false;
 
@@ -144,19 +155,51 @@ async function reloadIfChanged() {
   }
 }
 
-async function main() {
-  // Acquire advisory lock — ensures only one scheduler process runs at a time.
-  // The lock is held for the lifetime of this connection (released on disconnect).
+async function acquireLock(): Promise<ReturnType<typeof getPgClient> extends Promise<infer T> ? T : never> {
   const lockClient = await getPgClient();
   const lockResult = await lockClient.query<{ locked: boolean }>(
     "SELECT pg_try_advisory_lock($1) AS locked",
     [SCHEDULER_LOCK_ID],
   );
-  if (!lockResult.rows[0].locked) {
-    lockClient.release();
-    console.error("[Scheduler] Another scheduler is already running. Exiting.");
-    process.exit(1);
+  if (lockResult.rows[0].locked) return lockClient;
+
+  // Lock held by another connection. Check if the holder is a stale idle connection
+  // (previous process died without releasing the pool connection).
+  const stale = await lockClient.query<{ pid: number }>(
+    `SELECT l.pid FROM pg_locks l
+     JOIN pg_stat_activity a ON a.pid = l.pid
+     WHERE l.locktype = 'advisory' AND l.objid = $1 AND l.granted = true AND a.state = 'idle'`,
+    [SCHEDULER_LOCK_ID],
+  );
+
+  if (stale.rows.length > 0) {
+    console.log(`[Scheduler] Terminating stale lock holder (pid ${stale.rows[0].pid})...`);
+    reclaimingLock = true;
+    await lockClient.query("SELECT pg_terminate_backend($1)", [stale.rows[0].pid]);
+    // Retry with backoff: PostgreSQL releases the lock asynchronously after session cleanup
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      const retry = await lockClient.query<{ locked: boolean }>(
+        "SELECT pg_try_advisory_lock($1) AS locked",
+        [SCHEDULER_LOCK_ID],
+      );
+      if (retry.rows[0].locked) {
+        reclaimingLock = false;
+        return lockClient;
+      }
+    }
+    reclaimingLock = false;
   }
+
+  lockClient.release();
+  console.error("[Scheduler] Another scheduler is already running. Exiting.");
+  process.exit(1);
+}
+
+async function main() {
+  // Acquire advisory lock — ensures only one scheduler process runs at a time.
+  // If the lock is held by a stale idle connection (dead process), reclaim it.
+  const lockClient = await acquireLock();
   console.log("[Scheduler] Advisory lock acquired.");
 
   const schedules = await loadSchedules();
