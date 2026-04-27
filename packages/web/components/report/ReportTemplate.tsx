@@ -498,6 +498,15 @@ export default function ReportTemplate({ data, variant: v, reportId, generatedAt
 				</p>
 			</div>
 
+			{/* Export PDF */}
+			{v === "ui" && (
+				<div className="no-print flex justify-end gap-3">
+					<a href={`/api/reports/${reportId}/export/pdf`} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+						Export PDF
+					</a>
+				</div>
+			)}
+
 			{/* Key Metrics */}
 			{v === "ui" ? (
 				<div className="report-section -mt-6">
@@ -599,13 +608,6 @@ export default function ReportTemplate({ data, variant: v, reportId, generatedAt
 							Download PDF
 						</a>
 					)}
-				</div>
-			)}
-			{v === "ui" && (
-				<div className="no-print flex justify-end gap-3">
-					<a href={`/api/reports/${reportId}/export/pdf`} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-						Export PDF
-					</a>
 				</div>
 			)}
 		</>
