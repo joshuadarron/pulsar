@@ -26,7 +26,6 @@ import { fileURLToPath } from 'url';
 const PIPELINES_DIR = path.resolve(fileURLToPath(import.meta.url), '../pipelines');
 const TREND_REPORT_PIPE = path.join(PIPELINES_DIR, 'trend-report.pipe');
 const ROCKETRIDE_CONTEXT_PIPE = path.join(PIPELINES_DIR, 'rocketride-context.pipe');
-const GRAPH_SNAPSHOT_PIPE = path.join(PIPELINES_DIR, 'graph-snapshot.pipe');
 
 const MAX_SNAPSHOT_AGE_HOURS = 48;
 
@@ -95,8 +94,10 @@ async function fetchRocketRideContext(
 }
 
 // ---------------------------------------------------------------------------
-// Graph snapshot pipeline (deterministic GDS Louvain + PageRank computation)
-// Computed once per run, persisted to graph_snapshots, consumed by trend report.
+// Graph snapshot computation (deterministic, no LLM, no RocketRide pipe).
+// Runs GDS Louvain on filtered Topics and GDS PageRank on the Entity
+// co-mention graph directly via the neo4j-driver session, assembles the
+// envelope in TS, and persists one row to graph_snapshots per run.
 // ---------------------------------------------------------------------------
 
 interface GraphSnapshotEnvelope {
@@ -105,42 +106,150 @@ interface GraphSnapshotEnvelope {
 	metadata: Record<string, unknown>;
 }
 
+interface LouvainRow {
+	communityId: number;
+	name: string;
+	trendScore: number;
+}
+
+interface PageRankRow {
+	name: string;
+	type: string;
+	pagerank_score: number;
+	mention_count: number;
+}
+
+function neoToNum(value: unknown): number {
+	if (typeof value === 'object' && value !== null && 'toNumber' in value) {
+		return (value as { toNumber(): number }).toNumber();
+	}
+	return value as number;
+}
+
+async function safeDropProjection(session: ReturnType<typeof getSession>, name: string): Promise<void> {
+	const exists = await session.run(
+		'CALL gds.graph.exists($name) YIELD exists RETURN exists',
+		{ name },
+	);
+	if (exists.records[0]?.get('exists')) {
+		await session.run('CALL gds.graph.drop($name) YIELD graphName RETURN graphName', { name });
+	}
+}
+
+function buildClusters(rows: LouvainRow[]): GraphSnapshotCluster[] {
+	const groups = new Map<number, { name: string; trend_score: number }[]>();
+	for (const row of rows) {
+		const list = groups.get(row.communityId) ?? [];
+		list.push({ name: row.name, trend_score: row.trendScore });
+		groups.set(row.communityId, list);
+	}
+	const clusters: GraphSnapshotCluster[] = [];
+	for (const [cluster_id, topics] of groups) {
+		const sorted = topics.sort((a, b) => b.trend_score - a.trend_score).slice(0, 20);
+		clusters.push({ cluster_id, topic_count: topics.length, topics: sorted });
+	}
+	clusters.sort((a, b) => b.topic_count - a.topic_count);
+	return clusters;
+}
+
+function buildEntityImportance(rows: PageRankRow[]): GraphSnapshotEntity[] {
+	return rows.map((row, idx) => ({
+		name: row.name,
+		type: row.type,
+		pagerank_score: row.pagerank_score,
+		pagerank_rank: idx + 1,
+		mention_count: row.mention_count,
+	}));
+}
+
 async function runGraphSnapshot(
-	client: Awaited<ReturnType<typeof getClient>>,
+	_client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
 ): Promise<string | null> {
+	const session = getSession();
 	try {
 		await logRun(runId, 'info', 'graph-snapshot', 'Computing graph snapshot (Louvain + PageRank)...');
 
-		const result = await client.use({ filepath: GRAPH_SNAPSHOT_PIPE });
-		const token = result.token;
-		setActiveToken(runId, client, token);
-
-		const response = await client.send(token, '{}', {}, 'application/json');
-		await client.terminate(token);
-
-		const raw = response?.answers?.[0];
-		if (!raw) {
-			await logRun(runId, 'warn', 'graph-snapshot', 'Snapshot pipeline returned no answer');
-			return null;
+		// Louvain on filtered Topics.
+		await safeDropProjection(session, 'topic_louvain_graph');
+		let louvainRows: LouvainRow[] = [];
+		try {
+			await session.run(
+				`CALL gds.graph.project.cypher(
+					'topic_louvain_graph',
+					'MATCH (t:Topic) WHERE t.lastSeen > datetime() - duration({days: 7}) AND COUNT { (t)<-[:TAGGED_WITH]-() } >= 3 RETURN id(t) AS id',
+					'MATCH (t1:Topic)-[r:RELATED_TO]-(t2:Topic) WHERE t1.lastSeen > datetime() - duration({days: 7}) AND t2.lastSeen > datetime() - duration({days: 7}) AND COUNT { (t1)<-[:TAGGED_WITH]-() } >= 3 AND COUNT { (t2)<-[:TAGGED_WITH]-() } >= 3 RETURN id(t1) AS source, id(t2) AS target, r.weight AS weight'
+				) YIELD graphName, nodeCount, relationshipCount RETURN graphName, nodeCount, relationshipCount`,
+			);
+			const louvainResult = await session.run(
+				`CALL gds.louvain.stream('topic_louvain_graph', { relationshipWeightProperty: 'weight' })
+				 YIELD nodeId, communityId
+				 WITH nodeId, communityId, gds.util.asNode(nodeId) AS topic
+				 RETURN communityId, topic.name AS name, topic.trendScore AS trendScore
+				 ORDER BY communityId, trendScore DESC`,
+			);
+			louvainRows = louvainResult.records.map((r) => ({
+				communityId: neoToNum(r.get('communityId')),
+				name: r.get('name'),
+				trendScore: neoToNum(r.get('trendScore')),
+			}));
+		} finally {
+			await safeDropProjection(session, 'topic_louvain_graph');
 		}
 
-		let envelope: GraphSnapshotEnvelope;
-		if (typeof raw === 'object' && !Array.isArray(raw)) {
-			envelope = raw as unknown as GraphSnapshotEnvelope;
-		} else {
-			const str = typeof raw === 'string' ? raw : JSON.stringify(raw);
-			envelope = extractJson<GraphSnapshotEnvelope>(str);
+		// PageRank on the Entity co-mention graph.
+		await safeDropProjection(session, 'entity_pagerank_graph');
+		let pageRankRows: PageRankRow[] = [];
+		try {
+			await session.run(
+				`CALL gds.graph.project.cypher(
+					'entity_pagerank_graph',
+					'MATCH (e:Entity) RETURN id(e) AS id',
+					'MATCH (e1:Entity)<-[:MENTIONS]-(a:Article)-[:MENTIONS]->(e2:Entity) WHERE id(e1) < id(e2) WITH e1, e2, count(a) AS coMentionCount RETURN id(e1) AS source, id(e2) AS target, coMentionCount AS weight'
+				) YIELD graphName, nodeCount, relationshipCount RETURN graphName, nodeCount, relationshipCount`,
+			);
+			const prResult = await session.run(
+				`CALL gds.pageRank.stream('entity_pagerank_graph', { relationshipWeightProperty: 'weight' })
+				 YIELD nodeId, score
+				 WITH nodeId, score, gds.util.asNode(nodeId) AS entity
+				 RETURN entity.name AS name, entity.type AS type, score AS pagerank_score, COUNT { (entity)<-[:MENTIONS]-() } AS mention_count
+				 ORDER BY score DESC`,
+			);
+			pageRankRows = prResult.records.map((r) => ({
+				name: r.get('name'),
+				type: r.get('type'),
+				pagerank_score: neoToNum(r.get('pagerank_score')),
+				mention_count: neoToNum(r.get('mention_count')),
+			}));
+		} finally {
+			await safeDropProjection(session, 'entity_pagerank_graph');
 		}
+
+		const versionResult = await session.run('RETURN gds.version() AS version');
+		const gdsVersion: string = versionResult.records[0]?.get('version') ?? 'unknown';
+
+		const envelope: GraphSnapshotEnvelope = {
+			topic_clusters: buildClusters(louvainRows),
+			entity_importance: buildEntityImportance(pageRankRows),
+			metadata: {
+				louvain_filter: 'lastSeen > 7d AND article_count >= 3',
+				total_topics_clustered: louvainRows.length,
+				total_entities_ranked: pageRankRows.length,
+				gds_version: gdsVersion,
+			},
+		};
 
 		await validateAndPersist(runId, 'graph-snapshot.pipe', envelope);
 
-		if (!Array.isArray(envelope.topic_clusters) || !Array.isArray(envelope.entity_importance)) {
+		// Defense in depth: if either array is empty there is nothing useful to
+		// inject into the trend report. Skip the insert so the prior good
+		// snapshot remains the most recent for loadGraphSnapshots() consumers.
+		if (envelope.topic_clusters.length === 0 && envelope.entity_importance.length === 0) {
 			await logRun(
 				runId,
 				'warn',
 				'graph-snapshot',
-				'Snapshot envelope missing required arrays, skipping insert',
+				`Snapshot empty (gds_version=${gdsVersion}, louvain_rows=${louvainRows.length}, pr_rows=${pageRankRows.length}), not persisting`,
 			);
 			return null;
 		}
@@ -152,7 +261,7 @@ async function runGraphSnapshot(
 				runId,
 				JSON.stringify(envelope.topic_clusters),
 				JSON.stringify(envelope.entity_importance),
-				JSON.stringify(envelope.metadata ?? {}),
+				JSON.stringify(envelope.metadata),
 			],
 		);
 
@@ -167,6 +276,8 @@ async function runGraphSnapshot(
 	} catch (err) {
 		await logRun(runId, 'warn', 'graph-snapshot', `Snapshot failed (soft fail): ${err}`);
 		return null;
+	} finally {
+		await session.close();
 	}
 }
 
