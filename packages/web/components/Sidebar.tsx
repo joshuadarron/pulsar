@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
+import PulsarLogo from "./PulsarLogo";
 
 interface NavItem {
   href: string;
@@ -91,18 +92,10 @@ export default function Sidebar() {
       <div className="flex h-16 items-center gap-2 border-b border-gray-200 dark:border-neutral-800 px-6">
         {hasRunning ? (
           <Link href="/runs" title="Pipeline running — view run history">
-            <svg className="h-8 w-8 animate-pulsar-beacon cursor-pointer" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="16" cy="16" r="5" fill="#7c3aed" />
-              <circle cx="16" cy="16" r="9" stroke="#7c3aed" strokeWidth="1.5" opacity="0.6" />
-              <circle cx="16" cy="16" r="13" stroke="#7c3aed" strokeWidth="1.5" opacity="0.3" />
-            </svg>
+            <PulsarLogo className="h-8 w-8 cursor-pointer animate-pulsar-beacon text-purple-700 dark:text-purple-400" />
           </Link>
         ) : (
-          <svg className="h-8 w-8" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="16" cy="16" r="5" fill="#7c3aed" />
-            <circle cx="16" cy="16" r="9" stroke="#7c3aed" strokeWidth="1.5" opacity="0.6" />
-            <circle cx="16" cy="16" r="13" stroke="#7c3aed" strokeWidth="1.5" opacity="0.3" />
-          </svg>
+          <PulsarLogo className="h-8 w-8 text-purple-700 dark:text-purple-400" />
         )}
         <span className="text-xl font-bold">Pulsar</span>
       </div>
