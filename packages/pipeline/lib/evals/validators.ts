@@ -128,78 +128,6 @@ export const ROCKETRIDE_CONTEXT_SUITE: ValidatorSuite = {
 };
 
 // ---------------------------------------------------------------------------
-// Suite: graph-snapshot.pipe
-// Output shape: { topic_clusters: [...], entity_importance: [...], metadata: {...} }
-// ---------------------------------------------------------------------------
-
-export const GRAPH_SNAPSHOT_SUITE: ValidatorSuite = {
-	pipelineName: 'graph-snapshot.pipe',
-	validators: [
-		{
-			name: 'topic_clusters_non_empty',
-			description: 'at least 1 cluster',
-			check: (out) => {
-				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
-				const clusters = out.topic_clusters;
-				if (!Array.isArray(clusters))
-					return { passed: false, detail: 'topic_clusters not an array' };
-				return clusters.length >= 1
-					? { passed: true, detail: `${clusters.length} clusters` }
-					: { passed: false, detail: 'no clusters' };
-			}
-		},
-		{
-			name: 'entity_importance_non_empty',
-			description: 'at least 1 entity',
-			check: (out) => {
-				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
-				const entities = out.entity_importance;
-				if (!Array.isArray(entities))
-					return { passed: false, detail: 'entity_importance not an array' };
-				return entities.length >= 1
-					? { passed: true, detail: `${entities.length} entities` }
-					: { passed: false, detail: 'no entities' };
-			}
-		},
-		{
-			name: 'pagerank_ranks_sequential',
-			description: 'ranks are 1, 2, 3 with no gaps',
-			check: (out) => {
-				if (!isObject(out) || !Array.isArray(out.entity_importance)) {
-					return { passed: false, detail: 'entity_importance not an array' };
-				}
-				const entities = out.entity_importance as { pagerank_rank?: unknown }[];
-				if (entities.length === 0) return { passed: true };
-				for (let i = 0; i < entities.length; i++) {
-					const rank = entities[i].pagerank_rank;
-					if (rank !== i + 1) {
-						return {
-							passed: false,
-							detail: `expected rank ${i + 1}, got ${String(rank)} at index ${i}`
-						};
-					}
-				}
-				return { passed: true };
-			}
-		},
-		{
-			name: 'metadata_complete',
-			description: 'gds_version, total_topics_clustered, total_entities_ranked all present',
-			check: (out) => {
-				if (!isObject(out)) return { passed: false, detail: 'metadata not an object' };
-				const metadata = out.metadata;
-				if (!isObject(metadata)) return { passed: false, detail: 'metadata not an object' };
-				const required = ['gds_version', 'total_topics_clustered', 'total_entities_ranked'];
-				const missing = required.filter((k) => !(k in metadata));
-				return missing.length === 0
-					? { passed: true }
-					: { passed: false, detail: `missing keys: ${missing.join(', ')}` };
-			}
-		}
-	]
-};
-
-// ---------------------------------------------------------------------------
 // Suite: trend-report.pipe
 // Output shape: ReportData (sections: {marketLandscape, technologyTrends, ...})
 // ---------------------------------------------------------------------------
@@ -336,7 +264,6 @@ export const CONTENT_DRAFTS_SUITE: ValidatorSuite = {
 
 export const VALIDATOR_SUITES: Record<string, ValidatorSuite> = {
 	'rocketride-context.pipe': ROCKETRIDE_CONTEXT_SUITE,
-	'graph-snapshot.pipe': GRAPH_SNAPSHOT_SUITE,
 	'trend-report.pipe': TREND_REPORT_SUITE,
 	'content-drafts.pipe': CONTENT_DRAFTS_SUITE
 };

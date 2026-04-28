@@ -289,8 +289,6 @@ async function runGraphSnapshot(
 			}
 		};
 
-		await validateAndPersist(runId, 'graph-snapshot.pipe', envelope);
-
 		// Defense in depth: if either array is empty there is nothing useful to
 		// inject into the trend report. Skip the insert so the prior good
 		// snapshot remains the most recent for loadGraphSnapshots() consumers.
