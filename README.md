@@ -11,7 +11,7 @@ Automated market intelligence agent. Scrapes free developer sources, runs AI ana
 - Node.js 20+
 - pnpm
 - Docker + Docker Compose
-- RocketRide runtime (port 5565)
+- RocketRide
 
 ### Steps
 
