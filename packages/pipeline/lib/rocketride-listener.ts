@@ -13,7 +13,8 @@ export interface Correlation {
 }
 
 export interface RrEvent {
-	event: string;
+	/** Event-type discriminator. Required for dispatch; the top-of-fn guard returns early if missing. */
+	event?: string;
 	body?: unknown;
 	token?: string;
 	seq?: number;
@@ -385,6 +386,11 @@ async function handleFlow(
 // ---------------------------------------------------------------------------
 
 export async function dispatchEvent(event: RrEvent): Promise<void> {
+	// Guard against non-event messages (the SDK's onEvent should only ever
+	// fire for events, but the DAPMessage union also covers request/response
+	// where `event` is undefined).
+	if (typeof event.event !== 'string' || event.event.length === 0) return;
+
 	const body = (event.body ?? {}) as Record<string, unknown>;
 	const corr = resolveCorrelation(event);
 
@@ -465,13 +471,12 @@ async function flushDeferredKey(key: string): Promise<void> {
 export const MONITOR_SUBSCRIPTION_TYPES = ['TASK', 'SUMMARY', 'FLOW', 'OUTPUT', 'SSE'];
 
 /**
- * Note: not yet called from anywhere. Commit 3 wires this into
- * lib/rocketride.ts so the SDK's onConnected handler invokes it,
- * giving us auto-resubscribe on reconnect.
+ * Subscribe this connection to runtime events for every task its API key
+ * triggers. Call from the RocketRide client's `onConnected` so that
+ * reconnects re-establish the subscription automatically.
  */
 export async function ensureMonitorSubscription(client: {
-	addMonitor?: (args: { key: { token: string }; types: string[] }) => Promise<void>;
+	setEvents: (token: string, eventTypes: string[], pipeId?: number) => Promise<void>;
 }): Promise<void> {
-	if (!client.addMonitor) return;
-	await client.addMonitor({ key: { token: '*' }, types: MONITOR_SUBSCRIPTION_TYPES });
+	await client.setEvents('*', MONITOR_SUBSCRIPTION_TYPES);
 }

@@ -1,5 +1,6 @@
 import { RocketRideClient } from 'rocketride';
 import { env } from '@pulsar/shared/config/env';
+import { dispatchEvent, ensureMonitorSubscription } from './rocketride-listener.js';
 
 let client: RocketRideClient | null = null;
 
@@ -11,8 +12,16 @@ export async function getClient(): Promise<RocketRideClient> {
 		auth: env.rocketride.apiKey,
 		persist: true,
 		maxRetryTime: 30000,
+		onEvent: dispatchEvent,
 		onConnected: async () => {
 			console.log('[RocketRide] Connected');
+			if (!client) return;
+			try {
+				await ensureMonitorSubscription(client);
+				console.log('[RocketRide] Monitor subscription active');
+			} catch (err) {
+				console.warn('[RocketRide] Failed to subscribe to events:', err);
+			}
 		},
 		onDisconnected: async (reason, hasError) => {
 			if (hasError) console.warn('[RocketRide] Disconnected:', reason);
