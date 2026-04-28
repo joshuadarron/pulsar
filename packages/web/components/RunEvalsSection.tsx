@@ -1,17 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
-
-interface Run {
-	id: string;
-	started_at: string;
-	completed_at: string | null;
-	status: string;
-	run_type: string;
-	trigger: string;
-}
 
 interface ValidationCheck {
 	check_name: string;
@@ -54,7 +43,6 @@ interface Prediction {
 }
 
 interface Payload {
-	run: Run;
 	validations: Validation[];
 	evaluations: Evaluation[];
 	predictions: Prediction[];
@@ -67,11 +55,8 @@ const OUTCOME_COLORS: Record<string, string> = {
 	inconclusive: 'bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-neutral-300'
 };
 
-export default function EvalDetailPage() {
-	const params = useParams();
-	const runId = params?.run_id as string | undefined;
+export default function RunEvalsSection({ runId }: { runId: string }) {
 	const [data, setData] = useState<Payload | null>(null);
-	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
 		if (!runId) return;
@@ -81,44 +66,28 @@ export default function EvalDetailPage() {
 				return r.json();
 			})
 			.then((d) => setData(d))
-			.catch((e) => setError(String(e)));
+			.catch(() => setData(null));
 	}, [runId]);
 
-	if (error) return <div className="p-8 text-red-600">Failed to load: {error}</div>;
-	if (!data) return <div className="p-8 text-gray-500">Loading...</div>;
+	if (!data) return null;
+
+	const hasAny =
+		data.validations.length > 0 || data.evaluations.length > 0 || data.predictions.length > 0;
+	if (!hasAny) return null;
 
 	const reportEvals = data.evaluations.filter((e) => e.target_type === 'trend_report');
 	const draftEvals = data.evaluations.filter((e) => e.target_type === 'content_draft');
-
 	const platforms = Array.from(new Set(draftEvals.map((e) => e.target_id ?? '')));
 
 	return (
-		<div className="space-y-8 p-8">
-			<div>
-				<Link
-					href="/evals"
-					className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
-				>
-					&larr; All evaluations
-				</Link>
-				<h1 className="mt-2 text-3xl font-bold text-gray-900 dark:text-neutral-100">
-					Run {data.run.id.slice(0, 8)}
-				</h1>
-				<p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">
-					{new Date(data.run.started_at).toLocaleString()}, status: {data.run.status}, trigger:{' '}
-					{data.run.trigger}
-				</p>
-			</div>
+		<div className="mt-6 space-y-6">
+			<h2 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">Evaluations</h2>
 
-			<section>
-				<h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-neutral-100">
-					Pipeline validations
-				</h2>
-				{data.validations.length === 0 ? (
-					<div className="rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 text-sm text-gray-500">
-						No validation results recorded.
-					</div>
-				) : (
+			{data.validations.length > 0 && (
+				<section>
+					<h3 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-neutral-400">
+						Pipeline validations
+					</h3>
 					<div className="space-y-3">
 						{data.validations.map((v) => (
 							<div
@@ -158,18 +127,14 @@ export default function EvalDetailPage() {
 							</div>
 						))}
 					</div>
-				)}
-			</section>
+				</section>
+			)}
 
-			<section>
-				<h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-neutral-100">
-					Trend report scores
-				</h2>
-				{reportEvals.length === 0 ? (
-					<div className="rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 text-sm text-gray-500">
-						No trend report evaluations recorded.
-					</div>
-				) : (
+			{reportEvals.length > 0 && (
+				<section>
+					<h3 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-neutral-400">
+						Trend report scores
+					</h3>
 					<div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
 						<table className="w-full text-sm">
 							<thead className="bg-gray-50 dark:bg-neutral-800">
@@ -206,18 +171,14 @@ export default function EvalDetailPage() {
 							</tbody>
 						</table>
 					</div>
-				)}
-			</section>
+				</section>
+			)}
 
-			<section>
-				<h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-neutral-100">
-					Content draft scores
-				</h2>
-				{platforms.length === 0 ? (
-					<div className="rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 text-sm text-gray-500">
-						No draft evaluations recorded.
-					</div>
-				) : (
+			{platforms.length > 0 && (
+				<section>
+					<h3 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-neutral-400">
+						Content draft scores
+					</h3>
 					<div className="space-y-4">
 						{platforms.map((platform) => {
 							const llm = draftEvals.filter(
@@ -291,18 +252,14 @@ export default function EvalDetailPage() {
 							);
 						})}
 					</div>
-				)}
-			</section>
+				</section>
+			)}
 
-			<section>
-				<h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-neutral-100">
-					Predictions extracted from this run
-				</h2>
-				{data.predictions.length === 0 ? (
-					<div className="rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 text-sm text-gray-500">
-						No predictions extracted.
-					</div>
-				) : (
+			{data.predictions.length > 0 && (
+				<section>
+					<h3 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-neutral-400">
+						Predictions extracted from this run
+					</h3>
 					<div className="space-y-3">
 						{data.predictions.map((p) => (
 							<div
@@ -341,8 +298,8 @@ export default function EvalDetailPage() {
 							</div>
 						))}
 					</div>
-				)}
-			</section>
+				</section>
+			)}
 		</div>
 	);
 }

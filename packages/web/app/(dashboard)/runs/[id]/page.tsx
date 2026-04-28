@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import RunEvalsSection from '@/components/RunEvalsSection';
 
 interface Run {
 	id: string;
@@ -258,6 +259,8 @@ export default function RunDetailPage() {
 					</pre>
 				</div>
 			)}
+
+			<RunEvalsSection runId={id} />
 		</div>
 	);
 }
