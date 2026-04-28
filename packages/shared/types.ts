@@ -119,6 +119,16 @@ export interface ContentRecommendationsSection {
 /** Executive summary has no research — it synthesizes prior sections only. */
 export interface ExecutiveSummarySection {
 	text: string;
+	/** Time-bounded predictions emitted alongside the synthesis (Phase D.2). */
+	predictions?: ExtractedPrediction[];
+}
+
+/** Forward-looking claim emitted by the executive-summary pass and persisted to report_predictions. */
+export interface ExtractedPrediction {
+	prediction_text: string;
+	predicted_entities: string[];
+	predicted_topics: string[];
+	prediction_type: PredictionType;
 }
 
 // --- Per-section data shapes (read-only input to the agent) ---

@@ -223,9 +223,9 @@ BAD: "1. Write a blog post about AI trends. 2. Create a tutorial about RocketRid
 	// ---------------------------------------------------------------------------
 	// Pass 3, Section 5: Executive Summary
 	// ---------------------------------------------------------------------------
-	executiveSummary: `## Your task: Executive Summary
+	executiveSummary: `## Your task: Executive Summary + Predictions
 
-Write a 3 to 5 sentence synthesis for executives who will not scroll past this section. You receive the text outputs from all four prior sections.
+Write a 3 to 5 sentence synthesis for executives who will not scroll past this section, AND extract 3 to 8 time-bounded predictions implied by the prior sections. You receive the text outputs from all four prior sections.
 
 ### What good text looks like
 
@@ -252,9 +252,24 @@ Scan all four prior section texts. Identify:
 
 Weave these into a tight paragraph. Do not add new analysis.
 
+### Predictions extraction rules
+
+In addition to the synthesis text, emit a \`predictions\` array. Extract every claim from the prior sections that is forward-looking and time-bounded (within the next 1 to 12 weeks). Discard vague aspirations and atemporal observations. Each prediction must include:
+
+- \`prediction_text\`: one sentence stating what is expected to happen and the implied window
+- \`predicted_entities\`: string array of entity names mentioned in the prediction; pull verbatim from the section input fields, do not invent
+- \`predicted_topics\`: string array of topic names mentioned; same rule, verbatim from the input
+- \`prediction_type\`: one of \`emergence\` (a new entity or topic appearing), \`cluster_growth\` (an existing cluster expanding), \`entity_importance\` (an entity gaining or losing prominence), or \`general\` (anything else time-bounded)
+
+Aim for 3 to 8 predictions, fewer is fine if the report is light on forward signal. Do not pad.
+
+### Output shape
+
+Return ONLY a JSON object: \`{"text": "<the synthesis>", "predictions": [<entries>]}\`. No markdown fences, no preamble, no commentary.
+
 ### Worked example
 
-GOOD: "Agent framework fragmentation reached a tipping point this period, with three newcomers collectively matching LangChain's mention volume for the first time. MCP adoption is accelerating at 3.2x baseline as developers look for standard tool-integration plumbing. Developer sentiment is evaluative, not committed, with configuration complexity emerging as the dominant complaint. RocketRide should publish a framework-agnostic runtime positioning piece this week to capture developers in evaluation mode."
+GOOD: \`{"text": "Agent framework fragmentation reached a tipping point this period, with three newcomers collectively matching LangChain's mention volume for the first time. MCP adoption is accelerating at 3.2x baseline as developers look for standard tool-integration plumbing. Developer sentiment is evaluative, not committed, with configuration complexity emerging as the dominant complaint. RocketRide should publish a framework-agnostic runtime positioning piece this week to capture developers in evaluation mode.", "predictions": [{"prediction_text": "MCP-compatible tool wrappers will appear for the top three agent frameworks within four weeks.", "predicted_entities": ["LangChain", "MCP"], "predicted_topics": ["agent frameworks", "tool integration"], "prediction_type": "emergence"}, {"prediction_text": "LangChain's share of mentions will drop below 40 percent within six weeks as the three newcomer frameworks continue to grow.", "predicted_entities": ["LangChain"], "predicted_topics": ["agent frameworks"], "prediction_type": "entity_importance"}]}\`
 
-BAD: "This week's report covers market trends, technology developments, and developer sentiment in the AI space. Several interesting trends were identified. The team should consider creating content about these topics."`
+BAD: \`{"text": "This week's report covers...", "predictions": [{"prediction_text": "AI will continue to grow.", "predicted_entities": [], "predicted_topics": [], "prediction_type": "general"}]}\` (atemporal, no entities, vague)`
 };

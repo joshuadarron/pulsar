@@ -16,6 +16,7 @@ import type {
 	TechnologyTrendsData,
 	DeveloperSignalsData,
 	ResearchCitation,
+	ExtractedPrediction,
 	GraphSnapshot,
 	GraphSnapshotCluster,
 	GraphSnapshotEntity,
@@ -365,6 +366,8 @@ function checkCancelled(runId: string) {
 interface SectionResponse {
 	text: string;
 	research?: ResearchCitation[];
+	/** Only emitted by the executiveSummary pass. */
+	predictions?: ExtractedPrediction[];
 }
 
 async function runSection(
@@ -399,7 +402,10 @@ async function runSection(
 		if (typeof obj.text === 'string') {
 			parsed = {
 				text: obj.text,
-				...(Array.isArray(obj.research) ? { research: obj.research as ResearchCitation[] } : {})
+				...(Array.isArray(obj.research) ? { research: obj.research as ResearchCitation[] } : {}),
+				...(Array.isArray(obj.predictions)
+					? { predictions: obj.predictions as ExtractedPrediction[] }
+					: {})
 			};
 		} else {
 			// Object response without a top-level text key. Stringify and pass
@@ -781,7 +787,8 @@ async function runTrendReport(
 				...(contentResponse.research?.length ? { research: contentResponse.research } : {})
 			},
 			executiveSummary: {
-				text: summaryResponse.text
+				text: summaryResponse.text,
+				...(summaryResponse.predictions?.length ? { predictions: summaryResponse.predictions } : {})
 			}
 		}
 	};
@@ -1085,7 +1092,7 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 				[reportId]
 			);
 			if (reportRow.rows.length > 0) {
-				await extractPredictions(client, runId, reportId, reportRow.rows[0].report_data);
+				await extractPredictions(runId, reportId, reportRow.rows[0].report_data);
 			}
 
 			draftCount = await runContentDrafts(client, runId, reportId, rocketrideContext);

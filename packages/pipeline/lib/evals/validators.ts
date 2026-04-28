@@ -183,6 +183,19 @@ export const TREND_REPORT_SUITE: ValidatorSuite = {
 					? { passed: true }
 					: { passed: false, detail: `missing top-level keys: ${missing.join(', ')}` };
 			}
+		},
+		{
+			name: 'predictions_present',
+			description: 'executiveSummary.predictions array has at least one entry',
+			check: (out) => {
+				const data = out as Partial<ReportData>;
+				const preds = data?.sections?.executiveSummary?.predictions;
+				if (!Array.isArray(preds))
+					return { passed: false, detail: 'predictions array missing on executiveSummary' };
+				return preds.length >= 1
+					? { passed: true, detail: `${preds.length} predictions` }
+					: { passed: false, detail: 'predictions array empty' };
+			}
 		}
 	]
 };
