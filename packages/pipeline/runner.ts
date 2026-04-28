@@ -5,6 +5,7 @@ import { runValidators, VALIDATOR_SUITES } from './lib/evals/validators.js';
 import { persistValidation } from './lib/evals/persist.js';
 import { runEvaluations } from './lib/evals/runner.js';
 import { extractPredictions } from './lib/evals/extract.js';
+import { fetchRocketRideContext, type RocketRideContext } from './lib/fetch-rocketride-context.js';
 import { SECTION_PROMPTS } from './trend-report-prompts.js';
 import { query } from '@pulsar/shared/db/postgres';
 import { getSession } from '@pulsar/shared/db/neo4j';
@@ -25,7 +26,6 @@ import { fileURLToPath } from 'node:url';
 
 const PIPELINES_DIR = path.resolve(fileURLToPath(import.meta.url), '../pipelines');
 const TREND_REPORT_PIPE = path.join(PIPELINES_DIR, 'trend-report.pipe');
-const ROCKETRIDE_CONTEXT_PIPE = path.join(PIPELINES_DIR, 'rocketride-context.pipe');
 
 const MAX_SNAPSHOT_AGE_HOURS = 48;
 
@@ -49,90 +49,6 @@ async function validateAndPersist(
 		}
 	} catch (err) {
 		await logRun(runId, 'warn', 'validation', `${pipelineName} validator threw: ${err}`);
-	}
-}
-
-// ---------------------------------------------------------------------------
-// RocketRide product context (fetched once per run via rocketride-context.pipe)
-// ---------------------------------------------------------------------------
-
-interface RocketRideContext {
-	packages: {
-		pypi: { name: string; version: string; summary: string; homepage: string } | null;
-		npm: { name: string; version: string; description: string } | null;
-		vscode: { id: string; version: string; installs: number; rating: number } | null;
-		openvsx: { id: string; version: string; downloads: number } | null;
-	};
-	sites: {
-		marketing: string | null;
-		docs_index: string | null;
-		github_readme: string | null;
-		founder_article: string | null;
-	};
-	fetched_at: string;
-}
-
-async function fetchRocketRideContext(
-	client: Awaited<ReturnType<typeof getClient>>,
-	runId?: string
-): Promise<RocketRideContext | null> {
-	try {
-		const result = await client.use({ filepath: ROCKETRIDE_CONTEXT_PIPE });
-		const response = await client.send(result.token, '{}', {}, 'application/json');
-		await client.terminate(result.token);
-
-		const raw = response?.answers?.[0];
-		if (!raw) {
-			if (runId)
-				await logRun(
-					runId,
-					'warn',
-					'context-debug',
-					'rocketride-context returned no answer (response.answers[0] empty)'
-				);
-			return null;
-		}
-
-		let ctx: RocketRideContext;
-		if (typeof raw === 'object' && !Array.isArray(raw)) {
-			ctx = raw as unknown as RocketRideContext;
-		} else {
-			const str = typeof raw === 'string' ? raw : JSON.stringify(raw);
-			ctx = extractJson<RocketRideContext>(str);
-		}
-
-		// Diagnostic: log the actual shape when expected keys are missing so we
-		// can identify whether the agent wrapped, echoed, or emitted the wrong
-		// envelope. Fires only when packages or sites is malformed.
-		if (runId) {
-			const ctxRecord = ctx as unknown as Record<string, unknown>;
-			const packagesOk = typeof ctxRecord.packages === 'object' && ctxRecord.packages !== null;
-			const sitesOk = typeof ctxRecord.sites === 'object' && ctxRecord.sites !== null;
-			if (!packagesOk || !sitesOk) {
-				const rawType = Array.isArray(raw) ? 'array' : typeof raw;
-				const rawKeys =
-					raw && typeof raw === 'object' && !Array.isArray(raw)
-						? Object.keys(raw as Record<string, unknown>).join(',')
-						: 'n/a';
-				const preview = typeof raw === 'string' ? raw : JSON.stringify(raw ?? null);
-				await logRun(
-					runId,
-					'warn',
-					'context-debug',
-					`response missing packages/sites. raw_type=${rawType} keys=${rawKeys} preview=${preview.slice(0, 800)}`
-				);
-			}
-		}
-
-		// Ensure fetched_at is set (agent may omit it)
-		if (!ctx.fetched_at) {
-			ctx.fetched_at = new Date().toISOString();
-		}
-		return ctx;
-	} catch (err) {
-		console.error('[Runner] Failed to fetch RocketRide context:', err);
-		if (runId) await logRun(runId, 'warn', 'context-debug', `fetchRocketRideContext threw: ${err}`);
-		return null;
 	}
 }
 
@@ -1145,7 +1061,7 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 
 		// Fetch RocketRide product context once for both pipelines
 		await logRun(runId, 'info', 'context', 'Fetching RocketRide product context...');
-		const rocketrideContext = await fetchRocketRideContext(client, runId);
+		const rocketrideContext = await fetchRocketRideContext(runId);
 		if (rocketrideContext) {
 			await validateAndPersist(runId, 'rocketride-context.pipe', rocketrideContext);
 		}

@@ -25,6 +25,12 @@ export const env = {
 		wsUrl: optional('ROCKETRIDE_WS_URL', 'ws://localhost:5565'),
 		apiKey: optional('ROCKETRIDE_APIKEY', '')
 	},
+	firecrawl: {
+		apiKey: optional('FIRECRAWL_API_KEY', '')
+	},
+	github: {
+		token: optional('GITHUB_TOKEN', '')
+	},
 	nextauth: {
 		secret: optional('NEXTAUTH_SECRET', ''),
 		url: optional('NEXTAUTH_URL', 'http://localhost:3000')
