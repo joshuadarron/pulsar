@@ -4,8 +4,8 @@ import { RocketRideClient } from 'rocketride';
 import { env } from '@pulsar/shared/config/env';
 import { logRun } from '@pulsar/shared/run-logger';
 import {
+	MONITOR_SUBSCRIPTION_TYPES,
 	dispatchEvent,
-	ensureMonitorSubscription,
 	getActiveRuns,
 	registerToken,
 	unregisterToken
@@ -55,13 +55,12 @@ export async function getClient(): Promise<RocketRideClient> {
 				}
 				lastDisconnectAt = null;
 			}
-
-			try {
-				await ensureMonitorSubscription(client);
-				console.log('[RocketRide] Monitor subscription active');
-			} catch (err) {
-				console.warn('[RocketRide] Failed to subscribe to events:', err);
-			}
+			// NOTE: we do NOT call setEvents('*') here. An eager
+			// connection-wide subscription was disconnecting the WS on some
+			// servers (probably because the wildcard token has nothing to
+			// resolve to before any tasks have started). Subscriptions are
+			// now established per-task inside `usePipeline()` after
+			// `client.use()` returns the token.
 		},
 		onDisconnected: async (reason, hasError) => {
 			if (hasError) {
@@ -106,22 +105,31 @@ async function readProjectId(filepath: string): Promise<string | undefined> {
 /**
  * Centralized chokepoint for invoking a RocketRide pipeline.
  *
+ * - Re-resolves `getClient()` so a stale (mid-reconnect) client doesn't bubble
+ *   "Server is not connected" up the stack on the first call after a long
+ *   non-WS phase (e.g. graph-snapshot, native-fetch context).
  * - Always sets `pipelineTraceLevel: 'summary'` so FLOW events fire in the
  *   observability listener.
  * - Registers the returned token (plus project_id and any source the SDK
  *   echoes back) so inbound events resolve to this run for run_logs.
+ * - Subscribes to events for the returned token via `setEvents` so the
+ *   monitor delivers FLOW / SUMMARY / OUTPUT / SSE events for this task.
  *
  * Pair every call with `terminatePipeline(client, token)` (or call
  * `unregisterToken(token)` directly) so the token is moved to the recently
  * ended grace bucket once the pipeline finishes.
  */
 export async function usePipeline(
-	client: RocketRideClient,
+	_caller: RocketRideClient,
 	runId: string,
 	filepath: string
 ): Promise<UsePipelineResult> {
 	const basename = path.basename(filepath, '.pipe');
 	const projectIdFromFile = await readProjectId(filepath);
+
+	// Always resolve via getClient() so a dropped/reconnecting WS triggers a
+	// fresh connect rather than throwing "Server is not connected" on use().
+	const client = await getClient();
 
 	const response = await client.use({ filepath, pipelineTraceLevel: 'summary' });
 
@@ -138,6 +146,15 @@ export async function usePipeline(
 		project_id: projectIdFromResp ?? projectIdFromFile,
 		source
 	});
+
+	// Subscribe per-task; the apaevt_task `begin` event has typically fired
+	// before this point, but flow / status_update / output / sse / end all
+	// arrive after and will be delivered.
+	try {
+		await client.setEvents(response.token, MONITOR_SUBSCRIPTION_TYPES);
+	} catch (err) {
+		console.warn(`[RocketRide] setEvents failed for ${basename}:`, err);
+	}
 
 	return { token: response.token, response };
 }
