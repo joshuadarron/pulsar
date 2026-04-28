@@ -1,6 +1,15 @@
-"use client";
+'use client';
 
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from "recharts";
+import {
+	LineChart,
+	Line,
+	XAxis,
+	YAxis,
+	Tooltip,
+	ResponsiveContainer,
+	Legend,
+	CartesianGrid
+} from 'recharts';
 
 interface ReportTrendPoint {
 	judged_at: string;
@@ -13,11 +22,11 @@ interface Props {
 }
 
 const DIM_COLORS: Record<string, string> = {
-	grounding: "#4f46e5",
-	specificity: "#0891b2",
-	tone_match: "#16a34a",
-	actionability: "#ea580c",
-	internal_consistency: "#a855f7",
+	grounding: '#4f46e5',
+	specificity: '#0891b2',
+	tone_match: '#16a34a',
+	actionability: '#ea580c',
+	internal_consistency: '#a855f7'
 };
 
 export default function EvalTrendChart({ data }: Props) {
@@ -28,7 +37,9 @@ export default function EvalTrendChart({ data }: Props) {
 		entry[row.dimension] = row.score;
 		byDate.set(date, entry);
 	}
-	const series = Array.from(byDate.values()).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+	const series = Array.from(byDate.values()).sort((a, b) =>
+		String(a.date).localeCompare(String(b.date))
+	);
 
 	const dimensions = Array.from(new Set(data.map((d) => d.dimension)));
 
@@ -54,7 +65,7 @@ export default function EvalTrendChart({ data }: Props) {
 							key={dim}
 							type="monotone"
 							dataKey={dim}
-							stroke={DIM_COLORS[dim] ?? "#6b7280"}
+							stroke={DIM_COLORS[dim] ?? '#6b7280'}
 							strokeWidth={2}
 							dot={{ r: 3 }}
 							activeDot={{ r: 5 }}

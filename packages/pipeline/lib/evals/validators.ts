@@ -28,7 +28,7 @@ export function runValidators(suite: ValidatorSuite, output: unknown): Validatio
 			return {
 				check_name: v.name,
 				passed: false,
-				detail: `validator threw: ${err instanceof Error ? err.message : String(err)}`,
+				detail: `validator threw: ${err instanceof Error ? err.message : String(err)}`
 			};
 		}
 	});
@@ -36,7 +36,10 @@ export function runValidators(suite: ValidatorSuite, output: unknown): Validatio
 	return {
 		passed: failed.length === 0,
 		checks,
-		error_summary: failed.length === 0 ? null : failed.map((c) => `${c.check_name}: ${c.detail ?? 'failed'}`).join('; '),
+		error_summary:
+			failed.length === 0
+				? null
+				: failed.map((c) => `${c.check_name}: ${c.detail ?? 'failed'}`).join('; ')
 	};
 }
 
@@ -72,7 +75,7 @@ export const ROCKETRIDE_CONTEXT_SUITE: ValidatorSuite = {
 				return missing.length === 0
 					? { passed: true }
 					: { passed: false, detail: `missing keys: ${missing.join(', ')}` };
-			},
+			}
 		},
 		{
 			name: 'has_sites',
@@ -86,7 +89,7 @@ export const ROCKETRIDE_CONTEXT_SUITE: ValidatorSuite = {
 				return missing.length === 0
 					? { passed: true }
 					: { passed: false, detail: `missing keys: ${missing.join(', ')}` };
-			},
+			}
 		},
 		{
 			name: 'has_fetched_at',
@@ -99,27 +102,29 @@ export const ROCKETRIDE_CONTEXT_SUITE: ValidatorSuite = {
 				return Number.isFinite(parsed)
 					? { passed: true }
 					: { passed: false, detail: `not a valid ISO timestamp: ${ts}` };
-			},
+			}
 		},
 		{
 			name: 'at_least_one_package_non_null',
 			description: 'catches total HTTP failure',
 			check: (out) => {
-				if (!isObject(out) || !isObject(out.packages)) return { passed: false, detail: 'packages object missing' };
+				if (!isObject(out) || !isObject(out.packages))
+					return { passed: false, detail: 'packages object missing' };
 				const anyPresent = Object.values(out.packages).some((v) => v !== null && v !== undefined);
 				return anyPresent ? { passed: true } : { passed: false, detail: 'all packages null' };
-			},
+			}
 		},
 		{
 			name: 'at_least_one_site_non_null',
 			description: 'catches total Firecrawl failure',
 			check: (out) => {
-				if (!isObject(out) || !isObject(out.sites)) return { passed: false, detail: 'sites object missing' };
+				if (!isObject(out) || !isObject(out.sites))
+					return { passed: false, detail: 'sites object missing' };
 				const anyPresent = Object.values(out.sites).some((v) => nonEmptyString(v));
 				return anyPresent ? { passed: true } : { passed: false, detail: 'all sites null or empty' };
-			},
-		},
-	],
+			}
+		}
+	]
 };
 
 // ---------------------------------------------------------------------------
@@ -136,11 +141,12 @@ export const GRAPH_SNAPSHOT_SUITE: ValidatorSuite = {
 			check: (out) => {
 				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
 				const clusters = out.topic_clusters;
-				if (!Array.isArray(clusters)) return { passed: false, detail: 'topic_clusters not an array' };
+				if (!Array.isArray(clusters))
+					return { passed: false, detail: 'topic_clusters not an array' };
 				return clusters.length >= 1
 					? { passed: true, detail: `${clusters.length} clusters` }
 					: { passed: false, detail: 'no clusters' };
-			},
+			}
 		},
 		{
 			name: 'entity_importance_non_empty',
@@ -148,11 +154,12 @@ export const GRAPH_SNAPSHOT_SUITE: ValidatorSuite = {
 			check: (out) => {
 				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
 				const entities = out.entity_importance;
-				if (!Array.isArray(entities)) return { passed: false, detail: 'entity_importance not an array' };
+				if (!Array.isArray(entities))
+					return { passed: false, detail: 'entity_importance not an array' };
 				return entities.length >= 1
 					? { passed: true, detail: `${entities.length} entities` }
 					: { passed: false, detail: 'no entities' };
-			},
+			}
 		},
 		{
 			name: 'pagerank_ranks_sequential',
@@ -166,11 +173,14 @@ export const GRAPH_SNAPSHOT_SUITE: ValidatorSuite = {
 				for (let i = 0; i < entities.length; i++) {
 					const rank = entities[i].pagerank_rank;
 					if (rank !== i + 1) {
-						return { passed: false, detail: `expected rank ${i + 1}, got ${String(rank)} at index ${i}` };
+						return {
+							passed: false,
+							detail: `expected rank ${i + 1}, got ${String(rank)} at index ${i}`
+						};
 					}
 				}
 				return { passed: true };
-			},
+			}
 		},
 		{
 			name: 'metadata_complete',
@@ -184,9 +194,9 @@ export const GRAPH_SNAPSHOT_SUITE: ValidatorSuite = {
 				return missing.length === 0
 					? { passed: true }
 					: { passed: false, detail: `missing keys: ${missing.join(', ')}` };
-			},
-		},
-	],
+			}
+		}
+	]
 };
 
 // ---------------------------------------------------------------------------
@@ -206,7 +216,7 @@ export const TREND_REPORT_SUITE: ValidatorSuite = {
 				return nonEmptyString(text)
 					? { passed: true }
 					: { passed: false, detail: 'executiveSummary.text empty or missing' };
-			},
+			}
 		},
 		{
 			name: 'all_pass_1_sections_present',
@@ -222,7 +232,7 @@ export const TREND_REPORT_SUITE: ValidatorSuite = {
 				return missing.length === 0
 					? { passed: true }
 					: { passed: false, detail: `missing or empty: ${missing.join(', ')}` };
-			},
+			}
 		},
 		{
 			name: 'content_recommendations_non_empty',
@@ -233,7 +243,7 @@ export const TREND_REPORT_SUITE: ValidatorSuite = {
 				return nonEmptyString(text)
 					? { passed: true }
 					: { passed: false, detail: 'contentRecommendations.text empty or missing' };
-			},
+			}
 		},
 		{
 			name: 'report_data_jsonb_valid',
@@ -244,9 +254,9 @@ export const TREND_REPORT_SUITE: ValidatorSuite = {
 				return missing.length === 0
 					? { passed: true }
 					: { passed: false, detail: `missing top-level keys: ${missing.join(', ')}` };
-			},
-		},
-	],
+			}
+		}
+	]
 };
 
 // ---------------------------------------------------------------------------
@@ -254,7 +264,15 @@ export const TREND_REPORT_SUITE: ValidatorSuite = {
 // Output shape: Record<platform, body> assembled in runContentDrafts
 // ---------------------------------------------------------------------------
 
-const DRAFT_PLATFORMS = ['hashnode', 'medium', 'devto', 'hackernews', 'linkedin', 'twitter', 'discord'];
+const DRAFT_PLATFORMS = [
+	'hashnode',
+	'medium',
+	'devto',
+	'hackernews',
+	'linkedin',
+	'twitter',
+	'discord'
+];
 const EM_DASH_RE = /—/;
 const JSON_FENCE_RE = /```json/i;
 
@@ -270,7 +288,7 @@ export const CONTENT_DRAFTS_SUITE: ValidatorSuite = {
 				return present.length >= 5
 					? { passed: true, detail: `${present.length}/7 drafts present` }
 					: { passed: false, detail: `only ${present.length}/7 drafts present` };
-			},
+			}
 		},
 		{
 			name: 'each_draft_non_empty',
@@ -281,18 +299,20 @@ export const CONTENT_DRAFTS_SUITE: ValidatorSuite = {
 				return empties.length === 0
 					? { passed: true }
 					: { passed: false, detail: `empty drafts: ${empties.join(', ')}` };
-			},
+			}
 		},
 		{
 			name: 'no_em_dashes',
 			description: 'project hard rule: no em-dashes in drafts',
 			check: (out) => {
 				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
-				const offenders = DRAFT_PLATFORMS.filter((p) => typeof out[p] === 'string' && EM_DASH_RE.test(out[p] as string));
+				const offenders = DRAFT_PLATFORMS.filter(
+					(p) => typeof out[p] === 'string' && EM_DASH_RE.test(out[p] as string)
+				);
 				return offenders.length === 0
 					? { passed: true }
 					: { passed: false, detail: `em-dashes found in: ${offenders.join(', ')}` };
-			},
+			}
 		},
 		{
 			name: 'no_json_fence_leakage',
@@ -300,14 +320,14 @@ export const CONTENT_DRAFTS_SUITE: ValidatorSuite = {
 			check: (out) => {
 				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
 				const offenders = DRAFT_PLATFORMS.filter(
-					(p) => typeof out[p] === 'string' && JSON_FENCE_RE.test(out[p] as string),
+					(p) => typeof out[p] === 'string' && JSON_FENCE_RE.test(out[p] as string)
 				);
 				return offenders.length === 0
 					? { passed: true }
 					: { passed: false, detail: `json fence leakage in: ${offenders.join(', ')}` };
-			},
-		},
-	],
+			}
+		}
+	]
 };
 
 // ---------------------------------------------------------------------------
@@ -318,5 +338,5 @@ export const VALIDATOR_SUITES: Record<string, ValidatorSuite> = {
 	'rocketride-context.pipe': ROCKETRIDE_CONTEXT_SUITE,
 	'graph-snapshot.pipe': GRAPH_SNAPSHOT_SUITE,
 	'trend-report.pipe': TREND_REPORT_SUITE,
-	'content-drafts.pipe': CONTENT_DRAFTS_SUITE,
+	'content-drafts.pipe': CONTENT_DRAFTS_SUITE
 };

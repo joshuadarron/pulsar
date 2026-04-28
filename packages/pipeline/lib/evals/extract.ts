@@ -1,15 +1,20 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { query } from '@pulsar/shared/db/postgres';
 import { logRun } from '@pulsar/shared/run-logger';
 import type { PredictionType, ReportData } from '@pulsar/shared/types';
 import { extractJson } from '../parse-json.js';
-import { getClient } from '../rocketride.js';
+import type { getClient } from '../rocketride.js';
 
 const PIPELINES_DIR = path.resolve(fileURLToPath(import.meta.url), '../../../pipelines');
 const EXTRACTION_PIPE = path.join(PIPELINES_DIR, 'extraction.pipe');
 
-const VALID_TYPES: PredictionType[] = ['emergence', 'cluster_growth', 'entity_importance', 'general'];
+const VALID_TYPES: PredictionType[] = [
+	'emergence',
+	'cluster_growth',
+	'entity_importance',
+	'general'
+];
 
 interface ExtractedPrediction {
 	prediction_text: string;
@@ -30,14 +35,24 @@ export async function extractPredictions(
 	client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
 	reportId: string,
-	reportData: ReportData,
+	reportData: ReportData
 ): Promise<number> {
 	try {
-		await logRun(runId, 'info', 'extract-predictions', 'Extracting predictions from trend report...');
+		await logRun(
+			runId,
+			'info',
+			'extract-predictions',
+			'Extracting predictions from trend report...'
+		);
 
 		const result = await client.use({ filepath: EXTRACTION_PIPE });
 		const token = result.token;
-		const response = await client.send(token, JSON.stringify({ report: reportData }), {}, 'application/json');
+		const response = await client.send(
+			token,
+			JSON.stringify({ report: reportData }),
+			{},
+			'application/json'
+		);
 		await client.terminate(token);
 
 		const raw = response?.answers?.[0];
@@ -66,8 +81,8 @@ export async function extractPredictions(
 					p.prediction_text,
 					Array.isArray(p.predicted_entities) ? p.predicted_entities : [],
 					Array.isArray(p.predicted_topics) ? p.predicted_topics : [],
-					normalizeType(p.prediction_type),
-				],
+					normalizeType(p.prediction_type)
+				]
 			);
 			saved++;
 		}

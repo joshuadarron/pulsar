@@ -1,17 +1,17 @@
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
+import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-dotenv.config({ path: path.resolve(fileURLToPath(import.meta.url), "../../../.env") });
+dotenv.config({ path: path.resolve(fileURLToPath(import.meta.url), '../../../.env') });
 
-import { query } from "./postgres";
-import { getSession, closeDriver } from "./neo4j";
-import pool from "./postgres";
+import { query } from './postgres';
+import { getSession, closeDriver } from './neo4j';
+import pool from './postgres';
 
 async function migratePostgres() {
-  console.log("Running PostgreSQL migrations...");
+	console.log('Running PostgreSQL migrations...');
 
-  await query(`
+	await query(`
     CREATE TABLE IF NOT EXISTS runs (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       started_at TIMESTAMPTZ DEFAULT now(),
@@ -25,12 +25,12 @@ async function migratePostgres() {
     )
   `);
 
-  await query(`
+	await query(`
     CREATE UNIQUE INDEX IF NOT EXISTS runs_one_active_per_type
     ON runs (run_type) WHERE status = 'running'
   `);
 
-  await query(`
+	await query(`
     CREATE TABLE IF NOT EXISTS run_logs (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       run_id UUID REFERENCES runs(id) ON DELETE CASCADE,
@@ -41,11 +41,11 @@ async function migratePostgres() {
     )
   `);
 
-  await query(`
+	await query(`
     CREATE INDEX IF NOT EXISTS idx_run_logs_run_id ON run_logs (run_id, logged_at)
   `);
 
-  await query(`
+	await query(`
     CREATE TABLE IF NOT EXISTS articles_raw (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       url_hash CHAR(64) UNIQUE NOT NULL,
@@ -57,7 +57,7 @@ async function migratePostgres() {
     )
   `);
 
-  await query(`
+	await query(`
     CREATE TABLE IF NOT EXISTS articles (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       raw_id UUID REFERENCES articles_raw(id),
@@ -78,7 +78,7 @@ async function migratePostgres() {
     )
   `);
 
-  await query(`
+	await query(`
     CREATE TABLE IF NOT EXISTS reports (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       run_id UUID REFERENCES runs(id),
@@ -90,7 +90,7 @@ async function migratePostgres() {
     )
   `);
 
-  await query(`
+	await query(`
     CREATE TABLE IF NOT EXISTS content_drafts (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       run_id UUID REFERENCES runs(id),
@@ -104,7 +104,7 @@ async function migratePostgres() {
     )
   `);
 
-  await query(`
+	await query(`
     CREATE TABLE IF NOT EXISTS notifications (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       type TEXT NOT NULL,
@@ -117,15 +117,15 @@ async function migratePostgres() {
     )
   `);
 
-  await query(`
+	await query(`
     ALTER TABLE notifications ADD COLUMN IF NOT EXISTS reference_id TEXT
   `);
 
-  await query(`
+	await query(`
     CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications (read, created_at DESC)
   `);
 
-  await query(`
+	await query(`
     CREATE TABLE IF NOT EXISTS subscribers (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       email TEXT UNIQUE NOT NULL,
@@ -135,7 +135,7 @@ async function migratePostgres() {
     )
   `);
 
-  await query(`
+	await query(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
@@ -143,7 +143,7 @@ async function migratePostgres() {
     )
   `);
 
-  await query(`
+	await query(`
     CREATE TABLE IF NOT EXISTS schedules (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       type TEXT NOT NULL,
@@ -155,12 +155,12 @@ async function migratePostgres() {
     )
   `);
 
-  await query(`
+	await query(`
     CREATE UNIQUE INDEX IF NOT EXISTS schedules_unique_time
     ON schedules (type, hour, minute, days)
   `);
 
-  await query(`
+	await query(`
     CREATE TABLE IF NOT EXISTS graph_snapshots (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       run_id UUID REFERENCES runs(id) ON DELETE SET NULL,
@@ -171,12 +171,12 @@ async function migratePostgres() {
     )
   `);
 
-  await query(`
+	await query(`
     CREATE INDEX IF NOT EXISTS idx_graph_snapshots_computed_at
     ON graph_snapshots (computed_at DESC)
   `);
 
-  await query(`
+	await query(`
     CREATE TABLE IF NOT EXISTS pipeline_validations (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       run_id UUID NOT NULL,
@@ -188,17 +188,17 @@ async function migratePostgres() {
     )
   `);
 
-  await query(`
+	await query(`
     CREATE INDEX IF NOT EXISTS idx_pipeline_validations_run_id
     ON pipeline_validations (run_id)
   `);
 
-  await query(`
+	await query(`
     CREATE INDEX IF NOT EXISTS idx_pipeline_validations_validated_at
     ON pipeline_validations (validated_at DESC)
   `);
 
-  await query(`
+	await query(`
     CREATE TABLE IF NOT EXISTS evaluations (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       run_id UUID NOT NULL,
@@ -213,20 +213,20 @@ async function migratePostgres() {
     )
   `);
 
-  await query(`
+	await query(`
     CREATE INDEX IF NOT EXISTS idx_evaluations_run_id ON evaluations (run_id)
   `);
 
-  await query(`
+	await query(`
     CREATE INDEX IF NOT EXISTS idx_evaluations_target_type_judged_at
     ON evaluations (target_type, judged_at DESC)
   `);
 
-  await query(`
+	await query(`
     CREATE INDEX IF NOT EXISTS idx_evaluations_dimension ON evaluations (dimension)
   `);
 
-  await query(`
+	await query(`
     CREATE TABLE IF NOT EXISTS report_predictions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       report_id UUID NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
@@ -238,12 +238,12 @@ async function migratePostgres() {
     )
   `);
 
-  await query(`
+	await query(`
     CREATE INDEX IF NOT EXISTS idx_report_predictions_report_id
     ON report_predictions (report_id)
   `);
 
-  await query(`
+	await query(`
     CREATE TABLE IF NOT EXISTS retrospective_grades (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       prediction_id UUID NOT NULL REFERENCES report_predictions(id) ON DELETE CASCADE,
@@ -255,75 +255,75 @@ async function migratePostgres() {
     )
   `);
 
-  await query(`
+	await query(`
     CREATE INDEX IF NOT EXISTS idx_retrospective_grades_prediction_id
     ON retrospective_grades (prediction_id)
   `);
 
-  await query(`
+	await query(`
     CREATE INDEX IF NOT EXISTS idx_retrospective_grades_graded_at
     ON retrospective_grades (graded_at DESC)
   `);
 
-  // Seed defaults if table is empty
-  await query(`
+	// Seed defaults if table is empty
+	await query(`
     INSERT INTO schedules (type, hour, minute, days)
     SELECT 'scrape', 5, 30, '{1,2,3,4,5}'
     WHERE NOT EXISTS (SELECT 1 FROM schedules WHERE type = 'scrape')
   `);
 
-  await query(`
+	await query(`
     INSERT INTO schedules (type, hour, minute, days)
     SELECT 'pipeline', 6, 0, '{1,2,3,4,5}'
     WHERE NOT EXISTS (SELECT 1 FROM schedules WHERE type = 'pipeline')
   `);
 
-  await query(`
+	await query(`
     INSERT INTO schedules (type, hour, minute, days)
     SELECT 'retrospective', 7, 0, '{1,2,3,4,5}'
     WHERE NOT EXISTS (SELECT 1 FROM schedules WHERE type = 'retrospective')
   `);
 
-  console.log("PostgreSQL migrations complete.");
+	console.log('PostgreSQL migrations complete.');
 }
 
 async function migrateNeo4j() {
-  console.log("Running Neo4j constraints...");
-  const session = getSession();
-  try {
-    await session.run(
-      "CREATE CONSTRAINT article_id IF NOT EXISTS FOR (a:Article) REQUIRE a.id IS UNIQUE",
-    );
-    await session.run(
-      "CREATE CONSTRAINT topic_name IF NOT EXISTS FOR (t:Topic) REQUIRE t.name IS UNIQUE",
-    );
-    await session.run(
-      "CREATE CONSTRAINT entity_name IF NOT EXISTS FOR (e:Entity) REQUIRE e.name IS UNIQUE",
-    );
-    await session.run(
-      "CREATE CONSTRAINT author_handle IF NOT EXISTS FOR (a:Author) REQUIRE a.handle IS UNIQUE",
-    );
-    await session.run(
-      "CREATE CONSTRAINT source_name IF NOT EXISTS FOR (s:Source) REQUIRE s.name IS UNIQUE",
-    );
-    console.log("Neo4j constraints created.");
-  } finally {
-    await session.close();
-  }
+	console.log('Running Neo4j constraints...');
+	const session = getSession();
+	try {
+		await session.run(
+			'CREATE CONSTRAINT article_id IF NOT EXISTS FOR (a:Article) REQUIRE a.id IS UNIQUE'
+		);
+		await session.run(
+			'CREATE CONSTRAINT topic_name IF NOT EXISTS FOR (t:Topic) REQUIRE t.name IS UNIQUE'
+		);
+		await session.run(
+			'CREATE CONSTRAINT entity_name IF NOT EXISTS FOR (e:Entity) REQUIRE e.name IS UNIQUE'
+		);
+		await session.run(
+			'CREATE CONSTRAINT author_handle IF NOT EXISTS FOR (a:Author) REQUIRE a.handle IS UNIQUE'
+		);
+		await session.run(
+			'CREATE CONSTRAINT source_name IF NOT EXISTS FOR (s:Source) REQUIRE s.name IS UNIQUE'
+		);
+		console.log('Neo4j constraints created.');
+	} finally {
+		await session.close();
+	}
 }
 
 async function main() {
-  try {
-    await migratePostgres();
-    await migrateNeo4j();
-    console.log("All migrations complete.");
-  } catch (err) {
-    console.error("Migration failed:", err);
-    process.exit(1);
-  } finally {
-    await closeDriver();
-    await pool.end();
-  }
+	try {
+		await migratePostgres();
+		await migrateNeo4j();
+		console.log('All migrations complete.');
+	} catch (err) {
+		console.error('Migration failed:', err);
+		process.exit(1);
+	} finally {
+		await closeDriver();
+		await pool.end();
+	}
 }
 
 main();

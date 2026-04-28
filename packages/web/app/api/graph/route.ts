@@ -1,22 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
-import neo4j from "neo4j-driver";
-import { getSession } from "@pulsar/shared/db/neo4j";
+import { type NextRequest, NextResponse } from 'next/server';
+import neo4j from 'neo4j-driver';
+import { getSession } from '@pulsar/shared/db/neo4j';
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = request.nextUrl;
-  const nodeType = searchParams.get("type") || "Topic";
-  const limit = Math.min(parseInt(searchParams.get("limit") || "100"), 500);
+	const { searchParams } = request.nextUrl;
+	const nodeType = searchParams.get('type') || 'Topic';
+	const limit = Math.min(Number.parseInt(searchParams.get('limit') || '100'), 500);
 
-  const allowedTypes = ["Topic", "Entity", "Article", "Author", "Source"];
-  if (!allowedTypes.includes(nodeType)) {
-    return NextResponse.json({ error: "Invalid node type" }, { status: 400 });
-  }
+	const allowedTypes = ['Topic', 'Entity', 'Article', 'Author', 'Source'];
+	if (!allowedTypes.includes(nodeType)) {
+		return NextResponse.json({ error: 'Invalid node type' }, { status: 400 });
+	}
 
-  const session = getSession();
-  try {
-    // Get nodes and their relationships
-    const result = await session.run(
-      `MATCH (n:${nodeType})
+	const session = getSession();
+	try {
+		// Get nodes and their relationships
+		const result = await session.run(
+			`MATCH (n:${nodeType})
        OPTIONAL MATCH (n)-[r]-(m)
        WITH n, collect(DISTINCT {
          target: coalesce(m.name, m.title, m.handle, id(m)),
@@ -27,61 +27,62 @@ export async function GET(request: NextRequest) {
        RETURN n, rels
        ORDER BY coalesce(n.trendScore, 0) DESC
        LIMIT $limit`,
-      { limit: neo4j.int(limit) },
-    );
+			{ limit: neo4j.int(limit) }
+		);
 
-    const nodesMap = new Map<string, { id: string; label: string; type: string; score: number }>();
-    const links: { source: string; target: string; type: string; weight: number }[] = [];
+		const nodesMap = new Map<string, { id: string; label: string; type: string; score: number }>();
+		const links: { source: string; target: string; type: string; weight: number }[] = [];
 
-    for (const record of result.records) {
-      const node = record.get("n");
-      const props = node.properties;
-      const id = props.name || props.title || props.handle || String(node.identity);
-      const type = node.labels[0];
+		for (const record of result.records) {
+			const node = record.get('n');
+			const props = node.properties;
+			const id = props.name || props.title || props.handle || String(node.identity);
+			const type = node.labels[0];
 
-      nodesMap.set(id, {
-        id,
-        label: id,
-        type,
-        score: props.trendScore || props.score || 0,
-      });
+			nodesMap.set(id, {
+				id,
+				label: id,
+				type,
+				score: props.trendScore || props.score || 0
+			});
 
-      const rels = record.get("rels") as Array<{
-        target: string;
-        targetType: string;
-        relType: string;
-        weight: number;
-      }>;
+			const rels = record.get('rels') as Array<{
+				target: string;
+				targetType: string;
+				relType: string;
+				weight: number;
+			}>;
 
-      for (const rel of rels) {
-        if (!rel.target || !rel.relType) continue;
+			for (const rel of rels) {
+				if (!rel.target || !rel.relType) continue;
 
-        nodesMap.set(String(rel.target), {
-          id: String(rel.target),
-          label: String(rel.target),
-          type: rel.targetType || "Unknown",
-          score: 0,
-        });
+				nodesMap.set(String(rel.target), {
+					id: String(rel.target),
+					label: String(rel.target),
+					type: rel.targetType || 'Unknown',
+					score: 0
+				});
 
-        links.push({
-          source: id,
-          target: String(rel.target),
-          type: rel.relType,
-          weight: typeof rel.weight === "object"
-            ? (rel.weight as { toNumber(): number }).toNumber()
-            : (rel.weight || 1),
-        });
-      }
-    }
+				links.push({
+					source: id,
+					target: String(rel.target),
+					type: rel.relType,
+					weight:
+						typeof rel.weight === 'object'
+							? (rel.weight as { toNumber(): number }).toNumber()
+							: rel.weight || 1
+				});
+			}
+		}
 
-    return NextResponse.json({
-      nodes: Array.from(nodesMap.values()),
-      links,
-    });
-  } catch (err) {
-    console.error("[Graph API] Error:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
-  } finally {
-    await session.close();
-  }
+		return NextResponse.json({
+			nodes: Array.from(nodesMap.values()),
+			links
+		});
+	} catch (err) {
+		console.error('[Graph API] Error:', err);
+		return NextResponse.json({ error: String(err) }, { status: 500 });
+	} finally {
+		await session.close();
+	}
 }

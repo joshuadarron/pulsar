@@ -1,1 +1,1 @@
-export type { ScrapedItem, SourceAdapter } from "@pulsar/shared/types";
+export type { ScrapedItem, SourceAdapter } from '@pulsar/shared/types';

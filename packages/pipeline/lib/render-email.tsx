@@ -10,7 +10,7 @@ export function renderReportEmail(
 	reportUrl: string,
 	pdfUrl: string,
 	evaluationSummary?: EvaluationSummary,
-	evalsUrl?: string,
+	evalsUrl?: string
 ): string {
 	const body = renderToStaticMarkup(
 		createElement(ReportTemplate, {
@@ -21,8 +21,8 @@ export function renderReportEmail(
 			reportUrl,
 			pdfUrl,
 			evaluationSummary,
-			evalsUrl,
-		}),
+			evalsUrl
+		})
 	);
 
 	return `<!DOCTYPE html>

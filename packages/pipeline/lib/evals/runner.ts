@@ -1,10 +1,10 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { query } from '@pulsar/shared/db/postgres';
 import { logRun } from '@pulsar/shared/run-logger';
 import type { DraftEvalSummary, EvaluationSummary } from '@pulsar/shared/types';
 import { extractJson } from '../parse-json.js';
-import { getClient } from '../rocketride.js';
+import type { getClient } from '../rocketride.js';
 import { CONTENT_DRAFT_RUBRIC, TREND_REPORT_RUBRIC, type RubricDimension } from './rubrics.js';
 import { runSubChecks } from './sub-checks.js';
 
@@ -30,7 +30,7 @@ async function callEvaluationPipe(
 		target_id: string | null;
 		artifact: unknown;
 		rubric: RubricDimension[];
-	},
+	}
 ): Promise<EvaluationResponse | null> {
 	try {
 		const result = await client.use({ filepath: EVALUATION_PIPE });
@@ -55,7 +55,7 @@ async function persistScores(
 	runId: string,
 	targetType: 'trend_report' | 'content_draft',
 	targetId: string | null,
-	scores: ScoreEntry[],
+	scores: ScoreEntry[]
 ): Promise<void> {
 	for (const s of scores) {
 		await query(
@@ -69,8 +69,8 @@ async function persistScores(
 				typeof s.score === 'number' ? s.score : null,
 				typeof s.passed === 'boolean' ? s.passed : null,
 				s.rationale ?? null,
-				JUDGE_MODEL,
-			],
+				JUDGE_MODEL
+			]
 		);
 	}
 }
@@ -78,7 +78,7 @@ async function persistScores(
 async function persistSubCheckRows(
 	runId: string,
 	platform: string,
-	checks: { check_name: string; passed: boolean; detail?: string }[],
+	checks: { check_name: string; passed: boolean; detail?: string }[]
 ): Promise<void> {
 	for (const c of checks) {
 		await query(
@@ -92,36 +92,37 @@ async function persistSubCheckRows(
 				null,
 				c.passed,
 				c.detail ?? null,
-				'deterministic',
-			],
+				'deterministic'
+			]
 		);
 	}
 }
 
 function summarizeReport(scores: ScoreEntry[]): EvaluationSummary['reportScore'] {
-	const numeric = scores.filter((s) => typeof s.score === 'number') as Required<Pick<ScoreEntry, 'score' | 'dimension'>>[];
+	const numeric = scores.filter((s) => typeof s.score === 'number') as Required<
+		Pick<ScoreEntry, 'score' | 'dimension'>
+	>[];
 	const total = numeric.reduce((acc, s) => acc + s.score, 0);
 	const max = numeric.length * 5;
-	const lowest = numeric.length > 0
-		? numeric.reduce((min, s) => (s.score < min.score ? s : min))
-		: null;
+	const lowest =
+		numeric.length > 0 ? numeric.reduce((min, s) => (s.score < min.score ? s : min)) : null;
 	return {
 		total,
 		max,
-		lowestDim: lowest ? { name: lowest.dimension, score: lowest.score } : null,
+		lowestDim: lowest ? { name: lowest.dimension, score: lowest.score } : null
 	};
 }
 
 export async function runEvaluations(
 	client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
-	reportId: string,
+	reportId: string
 ): Promise<EvaluationSummary | null> {
 	await logRun(runId, 'info', 'evaluations', 'Starting LLM evaluations (Haiku)...');
 
 	const reportRow = await query<{ report_data: unknown }>(
 		'SELECT report_data FROM reports WHERE id = $1',
-		[reportId],
+		[reportId]
 	);
 	if (reportRow.rows.length === 0) {
 		await logRun(runId, 'warn', 'evaluations', `Report ${reportId} not found, skipping`);
@@ -131,7 +132,7 @@ export async function runEvaluations(
 
 	const draftRows = await query<{ platform: string; body: string }>(
 		'SELECT platform, body FROM content_drafts WHERE run_id = $1',
-		[runId],
+		[runId]
 	);
 	const drafts: Record<string, string> = {};
 	for (const r of draftRows.rows) drafts[r.platform] = r.body;
@@ -141,14 +142,19 @@ export async function runEvaluations(
 		target_type: 'trend_report',
 		target_id: null,
 		artifact: reportData,
-		rubric: TREND_REPORT_RUBRIC,
+		rubric: TREND_REPORT_RUBRIC
 	});
 
 	let reportScores: ScoreEntry[] = [];
 	if (reportResp?.scores && Array.isArray(reportResp.scores)) {
 		reportScores = reportResp.scores;
 		await persistScores(runId, 'trend_report', null, reportScores);
-		await logRun(runId, 'info', 'evaluations', `Trend report graded: ${reportScores.length} dimensions`);
+		await logRun(
+			runId,
+			'info',
+			'evaluations',
+			`Trend report graded: ${reportScores.length} dimensions`
+		);
 	} else {
 		await logRun(runId, 'warn', 'evaluations', 'Trend report grading failed or returned no scores');
 	}
@@ -161,7 +167,7 @@ export async function runEvaluations(
 			target_type: 'content_draft',
 			target_id: platform,
 			artifact: body,
-			rubric: CONTENT_DRAFT_RUBRIC,
+			rubric: CONTENT_DRAFT_RUBRIC
 		});
 		let llmScores: ScoreEntry[] = [];
 		if (draftResp?.scores && Array.isArray(draftResp.scores)) {
@@ -188,14 +194,19 @@ export async function runEvaluations(
 			llmMax,
 			subChecksPassed: subPassed,
 			subChecksTotal: sub.checks.length,
-			failedSubChecks,
+			failedSubChecks
 		});
 	}
 
-	await logRun(runId, 'success', 'evaluations', `Evaluations complete: report + ${draftSummaries.length} drafts`);
+	await logRun(
+		runId,
+		'success',
+		'evaluations',
+		`Evaluations complete: report + ${draftSummaries.length} drafts`
+	);
 
 	return {
 		reportScore: summarizeReport(reportScores),
-		draftScores: draftSummaries,
+		draftScores: draftSummaries
 	};
 }

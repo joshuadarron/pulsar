@@ -1,5 +1,5 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { query } from '@pulsar/shared/db/postgres';
 import { logRun } from '@pulsar/shared/run-logger';
 import type { RetrospectiveOutcome } from '@pulsar/shared/types';
@@ -10,7 +10,12 @@ import { JUDGE_MODEL } from './runner.js';
 const PIPELINES_DIR = path.resolve(fileURLToPath(import.meta.url), '../../../pipelines');
 const RETROSPECTIVE_PIPE = path.join(PIPELINES_DIR, 'retrospective.pipe');
 
-const VALID_OUTCOMES: RetrospectiveOutcome[] = ['confirmed', 'partially_confirmed', 'refuted', 'inconclusive'];
+const VALID_OUTCOMES: RetrospectiveOutcome[] = [
+	'confirmed',
+	'partially_confirmed',
+	'refuted',
+	'inconclusive'
+];
 
 interface CandidatePrediction {
 	prediction_id: string;
@@ -48,7 +53,7 @@ async function loadCandidates(): Promise<CandidatePrediction[]> {
 		 JOIN reports r ON r.id = p.report_id
 		 LEFT JOIN retrospective_grades g ON g.prediction_id = p.id
 		 WHERE g.id IS NULL
-		   AND r.generated_at::date = (now() - interval '14 days')::date`,
+		   AND r.generated_at::date = (now() - interval '14 days')::date`
 	);
 	return result.rows;
 }
@@ -56,7 +61,7 @@ async function loadCandidates(): Promise<CandidatePrediction[]> {
 async function gradePrediction(
 	client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
-	candidate: CandidatePrediction,
+	candidate: CandidatePrediction
 ): Promise<boolean> {
 	try {
 		const startDate = candidate.report_generated_at;
@@ -68,9 +73,9 @@ async function gradePrediction(
 				predicted_entities: candidate.predicted_entities,
 				predicted_topics: candidate.predicted_topics,
 				prediction_type: candidate.prediction_type,
-				made_at: startDate,
+				made_at: startDate
 			},
-			query_window: { start_date: startDate, end_date: endDate },
+			query_window: { start_date: startDate, end_date: endDate }
 		};
 
 		const result = await client.use({ filepath: RETROSPECTIVE_PIPE });
@@ -80,7 +85,12 @@ async function gradePrediction(
 
 		const raw = response?.answers?.[0];
 		if (!raw) {
-			await logRun(runId, 'warn', 'retrospective', `Grader returned no answer for ${candidate.prediction_id}`);
+			await logRun(
+				runId,
+				'warn',
+				'retrospective',
+				`Grader returned no answer for ${candidate.prediction_id}`
+			);
 			return false;
 		}
 
@@ -93,37 +103,54 @@ async function gradePrediction(
 		}
 
 		const outcome = normalizeOutcome(parsed.outcome);
-		const evidenceSummary = typeof parsed.evidence_summary === 'string' && parsed.evidence_summary.length > 0
-			? parsed.evidence_summary
-			: 'no evidence summary returned';
+		const evidenceSummary =
+			typeof parsed.evidence_summary === 'string' && parsed.evidence_summary.length > 0
+				? parsed.evidence_summary
+				: 'no evidence summary returned';
 		const evidenceData = parsed.evidence_data ?? null;
 
 		await query(
 			`INSERT INTO retrospective_grades (prediction_id, outcome, evidence_summary, judge_model, evidence_data)
 			 VALUES ($1, $2, $3, $4, $5)`,
-			[candidate.prediction_id, outcome, evidenceSummary, JUDGE_MODEL, evidenceData ? JSON.stringify(evidenceData) : null],
+			[
+				candidate.prediction_id,
+				outcome,
+				evidenceSummary,
+				JUDGE_MODEL,
+				evidenceData ? JSON.stringify(evidenceData) : null
+			]
 		);
 
 		await logRun(runId, 'info', 'retrospective', `Graded ${candidate.prediction_id}: ${outcome}`);
 		return true;
 	} catch (err) {
-		await logRun(runId, 'warn', 'retrospective', `Failed to grade ${candidate.prediction_id}: ${err}`);
+		await logRun(
+			runId,
+			'warn',
+			'retrospective',
+			`Failed to grade ${candidate.prediction_id}: ${err}`
+		);
 		return false;
 	}
 }
 
 export async function runRetrospectiveGrading(
-	trigger: 'scheduled' | 'manual' = 'scheduled',
+	trigger: 'scheduled' | 'manual' = 'scheduled'
 ): Promise<{ runId: string | null; graded: number; skipped: number }> {
 	let runId: string;
 	try {
 		const runResult = await query<{ id: string }>(
 			"INSERT INTO runs (trigger, run_type) VALUES ($1, 'retrospective') RETURNING id",
-			[trigger],
+			[trigger]
 		);
 		runId = runResult.rows[0].id;
 	} catch (err: unknown) {
-		if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === '23505') {
+		if (
+			err &&
+			typeof err === 'object' &&
+			'code' in err &&
+			(err as { code: string }).code === '23505'
+		) {
 			console.log('[Retrospective] Skipped, another retrospective run is active.');
 			return { runId: null, graded: 0, skipped: 0 };
 		}
@@ -135,13 +162,17 @@ export async function runRetrospectiveGrading(
 	try {
 		await logRun(runId, 'info', 'retrospective', `Retrospective run started (trigger: ${trigger})`);
 		const candidates = await loadCandidates();
-		await logRun(runId, 'info', 'retrospective', `Found ${candidates.length} candidate prediction(s) to grade`);
+		await logRun(
+			runId,
+			'info',
+			'retrospective',
+			`Found ${candidates.length} candidate prediction(s) to grade`
+		);
 
 		if (candidates.length === 0) {
-			await query(
-				"UPDATE runs SET completed_at = now(), status = 'complete' WHERE id = $1",
-				[runId],
-			);
+			await query("UPDATE runs SET completed_at = now(), status = 'complete' WHERE id = $1", [
+				runId
+			]);
 			await logRun(runId, 'success', 'retrospective', 'No candidates, run complete');
 			return { runId, graded: 0, skipped: 0 };
 		}
@@ -157,10 +188,7 @@ export async function runRetrospectiveGrading(
 			await disconnectClient();
 		}
 
-		await query(
-			"UPDATE runs SET completed_at = now(), status = 'complete' WHERE id = $1",
-			[runId],
-		);
+		await query("UPDATE runs SET completed_at = now(), status = 'complete' WHERE id = $1", [runId]);
 		await logRun(runId, 'success', 'retrospective', `Graded: ${graded}, skipped: ${skipped}`);
 		return { runId, graded, skipped };
 	} catch (err) {
@@ -168,7 +196,7 @@ export async function runRetrospectiveGrading(
 		await logRun(runId, 'error', 'retrospective', `Retrospective run failed: ${message}`);
 		await query(
 			"UPDATE runs SET completed_at = now(), status = 'failed', error_log = $1 WHERE id = $2",
-			[message, runId],
+			[message, runId]
 		);
 		throw err;
 	}

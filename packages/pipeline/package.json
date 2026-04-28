@@ -1,32 +1,33 @@
 {
-  "name": "@pulsar/pipeline",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "pipeline": "tsx run-once.ts",
-    "pipeline-scheduler": "tsx index.ts",
-    "retrospective": "tsx run-retrospective.ts"
-  },
-  "dependencies": {
-    "@pulsar/shared": "workspace:*",
-    "@pulsar/web": "workspace:*",
-    "dotenv": "^17.4.2",
-    "node-cron": "^3.0.3",
-    "nodemailer": "^6.9.16",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5",
-    "rocketride": "^1.0.6",
-    "ws": "^8.18.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.0",
-    "@types/node-cron": "^3.0.11",
-    "@types/nodemailer": "^6.4.17",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "@types/ws": "^8.5.13",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
-  }
+	"name": "@pulsar/pipeline",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"pipeline": "tsx run-once.ts",
+		"pipeline-scheduler": "tsx index.ts",
+		"retrospective": "tsx run-retrospective.ts",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@pulsar/shared": "workspace:*",
+		"@pulsar/web": "workspace:*",
+		"dotenv": "^17.4.2",
+		"node-cron": "^3.0.3",
+		"nodemailer": "^6.9.16",
+		"react": "^19.2.5",
+		"react-dom": "^19.2.5",
+		"rocketride": "^1.0.6",
+		"ws": "^8.18.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.0",
+		"@types/node-cron": "^3.0.11",
+		"@types/nodemailer": "^6.4.17",
+		"@types/react": "^19.2.14",
+		"@types/react-dom": "^19.2.3",
+		"@types/ws": "^8.5.13",
+		"tsx": "^4.19.2",
+		"typescript": "^5.7.2"
+	}
 }

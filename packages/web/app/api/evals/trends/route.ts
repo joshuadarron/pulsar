@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { query } from "@pulsar/shared/db/postgres";
+import { type NextRequest, NextResponse } from 'next/server';
+import { query } from '@pulsar/shared/db/postgres';
 
 export async function GET(request: NextRequest) {
 	const url = request.nextUrl;
-	const days = parseInt(url.searchParams.get("days") || "90");
+	const days = Number.parseInt(url.searchParams.get('days') || '90');
 
 	const [reportTrend, draftPlatformPass, validationFailures] = await Promise.all([
 		query<{ judged_at: string; dimension: string; score: number }>(
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 			   AND score IS NOT NULL
 			   AND judged_at > now() - ($1::int || ' days')::interval
 			 ORDER BY judged_at`,
-			[days],
+			[days]
 		),
 		query<{ platform: string; total: number; passed: number }>(
 			`SELECT target_id AS platform,
@@ -25,21 +25,21 @@ export async function GET(request: NextRequest) {
 			   AND passed IS NOT NULL
 			   AND judged_at > now() - interval '30 days'
 			 GROUP BY target_id
-			 ORDER BY target_id`,
+			 ORDER BY target_id`
 		),
 		query<{ pipeline_name: string; failures: number }>(
 			`SELECT pipeline_name, COUNT(*) FILTER (WHERE passed = false)::int AS failures
 			 FROM pipeline_validations
 			 WHERE validated_at > now() - interval '30 days'
 			 GROUP BY pipeline_name
-			 ORDER BY pipeline_name`,
-		),
+			 ORDER BY pipeline_name`
+		)
 	]);
 
 	return NextResponse.json({
 		reportTrend: reportTrend.rows,
 		draftPlatformPass: draftPlatformPass.rows,
 		validationFailures: validationFailures.rows,
-		days,
+		days
 	});
 }

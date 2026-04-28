@@ -1,35 +1,36 @@
 {
-  "name": "@pulsar/web",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module",
-  "exports": {
-    "./report-template": "./components/report/ReportTemplate.tsx"
-  },
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
-  },
-  "dependencies": {
-    "@pulsar/shared": "workspace:*",
-    "@auth/core": "^0.37.0",
-    "neo4j-driver": "^5.27.0",
-    "next": "^15.1.0",
-    "next-auth": "^5.0.0-beta.25",
-    "puppeteer": "^23.10.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-force-graph-2d": "^1.25.0",
-    "recharts": "^2.15.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.16",
-    "typescript": "^5.7.2"
-  }
+	"name": "@pulsar/web",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./report-template": "./components/report/ReportTemplate.tsx"
+	},
+	"scripts": {
+		"dev": "next dev",
+		"build": "next build",
+		"start": "next start",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@pulsar/shared": "workspace:*",
+		"@auth/core": "^0.37.0",
+		"neo4j-driver": "^5.27.0",
+		"next": "^15.1.0",
+		"next-auth": "^5.0.0-beta.25",
+		"puppeteer": "^23.10.0",
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0",
+		"react-force-graph-2d": "^1.25.0",
+		"recharts": "^2.15.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.0",
+		"@types/react": "^19.0.0",
+		"@types/react-dom": "^19.0.0",
+		"autoprefixer": "^10.4.20",
+		"postcss": "^8.4.49",
+		"tailwindcss": "^3.4.16",
+		"typescript": "^5.7.2"
+	}
 }

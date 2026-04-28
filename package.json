@@ -1,21 +1,36 @@
 {
-  "name": "pulsar",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "pnpm --filter @pulsar/web dev",
-    "build": "pnpm --filter @pulsar/web build",
-    "start": "pnpm --filter @pulsar/web start",
-    "scrape": "pnpm --filter @pulsar/scraper scrape",
-    "scrape-scheduler": "pnpm --filter @pulsar/scraper scrape-scheduler",
-    "pipeline": "pnpm --filter @pulsar/pipeline pipeline",
-    "pipeline-scheduler": "pnpm --filter @pulsar/pipeline pipeline-scheduler",
-    "db:migrate": "pnpm --filter @pulsar/shared db:migrate"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "puppeteer"
-    ]
-  }
+	"name": "pulsar",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": ">=22.3.0",
+		"pnpm": ">=10.0.0"
+	},
+	"scripts": {
+		"dev": "pnpm --filter @pulsar/web dev",
+		"build": "pnpm --filter @pulsar/web build",
+		"start": "pnpm --filter @pulsar/web start",
+		"scrape": "pnpm --filter @pulsar/scraper scrape",
+		"scrape-scheduler": "pnpm --filter @pulsar/scraper scrape-scheduler",
+		"pipeline": "pnpm --filter @pulsar/pipeline pipeline",
+		"pipeline-scheduler": "pnpm --filter @pulsar/pipeline pipeline-scheduler",
+		"db:migrate": "pnpm --filter @pulsar/shared db:migrate",
+		"typecheck": "pnpm -r typecheck",
+		"lint": "biome lint .",
+		"lint:fix": "biome lint --write .",
+		"format": "biome format --write .",
+		"format:check": "biome format .",
+		"check": "biome check .",
+		"test": "node --import tsx --experimental-test-module-mocks --test 'packages/**/*.test.ts'",
+		"test:watch": "node --import tsx --experimental-test-module-mocks --test --watch 'packages/**/*.test.ts'"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
+		"tsx": "^4.19.2",
+		"typescript": "^5.7.2"
+	},
+	"pnpm": {
+		"onlyBuiltDependencies": ["puppeteer"]
+	}
 }

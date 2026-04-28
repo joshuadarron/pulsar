@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { query } from "@pulsar/shared/db/postgres";
+import { type NextRequest, NextResponse } from 'next/server';
+import { query } from '@pulsar/shared/db/postgres';
 
 interface RecentRunRow {
 	run_id: string;
@@ -16,7 +16,7 @@ interface RecentRunRow {
 
 export async function GET(request: NextRequest) {
 	const url = request.nextUrl;
-	const days = parseInt(url.searchParams.get("days") || "30");
+	const days = Number.parseInt(url.searchParams.get('days') || '30');
 
 	const result = await query<RecentRunRow>(
 		`WITH recent_runs AS (
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
 		LEFT JOIN draft_scores ds ON ds.run_id = r.run_id
 		LEFT JOIN validation_counts vc ON vc.run_id = r.run_id
 		ORDER BY r.started_at DESC`,
-		[days],
+		[days]
 	);
 
 	return NextResponse.json({ runs: result.rows, days });

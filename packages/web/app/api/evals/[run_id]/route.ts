@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { query } from "@pulsar/shared/db/postgres";
+import { type NextRequest, NextResponse } from 'next/server';
+import { query } from '@pulsar/shared/db/postgres';
 
 export async function GET(
 	_request: NextRequest,
-	{ params }: { params: Promise<{ run_id: string }> },
+	{ params }: { params: Promise<{ run_id: string }> }
 ) {
 	const { run_id } = await params;
 
@@ -15,10 +15,9 @@ export async function GET(
 			status: string;
 			run_type: string;
 			trigger: string;
-		}>(
-			"SELECT id, started_at, completed_at, status, run_type, trigger FROM runs WHERE id = $1",
-			[run_id],
-		),
+		}>('SELECT id, started_at, completed_at, status, run_type, trigger FROM runs WHERE id = $1', [
+			run_id
+		]),
 		query<{
 			id: string;
 			pipeline_name: string;
@@ -27,8 +26,8 @@ export async function GET(
 			checks: { check_name: string; passed: boolean; detail?: string }[];
 			error_summary: string | null;
 		}>(
-			"SELECT id, pipeline_name, validated_at, passed, checks, error_summary FROM pipeline_validations WHERE run_id = $1 ORDER BY validated_at",
-			[run_id],
+			'SELECT id, pipeline_name, validated_at, passed, checks, error_summary FROM pipeline_validations WHERE run_id = $1 ORDER BY validated_at',
+			[run_id]
 		),
 		query<{
 			id: string;
@@ -43,7 +42,7 @@ export async function GET(
 		}>(
 			`SELECT id, target_type, target_id, dimension, score, passed, rationale, judge_model, judged_at
 			 FROM evaluations WHERE run_id = $1 ORDER BY target_type, target_id, dimension`,
-			[run_id],
+			[run_id]
 		),
 		query<{
 			id: string;
@@ -65,18 +64,18 @@ export async function GET(
 			 LEFT JOIN retrospective_grades g ON g.prediction_id = p.id
 			 WHERE r.run_id = $1
 			 ORDER BY p.extracted_at`,
-			[run_id],
-		),
+			[run_id]
+		)
 	]);
 
 	if (runRow.rows.length === 0) {
-		return NextResponse.json({ error: "Run not found" }, { status: 404 });
+		return NextResponse.json({ error: 'Run not found' }, { status: 404 });
 	}
 
 	return NextResponse.json({
 		run: runRow.rows[0],
 		validations: validations.rows,
 		evaluations: evaluations.rows,
-		predictions: predictions.rows,
+		predictions: predictions.rows
 	});
 }

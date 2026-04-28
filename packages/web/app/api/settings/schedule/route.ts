@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { query } from '@pulsar/shared/db/postgres';
 
 interface ScheduleRow {
@@ -12,7 +12,7 @@ interface ScheduleRow {
 
 export async function GET() {
 	const result = await query<ScheduleRow>(
-		'SELECT id, type, hour, minute, days, active FROM schedules ORDER BY type, hour, minute',
+		'SELECT id, type, hour, minute, days, active FROM schedules ORDER BY type, hour, minute'
 	);
 	return NextResponse.json({ schedules: result.rows });
 }
@@ -24,8 +24,18 @@ export async function POST(request: NextRequest) {
 	if (!['scrape', 'pipeline'].includes(type)) {
 		return NextResponse.json({ error: 'type must be scrape or pipeline' }, { status: 400 });
 	}
-	if (typeof hour !== 'number' || typeof minute !== 'number' || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-		return NextResponse.json({ error: 'Valid hour (0-23) and minute (0-59) required' }, { status: 400 });
+	if (
+		typeof hour !== 'number' ||
+		typeof minute !== 'number' ||
+		hour < 0 ||
+		hour > 23 ||
+		minute < 0 ||
+		minute > 59
+	) {
+		return NextResponse.json(
+			{ error: 'Valid hour (0-23) and minute (0-59) required' },
+			{ status: 400 }
+		);
 	}
 	if (!Array.isArray(days) || days.length === 0 || days.some((d: number) => d < 0 || d > 6)) {
 		return NextResponse.json({ error: 'days must be array of 0-6 (Sun-Sat)' }, { status: 400 });
@@ -35,15 +45,18 @@ export async function POST(request: NextRequest) {
 
 	const existing = await query(
 		'SELECT id FROM schedules WHERE type = $1 AND hour = $2 AND minute = $3 AND days = $4',
-		[type, hour, minute, sortedDays],
+		[type, hour, minute, sortedDays]
 	);
 	if (existing.rows.length > 0) {
-		return NextResponse.json({ error: 'A schedule with this type, time, and days already exists' }, { status: 409 });
+		return NextResponse.json(
+			{ error: 'A schedule with this type, time, and days already exists' },
+			{ status: 409 }
+		);
 	}
 
 	const result = await query<{ id: string }>(
 		'INSERT INTO schedules (type, hour, minute, days) VALUES ($1, $2, $3, $4) RETURNING id',
-		[type, hour, minute, sortedDays],
+		[type, hour, minute, sortedDays]
 	);
 
 	return NextResponse.json({ id: result.rows[0].id });
@@ -81,20 +94,25 @@ export async function PATCH(request: NextRequest) {
 	if (typeof hour === 'number' || Array.isArray(days)) {
 		const current = await query<ScheduleRow>(
 			'SELECT type, hour, minute, days FROM schedules WHERE id = $1',
-			[id],
+			[id]
 		);
 		if (current.rows.length > 0) {
 			const row = current.rows[0];
 			const newHour = typeof hour === 'number' ? hour : row.hour;
 			const newMinute = typeof minute === 'number' ? minute : row.minute;
-			const newDays = Array.isArray(days) ? [...days].sort((a: number, b: number) => a - b) : row.days;
+			const newDays = Array.isArray(days)
+				? [...days].sort((a: number, b: number) => a - b)
+				: row.days;
 
 			const conflict = await query(
 				'SELECT id FROM schedules WHERE type = $1 AND hour = $2 AND minute = $3 AND days = $4 AND id != $5',
-				[row.type, newHour, newMinute, newDays, id],
+				[row.type, newHour, newMinute, newDays, id]
 			);
 			if (conflict.rows.length > 0) {
-				return NextResponse.json({ error: 'Another schedule with this type, time, and days already exists' }, { status: 409 });
+				return NextResponse.json(
+					{ error: 'Another schedule with this type, time, and days already exists' },
+					{ status: 409 }
+				);
 			}
 		}
 	}

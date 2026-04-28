@@ -1,24 +1,24 @@
-import { NextRequest, NextResponse } from "next/server";
-import { query } from "@pulsar/shared/db/postgres";
+import { type NextRequest, NextResponse } from 'next/server';
+import { query } from '@pulsar/shared/db/postgres';
 
 const VALID_OUTCOMES = new Set([
-	"confirmed",
-	"partially_confirmed",
-	"refuted",
-	"inconclusive",
-	"pending",
+	'confirmed',
+	'partially_confirmed',
+	'refuted',
+	'inconclusive',
+	'pending'
 ]);
 
 export async function GET(request: NextRequest) {
 	const url = request.nextUrl;
-	const outcomeFilter = url.searchParams.get("outcome");
-	const limit = parseInt(url.searchParams.get("limit") || "200");
+	const outcomeFilter = url.searchParams.get('outcome');
+	const limit = Number.parseInt(url.searchParams.get('limit') || '200');
 
 	const where: string[] = [];
 	const params: unknown[] = [];
 
 	if (outcomeFilter && VALID_OUTCOMES.has(outcomeFilter)) {
-		if (outcomeFilter === "pending") {
+		if (outcomeFilter === 'pending') {
 			where.push("g.id IS NULL AND r.generated_at > now() - interval '14 days'");
 		} else {
 			params.push(outcomeFilter);
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 	}
 
 	params.push(limit);
-	const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+	const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
 
 	const result = await query<{
 		prediction_id: string;
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 		 ${whereSql}
 		 ORDER BY r.generated_at DESC
 		 LIMIT $${params.length}`,
-		params,
+		params
 	);
 
 	return NextResponse.json({ predictions: result.rows });

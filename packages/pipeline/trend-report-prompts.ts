@@ -65,13 +65,11 @@ Research is for substantiation and context, not for inventing narrative the data
 
 For deeper RocketRide positioning context, scrape these pages via Firecrawl when you need feature details, install instructions, or ecosystem fit beyond what \`rocketridePackages\` provides: https://rocketride.ai/ , https://rocketride.org/ , https://pypi.org/project/rocketride/ , https://pypi.org/project/rocketride-mcp/ , https://www.npmjs.com/package/rocketride , https://marketplace.visualstudio.com/items?itemName=RocketRide.rocketride , https://open-vsx.org/extension/RocketRide/rocketride , https://rocketride-dashboard.pages.dev/ (client-side app, must use Firecrawl to render)`;
 
-
 export const SECTION_PROMPTS: Record<string, string> = {
-
-// ---------------------------------------------------------------------------
-// Pass 1, Section 1: Market Landscape
-// ---------------------------------------------------------------------------
-marketLandscape: `## Your task: Market Landscape
+	// ---------------------------------------------------------------------------
+	// Pass 1, Section 1: Market Landscape
+	// ---------------------------------------------------------------------------
+	marketLandscape: `## Your task: Market Landscape
 
 Analyze competitive movement across adjacent AI runtimes and orchestration tools. Your input data contains entity prominence rankings, technology adoption signals, and source distribution.
 
@@ -105,10 +103,10 @@ GOOD: "LangChain's mention volume dropped 18% week-over-week while LlamaIndex he
 
 BAD: "LangChain is a popular framework with many mentions. LlamaIndex is also mentioned frequently. Several new frameworks are emerging in the space. This is an exciting time for AI development."`,
 
-// ---------------------------------------------------------------------------
-// Pass 1, Section 2: Technology Trends
-// ---------------------------------------------------------------------------
-technologyTrends: `## Your task: Technology Trends
+	// ---------------------------------------------------------------------------
+	// Pass 1, Section 2: Technology Trends
+	// ---------------------------------------------------------------------------
+	technologyTrends: `## Your task: Technology Trends
 
 Analyze topic-level rise and fall across the reporting period. Your input data contains keyword frequencies with velocity deltas, topic scores with sentiment, velocity outliers, topic co-occurrence, and emerging topics.
 
@@ -145,10 +143,10 @@ GOOD: "MCP (Model Context Protocol) is the period's clearest velocity outlier, w
 
 BAD: "MCP is a trending topic this week. It has many mentions and a high trend score. It seems to be related to agents and tool use. This is an emerging area to watch."`,
 
-// ---------------------------------------------------------------------------
-// Pass 1, Section 3: Developer Signals
-// ---------------------------------------------------------------------------
-developerSignals: `## Your task: Developer Signals
+	// ---------------------------------------------------------------------------
+	// Pass 1, Section 3: Developer Signals
+	// ---------------------------------------------------------------------------
+	developerSignals: `## Your task: Developer Signals
 
 Analyze pain points, feature gaps, and the voices driving conversation. Your input data contains sentiment breakdown, top authors, and the most-discussed articles.
 
@@ -181,10 +179,10 @@ GOOD: "Sentiment this period skews 54% neutral, 31% positive, 15% negative. The 
 
 BAD: "Sentiment is mostly positive which shows the AI ecosystem is healthy. Many authors are writing about AI topics. The top discussions have lots of comments which shows high engagement."`,
 
-// ---------------------------------------------------------------------------
-// Pass 2, Section 4: Content Recommendations
-// ---------------------------------------------------------------------------
-contentRecommendations: `## Your task: Content Recommendations
+	// ---------------------------------------------------------------------------
+	// Pass 2, Section 4: Content Recommendations
+	// ---------------------------------------------------------------------------
+	contentRecommendations: `## Your task: Content Recommendations
 
 Derive actionable DevRel and marketing content ideas from the analysis in sections 1 through 3. You receive only the text outputs from the previous three sections, not their raw data.
 
@@ -222,10 +220,10 @@ GOOD: "1. 'Why your agent framework choice matters less than your runtime' (blog
 
 BAD: "1. Write a blog post about AI trends. 2. Create a tutorial about RocketRide. 3. Post on social media about new features."`,
 
-// ---------------------------------------------------------------------------
-// Pass 3, Section 5: Executive Summary
-// ---------------------------------------------------------------------------
-executiveSummary: `## Your task: Executive Summary
+	// ---------------------------------------------------------------------------
+	// Pass 3, Section 5: Executive Summary
+	// ---------------------------------------------------------------------------
+	executiveSummary: `## Your task: Executive Summary
 
 Write a 3 to 5 sentence synthesis for executives who will not scroll past this section. You receive the text outputs from all four prior sections.
 

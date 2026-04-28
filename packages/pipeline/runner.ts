@@ -18,10 +18,10 @@ import type {
 	GraphSnapshot,
 	GraphSnapshotCluster,
 	GraphSnapshotEntity,
-	EmergingEntity,
+	EmergingEntity
 } from '@pulsar/shared/types';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const PIPELINES_DIR = path.resolve(fileURLToPath(import.meta.url), '../pipelines');
 const TREND_REPORT_PIPE = path.join(PIPELINES_DIR, 'trend-report.pipe');
@@ -29,14 +29,23 @@ const ROCKETRIDE_CONTEXT_PIPE = path.join(PIPELINES_DIR, 'rocketride-context.pip
 
 const MAX_SNAPSHOT_AGE_HOURS = 48;
 
-async function validateAndPersist(runId: string, pipelineName: string, output: unknown): Promise<void> {
+async function validateAndPersist(
+	runId: string,
+	pipelineName: string,
+	output: unknown
+): Promise<void> {
 	const suite = VALIDATOR_SUITES[pipelineName];
 	if (!suite) return;
 	try {
 		const result = runValidators(suite, output);
 		await persistValidation(runId, pipelineName, result);
 		if (!result.passed) {
-			await logRun(runId, 'warn', 'validation', `${pipelineName} validation failures: ${result.error_summary}`);
+			await logRun(
+				runId,
+				'warn',
+				'validation',
+				`${pipelineName} validation failures: ${result.error_summary}`
+			);
 		}
 	} catch (err) {
 		await logRun(runId, 'warn', 'validation', `${pipelineName} validator threw: ${err}`);
@@ -65,6 +74,7 @@ interface RocketRideContext {
 
 async function fetchRocketRideContext(
 	client: Awaited<ReturnType<typeof getClient>>,
+	runId?: string
 ): Promise<RocketRideContext | null> {
 	try {
 		const result = await client.use({ filepath: ROCKETRIDE_CONTEXT_PIPE });
@@ -72,7 +82,16 @@ async function fetchRocketRideContext(
 		await client.terminate(result.token);
 
 		const raw = response?.answers?.[0];
-		if (!raw) return null;
+		if (!raw) {
+			if (runId)
+				await logRun(
+					runId,
+					'warn',
+					'context-debug',
+					'rocketride-context returned no answer (response.answers[0] empty)'
+				);
+			return null;
+		}
 
 		let ctx: RocketRideContext;
 		if (typeof raw === 'object' && !Array.isArray(raw)) {
@@ -82,6 +101,29 @@ async function fetchRocketRideContext(
 			ctx = extractJson<RocketRideContext>(str);
 		}
 
+		// Diagnostic: log the actual shape when expected keys are missing so we
+		// can identify whether the agent wrapped, echoed, or emitted the wrong
+		// envelope. Fires only when packages or sites is malformed.
+		if (runId) {
+			const ctxRecord = ctx as unknown as Record<string, unknown>;
+			const packagesOk = typeof ctxRecord.packages === 'object' && ctxRecord.packages !== null;
+			const sitesOk = typeof ctxRecord.sites === 'object' && ctxRecord.sites !== null;
+			if (!packagesOk || !sitesOk) {
+				const rawType = Array.isArray(raw) ? 'array' : typeof raw;
+				const rawKeys =
+					raw && typeof raw === 'object' && !Array.isArray(raw)
+						? Object.keys(raw as Record<string, unknown>).join(',')
+						: 'n/a';
+				const preview = typeof raw === 'string' ? raw : JSON.stringify(raw ?? null);
+				await logRun(
+					runId,
+					'warn',
+					'context-debug',
+					`response missing packages/sites. raw_type=${rawType} keys=${rawKeys} preview=${preview.slice(0, 800)}`
+				);
+			}
+		}
+
 		// Ensure fetched_at is set (agent may omit it)
 		if (!ctx.fetched_at) {
 			ctx.fetched_at = new Date().toISOString();
@@ -89,6 +131,7 @@ async function fetchRocketRideContext(
 		return ctx;
 	} catch (err) {
 		console.error('[Runner] Failed to fetch RocketRide context:', err);
+		if (runId) await logRun(runId, 'warn', 'context-debug', `fetchRocketRideContext threw: ${err}`);
 		return null;
 	}
 }
@@ -126,11 +169,13 @@ function neoToNum(value: unknown): number {
 	return value as number;
 }
 
-async function safeDropProjection(session: ReturnType<typeof getSession>, name: string): Promise<void> {
-	const exists = await session.run(
-		'CALL gds.graph.exists($name) YIELD exists RETURN exists',
-		{ name },
-	);
+async function safeDropProjection(
+	session: ReturnType<typeof getSession>,
+	name: string
+): Promise<void> {
+	const exists = await session.run('CALL gds.graph.exists($name) YIELD exists RETURN exists', {
+		name
+	});
 	if (exists.records[0]?.get('exists')) {
 		await session.run('CALL gds.graph.drop($name) YIELD graphName RETURN graphName', { name });
 	}
@@ -158,17 +203,22 @@ function buildEntityImportance(rows: PageRankRow[]): GraphSnapshotEntity[] {
 		type: row.type,
 		pagerank_score: row.pagerank_score,
 		pagerank_rank: idx + 1,
-		mention_count: row.mention_count,
+		mention_count: row.mention_count
 	}));
 }
 
 async function runGraphSnapshot(
 	_client: Awaited<ReturnType<typeof getClient>>,
-	runId: string,
+	runId: string
 ): Promise<string | null> {
 	const session = getSession();
 	try {
-		await logRun(runId, 'info', 'graph-snapshot', 'Computing graph snapshot (Louvain + PageRank)...');
+		await logRun(
+			runId,
+			'info',
+			'graph-snapshot',
+			'Computing graph snapshot (Louvain + PageRank)...'
+		);
 
 		// Louvain on filtered Topics.
 		await safeDropProjection(session, 'topic_louvain_graph');
@@ -179,19 +229,19 @@ async function runGraphSnapshot(
 					'topic_louvain_graph',
 					'MATCH (t:Topic) WHERE t.lastSeen > datetime() - duration({days: 7}) AND COUNT { (t)<-[:TAGGED_WITH]-() } >= 3 RETURN id(t) AS id',
 					'MATCH (t1:Topic)-[r:RELATED_TO]-(t2:Topic) WHERE t1.lastSeen > datetime() - duration({days: 7}) AND t2.lastSeen > datetime() - duration({days: 7}) AND COUNT { (t1)<-[:TAGGED_WITH]-() } >= 3 AND COUNT { (t2)<-[:TAGGED_WITH]-() } >= 3 RETURN id(t1) AS source, id(t2) AS target, r.weight AS weight'
-				) YIELD graphName, nodeCount, relationshipCount RETURN graphName, nodeCount, relationshipCount`,
+				) YIELD graphName, nodeCount, relationshipCount RETURN graphName, nodeCount, relationshipCount`
 			);
 			const louvainResult = await session.run(
 				`CALL gds.louvain.stream('topic_louvain_graph', { relationshipWeightProperty: 'weight' })
 				 YIELD nodeId, communityId
 				 WITH nodeId, communityId, gds.util.asNode(nodeId) AS topic
 				 RETURN communityId, topic.name AS name, topic.trendScore AS trendScore
-				 ORDER BY communityId, trendScore DESC`,
+				 ORDER BY communityId, trendScore DESC`
 			);
 			louvainRows = louvainResult.records.map((r) => ({
 				communityId: neoToNum(r.get('communityId')),
 				name: r.get('name'),
-				trendScore: neoToNum(r.get('trendScore')),
+				trendScore: neoToNum(r.get('trendScore'))
 			}));
 		} finally {
 			await safeDropProjection(session, 'topic_louvain_graph');
@@ -206,20 +256,20 @@ async function runGraphSnapshot(
 					'entity_pagerank_graph',
 					'MATCH (e:Entity) RETURN id(e) AS id',
 					'MATCH (e1:Entity)<-[:MENTIONS]-(a:Article)-[:MENTIONS]->(e2:Entity) WHERE id(e1) < id(e2) WITH e1, e2, count(a) AS coMentionCount RETURN id(e1) AS source, id(e2) AS target, coMentionCount AS weight'
-				) YIELD graphName, nodeCount, relationshipCount RETURN graphName, nodeCount, relationshipCount`,
+				) YIELD graphName, nodeCount, relationshipCount RETURN graphName, nodeCount, relationshipCount`
 			);
 			const prResult = await session.run(
 				`CALL gds.pageRank.stream('entity_pagerank_graph', { relationshipWeightProperty: 'weight' })
 				 YIELD nodeId, score
 				 WITH nodeId, score, gds.util.asNode(nodeId) AS entity
 				 RETURN entity.name AS name, entity.type AS type, score AS pagerank_score, COUNT { (entity)<-[:MENTIONS]-() } AS mention_count
-				 ORDER BY score DESC`,
+				 ORDER BY score DESC`
 			);
 			pageRankRows = prResult.records.map((r) => ({
 				name: r.get('name'),
 				type: r.get('type'),
 				pagerank_score: neoToNum(r.get('pagerank_score')),
-				mention_count: neoToNum(r.get('mention_count')),
+				mention_count: neoToNum(r.get('mention_count'))
 			}));
 		} finally {
 			await safeDropProjection(session, 'entity_pagerank_graph');
@@ -235,8 +285,8 @@ async function runGraphSnapshot(
 				louvain_filter: 'lastSeen > 7d AND article_count >= 3',
 				total_topics_clustered: louvainRows.length,
 				total_entities_ranked: pageRankRows.length,
-				gds_version: gdsVersion,
-			},
+				gds_version: gdsVersion
+			}
 		};
 
 		await validateAndPersist(runId, 'graph-snapshot.pipe', envelope);
@@ -249,7 +299,7 @@ async function runGraphSnapshot(
 				runId,
 				'warn',
 				'graph-snapshot',
-				`Snapshot empty (gds_version=${gdsVersion}, louvain_rows=${louvainRows.length}, pr_rows=${pageRankRows.length}), not persisting`,
+				`Snapshot empty (gds_version=${gdsVersion}, louvain_rows=${louvainRows.length}, pr_rows=${pageRankRows.length}), not persisting`
 			);
 			return null;
 		}
@@ -261,8 +311,8 @@ async function runGraphSnapshot(
 				runId,
 				JSON.stringify(envelope.topic_clusters),
 				JSON.stringify(envelope.entity_importance),
-				JSON.stringify(envelope.metadata),
-			],
+				JSON.stringify(envelope.metadata)
+			]
 		);
 
 		const snapshotId = insertResult.rows[0].id;
@@ -270,7 +320,7 @@ async function runGraphSnapshot(
 			runId,
 			'success',
 			'graph-snapshot',
-			`Snapshot saved: ${snapshotId} (${envelope.topic_clusters.length} clusters, ${envelope.entity_importance.length} entities)`,
+			`Snapshot saved: ${snapshotId} (${envelope.topic_clusters.length} clusters, ${envelope.entity_importance.length} entities)`
 		);
 		return snapshotId;
 	} catch (err) {
@@ -283,14 +333,14 @@ async function runGraphSnapshot(
 
 async function warnIfSnapshotStale(runId: string): Promise<void> {
 	const result = await query<{ computed_at: Date }>(
-		'SELECT computed_at FROM graph_snapshots ORDER BY computed_at DESC LIMIT 1',
+		'SELECT computed_at FROM graph_snapshots ORDER BY computed_at DESC LIMIT 1'
 	);
 	if (result.rows.length === 0) {
 		await logRun(
 			runId,
 			'warn',
 			'graph-snapshot',
-			'No graph snapshots exist yet, trend report will run without algorithm-derived fields',
+			'No graph snapshots exist yet, trend report will run without algorithm-derived fields'
 		);
 		return;
 	}
@@ -301,7 +351,7 @@ async function warnIfSnapshotStale(runId: string): Promise<void> {
 			runId,
 			'warn',
 			'graph-snapshot',
-			`Latest graph snapshot is ${ageHours.toFixed(1)}h old (>${MAX_SNAPSHOT_AGE_HOURS}h), trend report fields may be stale`,
+			`Latest graph snapshot is ${ageHours.toFixed(1)}h old (>${MAX_SNAPSHOT_AGE_HOURS}h), trend report fields may be stale`
 		);
 	}
 }
@@ -312,22 +362,22 @@ async function loadGraphSnapshots(): Promise<{
 }> {
 	const currentResult = await query<GraphSnapshot>(
 		`SELECT id, run_id, computed_at, topic_clusters, entity_importance, metadata
-		 FROM graph_snapshots ORDER BY computed_at DESC LIMIT 1`,
+		 FROM graph_snapshots ORDER BY computed_at DESC LIMIT 1`
 	);
 	const weekAgoResult = await query<GraphSnapshot>(
 		`SELECT id, run_id, computed_at, topic_clusters, entity_importance, metadata
 		 FROM graph_snapshots WHERE computed_at <= now() - interval '7 days'
-		 ORDER BY computed_at DESC LIMIT 1`,
+		 ORDER BY computed_at DESC LIMIT 1`
 	);
 	return {
 		current: currentResult.rows[0] ?? null,
-		weekAgo: weekAgoResult.rows[0] ?? null,
+		weekAgo: weekAgoResult.rows[0] ?? null
 	};
 }
 
 function computeEmergingEntities(
 	current: GraphSnapshot | null,
-	weekAgo: GraphSnapshot | null,
+	weekAgo: GraphSnapshot | null
 ): EmergingEntity[] {
 	if (!current || !weekAgo) return [];
 	const weekAgoByName = new Map(weekAgo.entity_importance.map((e) => [e.name, e]));
@@ -351,7 +401,7 @@ function computeEmergingEntities(
 				prior_mentions: prior?.mention_count ?? 0,
 				mention_growth_multiplier: prior?.mention_count
 					? e.mention_count / prior.mention_count
-					: null,
+					: null
 			};
 		});
 }
@@ -360,7 +410,10 @@ function computeEmergingEntities(
 // Pipeline token tracking (for cancellation)
 // ---------------------------------------------------------------------------
 
-const activeRuns = new Map<string, { client: Awaited<ReturnType<typeof getClient>>; token: string; aborted: boolean }>();
+const activeRuns = new Map<
+	string,
+	{ client: Awaited<ReturnType<typeof getClient>>; token: string; aborted: boolean }
+>();
 
 export function cancelRun(runId: string): boolean {
 	const active = activeRuns.get(runId);
@@ -374,7 +427,11 @@ export function isRunCancelled(runId: string): boolean {
 	return activeRuns.get(runId)?.aborted === true;
 }
 
-function setActiveToken(runId: string, client: Awaited<ReturnType<typeof getClient>>, token: string) {
+function setActiveToken(
+	runId: string,
+	client: Awaited<ReturnType<typeof getClient>>,
+	token: string
+) {
 	const existing = activeRuns.get(runId);
 	if (existing?.aborted) throw new Error('Run was cancelled');
 	activeRuns.set(runId, { client, token, aborted: existing?.aborted ?? false });
@@ -400,48 +457,75 @@ async function runSection(
 	client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
 	sectionKey: string,
-	data: unknown,
+	data: unknown
 ): Promise<SectionResponse> {
 	checkCancelled(runId);
 
 	const payload = {
 		prompt: SECTION_PROMPTS[sectionKey],
-		data,
+		data
 	};
 
 	const result = await client.use({ filepath: TREND_REPORT_PIPE });
 	const token = result.token;
 	setActiveToken(runId, client, token);
 
-	const response = await client.send(
-		token,
-		JSON.stringify(payload),
-		{},
-		'application/json',
-	);
+	const response = await client.send(token, JSON.stringify(payload), {}, 'application/json');
 
 	await client.terminate(token);
 
 	const raw = response?.answers?.[0];
 
-	// If RocketRide already parsed the response into an object with a text field, use it
+	// Build the parsed result, then check shape and log diagnostics if the
+	// returned object lacks a usable text field. Single return point at end.
+	let parsed: SectionResponse;
+
 	if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
 		const obj = raw as Record<string, unknown>;
 		if (typeof obj.text === 'string') {
-			return {
+			parsed = {
 				text: obj.text,
-				...(Array.isArray(obj.research) ? { research: obj.research as ResearchCitation[] } : {}),
+				...(Array.isArray(obj.research) ? { research: obj.research as ResearchCitation[] } : {})
 			};
+		} else {
+			// Object response without a top-level text key. Stringify and pass
+			// through extractJson so we surface the same shape we used to.
+			const str = JSON.stringify(raw);
+			try {
+				parsed = extractJson<SectionResponse>(str);
+			} catch {
+				parsed = { text: str.trim() || 'Analysis could not be generated for this section.' };
+			}
+		}
+	} else {
+		const str = typeof raw === 'string' ? raw : JSON.stringify(raw ?? '{}');
+		try {
+			parsed = extractJson<SectionResponse>(str);
+		} catch {
+			parsed = { text: str.trim() || 'Analysis could not be generated for this section.' };
 		}
 	}
 
-	// Otherwise parse from string (handles JSON, Python-style dicts, markdown fences)
-	const str = typeof raw === 'string' ? raw : JSON.stringify(raw ?? '{}');
-	try {
-		return extractJson<SectionResponse>(str);
-	} catch {
-		return { text: str.trim() || 'Analysis could not be generated for this section.' };
+	// Diagnostic: if the parsed result has no usable text, capture the raw
+	// shape so we can identify whether the agent is wrapping, echoing, or
+	// emitting tool output. Fires only on failure, no noise on success.
+	const parsedText = (parsed as { text?: unknown }).text;
+	if (typeof parsedText !== 'string' || parsedText.trim().length === 0) {
+		const rawType = Array.isArray(raw) ? 'array' : typeof raw;
+		const rawKeys =
+			raw && typeof raw === 'object' && !Array.isArray(raw)
+				? Object.keys(raw as Record<string, unknown>).join(',')
+				: 'n/a';
+		const preview = typeof raw === 'string' ? raw : JSON.stringify(raw ?? null);
+		await logRun(
+			runId,
+			'warn',
+			'trend-report-debug',
+			`[${sectionKey}] response missing text. raw_type=${rawType} keys=${rawKeys} preview=${preview.slice(0, 600)}`
+		);
 	}
+
+	return parsed;
 }
 
 // ---------------------------------------------------------------------------
@@ -456,14 +540,15 @@ async function gatherMarketLandscapeData(): Promise<MarketLandscapeData> {
 			`MATCH (e:Entity)<-[:MENTIONS]-(a:Article)
 			 WHERE a.publishedAt > datetime() - duration('P7D')
 			 RETURN e.name AS name, e.type AS type, count(a) AS mentionCount
-			 ORDER BY mentionCount DESC LIMIT 20`,
+			 ORDER BY mentionCount DESC LIMIT 20`
 		);
 		const entities = entitiesResult.records.map((r) => ({
 			name: r.get('name'),
 			type: r.get('type'),
-			mentionCount: typeof r.get('mentionCount') === 'object'
-				? r.get('mentionCount').toNumber()
-				: r.get('mentionCount'),
+			mentionCount:
+				typeof r.get('mentionCount') === 'object'
+					? r.get('mentionCount').toNumber()
+					: r.get('mentionCount')
 		}));
 
 		// Technologies: entities filtered to tool/model/language
@@ -476,13 +561,14 @@ async function gatherMarketLandscapeData(): Promise<MarketLandscapeData> {
 			`MATCH (a:Article)-[:FROM_SOURCE]->(s:Source)
 			 WHERE a.publishedAt > datetime() - duration('P7D')
 			 RETURN s.name AS source, count(a) AS articleCount
-			 ORDER BY articleCount DESC`,
+			 ORDER BY articleCount DESC`
 		);
 		const sourceDistribution = sourceResult.records.map((r) => ({
 			source: r.get('source'),
-			articleCount: typeof r.get('articleCount') === 'object'
-				? r.get('articleCount').toNumber()
-				: r.get('articleCount'),
+			articleCount:
+				typeof r.get('articleCount') === 'object'
+					? r.get('articleCount').toNumber()
+					: r.get('articleCount')
 		}));
 
 		return { entities, technologies, sourceDistribution };
@@ -499,14 +585,14 @@ async function gatherTechnologyTrendsData(): Promise<TechnologyTrendsData> {
 			`MATCH (t:Topic)
 			 WHERE t.trendScore > 0
 			 RETURN t.name AS topic, t.trendScore AS trendScore, t.category AS category
-			 ORDER BY t.trendScore DESC LIMIT 20`,
+			 ORDER BY t.trendScore DESC LIMIT 20`
 		);
 		const topics = topicsResult.records.map((r) => ({
 			topic: r.get('topic'),
 			trendScore: r.get('trendScore'),
 			sentiment: 'neutral',
 			articleCount: 0,
-			sparkline: [] as number[],
+			sparkline: [] as number[]
 		}));
 
 		// Topic co-occurrence
@@ -514,14 +600,12 @@ async function gatherTechnologyTrendsData(): Promise<TechnologyTrendsData> {
 			`MATCH (t1:Topic)-[r:RELATED_TO]-(t2:Topic)
 			 WHERE r.weight > 2
 			 RETURN t1.name AS topicA, t2.name AS topicB, r.weight AS count
-			 ORDER BY count DESC LIMIT 15`,
+			 ORDER BY count DESC LIMIT 15`
 		);
 		const topicCoOccurrence = coOccurrenceResult.records.map((r) => ({
 			topicA: r.get('topicA'),
 			topicB: r.get('topicB'),
-			count: typeof r.get('count') === 'object'
-				? r.get('count').toNumber()
-				: r.get('count'),
+			count: typeof r.get('count') === 'object' ? r.get('count').toNumber() : r.get('count')
 		}));
 
 		await session.close();
@@ -531,11 +615,11 @@ async function gatherTechnologyTrendsData(): Promise<TechnologyTrendsData> {
 			`SELECT unnest(topic_tags) AS keyword, count(*) AS count
 			 FROM articles
 			 WHERE published_at > now() - interval '7 days'
-			 GROUP BY keyword ORDER BY count DESC LIMIT 20`,
+			 GROUP BY keyword ORDER BY count DESC LIMIT 20`
 		);
 		const trendingKeywords7d = keywordResult.rows.map((r) => ({
 			keyword: r.keyword,
-			count7d: parseInt(r.count),
+			count7d: Number.parseInt(r.count)
 		}));
 
 		// 30d keyword counts
@@ -543,10 +627,10 @@ async function gatherTechnologyTrendsData(): Promise<TechnologyTrendsData> {
 			`SELECT unnest(topic_tags) AS keyword, count(*) AS count
 			 FROM articles
 			 WHERE published_at > now() - interval '30 days'
-			 GROUP BY keyword ORDER BY count DESC LIMIT 30`,
+			 GROUP BY keyword ORDER BY count DESC LIMIT 30`
 		);
 		const keyword30dMap = new Map(
-			keyword30dResult.rows.map((r) => [r.keyword, parseInt(r.count)]),
+			keyword30dResult.rows.map((r) => [r.keyword, Number.parseInt(r.count)])
 		);
 
 		const keywords = trendingKeywords7d.map((k) => ({
@@ -555,7 +639,7 @@ async function gatherTechnologyTrendsData(): Promise<TechnologyTrendsData> {
 			delta:
 				k.count7d /
 					Math.max(1, ((keyword30dMap.get(k.keyword) || k.count7d) - k.count7d) / 3 || 1) -
-				1,
+				1
 		}));
 
 		// Velocity outliers: keywords with delta > 0.5
@@ -565,7 +649,7 @@ async function gatherTechnologyTrendsData(): Promise<TechnologyTrendsData> {
 			.map((k) => ({
 				topic: k.keyword,
 				spike: k.count7d,
-				baseline: k.count30d / 4,
+				baseline: k.count30d / 4
 			}));
 
 		// Emerging topics from Neo4j (recently appeared)
@@ -576,7 +660,7 @@ async function gatherTechnologyTrendsData(): Promise<TechnologyTrendsData> {
 				`MATCH (t:Topic)
 				 WHERE t.firstSeen > datetime() - duration('P14D') AND t.trendScore > 1
 				 RETURN t.name AS topic
-				 ORDER BY t.trendScore DESC LIMIT 10`,
+				 ORDER BY t.trendScore DESC LIMIT 10`
 			);
 			emergingTopics = emergingResult.records.map((r) => r.get('topic'));
 		} finally {
@@ -595,13 +679,13 @@ async function gatherDeveloperSignalsData(): Promise<DeveloperSignalsData> {
 		`SELECT COALESCE(sentiment, 'neutral') AS sentiment, count(*) AS count
 		 FROM articles
 		 WHERE published_at > now() - interval '7 days'
-		 GROUP BY sentiment`,
+		 GROUP BY sentiment`
 	);
 	const sentimentBreakdown = { positive: 0, negative: 0, neutral: 0 };
 	for (const row of sentimentResult.rows) {
 		const key = row.sentiment as keyof typeof sentimentBreakdown;
 		if (key in sentimentBreakdown) {
-			sentimentBreakdown[key] = parseInt(row.count);
+			sentimentBreakdown[key] = Number.parseInt(row.count);
 		}
 	}
 
@@ -613,14 +697,15 @@ async function gatherDeveloperSignalsData(): Promise<DeveloperSignalsData> {
 			`MATCH (au:Author)<-[:AUTHORED_BY]-(a:Article)
 			 WHERE a.publishedAt > datetime() - duration('P7D')
 			 RETURN au.handle AS handle, au.platform AS platform, count(a) AS articleCount
-			 ORDER BY articleCount DESC LIMIT 10`,
+			 ORDER BY articleCount DESC LIMIT 10`
 		);
 		topAuthors = authorsResult.records.map((r) => ({
 			handle: r.get('handle'),
 			platform: r.get('platform') || 'unknown',
-			articleCount: typeof r.get('articleCount') === 'object'
-				? r.get('articleCount').toNumber()
-				: r.get('articleCount'),
+			articleCount:
+				typeof r.get('articleCount') === 'object'
+					? r.get('articleCount').toNumber()
+					: r.get('articleCount')
 		}));
 	} finally {
 		await session.close();
@@ -637,13 +722,13 @@ async function gatherDeveloperSignalsData(): Promise<DeveloperSignalsData> {
 		 FROM articles
 		 WHERE published_at > now() - interval '7 days'
 		   AND comment_count IS NOT NULL AND comment_count > 0
-		 ORDER BY comment_count DESC LIMIT 10`,
+		 ORDER BY comment_count DESC LIMIT 10`
 	);
 	const topDiscussions = discussionsResult.rows.map((r) => ({
 		title: r.title,
 		url: r.url,
-		commentCount: parseInt(r.comment_count),
-		source: r.source_name,
+		commentCount: Number.parseInt(r.comment_count),
+		source: r.source_name
 	}));
 
 	return { sentimentBreakdown, topAuthors, topDiscussions };
@@ -656,7 +741,7 @@ async function gatherDeveloperSignalsData(): Promise<DeveloperSignalsData> {
 async function runTrendReport(
 	client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
-	rocketrideContext: RocketRideContext | null,
+	rocketrideContext: RocketRideContext | null
 ): Promise<string | null> {
 	await logRun(runId, 'info', 'trend-report', 'Starting trend report pipeline...');
 
@@ -667,7 +752,7 @@ async function runTrendReport(
 		gatherMarketLandscapeData(),
 		gatherTechnologyTrendsData(),
 		gatherDeveloperSignalsData(),
-		loadGraphSnapshots(),
+		loadGraphSnapshots()
 	]);
 
 	const topClusters = (snapshots.current?.topic_clusters ?? []).slice(0, 10);
@@ -678,41 +763,46 @@ async function runTrendReport(
 		runId,
 		'info',
 		'trend-report',
-		`Graph snapshot fields: ${topClusters.length} clusters, ${topEntities.length} entities, ${emergingEntities.length} emerging`,
+		`Graph snapshot fields: ${topClusters.length} clusters, ${topEntities.length} entities, ${emergingEntities.length} emerging`
 	);
 
 	// Article count + source count for metadata
 	const countResult = await query<{ count: string }>(
-		"SELECT count(*) AS count FROM articles WHERE published_at > now() - interval '7 days'",
+		"SELECT count(*) AS count FROM articles WHERE published_at > now() - interval '7 days'"
 	);
-	const articleCount = parseInt(countResult.rows[0].count);
+	const articleCount = Number.parseInt(countResult.rows[0].count);
 	const sourcesCount = marketData.sourceDistribution.length;
 
 	await logRun(
 		runId,
 		'info',
 		'trend-report',
-		`Data gathered: ${articleCount} articles, ${techData.topics.length} topics, ${marketData.entities.length} entities, ${sourcesCount} sources`,
+		`Data gathered: ${articleCount} articles, ${techData.topics.length} topics, ${marketData.entities.length} entities, ${sourcesCount} sources`
 	);
 
 	// --- Pass 1: sections 1, 2, 3 (sequential — RocketRide runs one pipeline at a time) ---
 	checkCancelled(runId);
-	await logRun(runId, 'info', 'trend-report', 'Pass 1: generating market_landscape, technology_trends, developer_signals...');
+	await logRun(
+		runId,
+		'info',
+		'trend-report',
+		'Pass 1: generating market_landscape, technology_trends, developer_signals...'
+	);
 
 	const marketResponse = await runSection(client, runId, 'marketLandscape', {
 		...marketData,
 		entityImportance: topEntities,
-		rocketrideContext,
+		rocketrideContext
 	});
 	const techResponse = await runSection(client, runId, 'technologyTrends', {
 		...techData,
 		topicClusters: topClusters,
-		rocketrideContext,
+		rocketrideContext
 	});
 	const signalsResponse = await runSection(client, runId, 'developerSignals', {
 		...signalsData,
 		emergingEntities,
-		rocketrideContext,
+		rocketrideContext
 	});
 
 	await logRun(runId, 'info', 'trend-report', 'Pass 1 complete.');
@@ -725,7 +815,7 @@ async function runTrendReport(
 		marketLandscape: marketResponse.text,
 		technologyTrends: techResponse.text,
 		developerSignals: signalsResponse.text,
-		rocketrideContext,
+		rocketrideContext
 	};
 	const contentResponse = await runSection(client, runId, 'contentRecommendations', pass2Input);
 
@@ -739,7 +829,7 @@ async function runTrendReport(
 		marketLandscape: marketResponse.text,
 		technologyTrends: techResponse.text,
 		developerSignals: signalsResponse.text,
-		contentRecommendations: contentResponse.text,
+		contentRecommendations: contentResponse.text
 	};
 	const summaryResponse = await runSection(client, runId, 'executiveSummary', pass3Input);
 
@@ -754,32 +844,32 @@ async function runTrendReport(
 			periodStart: weekAgo.toISOString(),
 			periodEnd: now.toISOString(),
 			sourcesCount,
-			articleCount,
+			articleCount
 		},
 		sections: {
 			marketLandscape: {
 				data: marketData,
 				text: marketResponse.text,
-				...(marketResponse.research?.length ? { research: marketResponse.research } : {}),
+				...(marketResponse.research?.length ? { research: marketResponse.research } : {})
 			},
 			technologyTrends: {
 				data: techData,
 				text: techResponse.text,
-				...(techResponse.research?.length ? { research: techResponse.research } : {}),
+				...(techResponse.research?.length ? { research: techResponse.research } : {})
 			},
 			developerSignals: {
 				data: signalsData,
 				text: signalsResponse.text,
-				...(signalsResponse.research?.length ? { research: signalsResponse.research } : {}),
+				...(signalsResponse.research?.length ? { research: signalsResponse.research } : {})
 			},
 			contentRecommendations: {
 				text: contentResponse.text,
-				...(contentResponse.research?.length ? { research: contentResponse.research } : {}),
+				...(contentResponse.research?.length ? { research: contentResponse.research } : {})
 			},
 			executiveSummary: {
-				text: summaryResponse.text,
-			},
-		},
+				text: summaryResponse.text
+			}
+		}
 	};
 
 	await validateAndPersist(runId, 'trend-report.pipe', reportData);
@@ -788,7 +878,7 @@ async function runTrendReport(
 	const reportResult = await query<{ id: string }>(
 		`INSERT INTO reports (run_id, period_start, period_end, report_data, article_count)
 		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		[runId, weekAgo, now, JSON.stringify(reportData), articleCount],
+		[runId, weekAgo, now, JSON.stringify(reportData), articleCount]
 	);
 
 	const reportId = reportResult.rows[0].id;
@@ -802,8 +892,8 @@ async function runTrendReport(
 			'New Trend Report',
 			`Report generated with ${articleCount} articles analyzed across ${sourcesCount} sources.`,
 			`/reports/${reportId}`,
-			reportId,
-		],
+			reportId
+		]
 	);
 
 	return reportId;
@@ -813,58 +903,88 @@ async function runTrendReport(
 // Content drafts pipeline (unchanged structure, updated field paths)
 // ---------------------------------------------------------------------------
 
-const DRAFT_PLATFORMS = ['hashnode', 'medium', 'devto', 'hackernews', 'linkedin', 'twitter', 'discord'];
+const DRAFT_PLATFORMS = [
+	'hashnode',
+	'medium',
+	'devto',
+	'hackernews',
+	'linkedin',
+	'twitter',
+	'discord'
+];
 
 async function runContentDrafts(
 	client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
 	reportId: string,
-	rocketrideContext: RocketRideContext | null,
+	rocketrideContext: RocketRideContext | null
 ) {
 	await logRun(runId, 'info', 'content-drafts', 'Starting content drafts pipeline...');
 
 	// Get latest report
 	const reportResult = await query<{ report_data: ReportData }>(
 		'SELECT report_data FROM reports WHERE id = $1',
-		[reportId],
+		[reportId]
 	);
 	const reportData = reportResult.rows[0].report_data;
 	const sections = reportData.sections;
 
 	// Get top 10 articles from last 24h
-	const articlesResult = await query<{ title: string; url: string; summary: string; source_name: string }>(
+	const articlesResult = await query<{
+		title: string;
+		url: string;
+		summary: string;
+		source_name: string;
+	}>(
 		`SELECT title, url, summary, source_name FROM articles
 		 WHERE published_at > now() - interval '24 hours' AND enriched_at IS NOT NULL
-		 ORDER BY score DESC NULLS LAST LIMIT 10`,
+		 ORDER BY score DESC NULLS LAST LIMIT 10`
 	);
 
-	await logRun(runId, 'info', 'content-drafts', `Using ${articlesResult.rows.length} top articles for draft generation`);
+	await logRun(
+		runId,
+		'info',
+		'content-drafts',
+		`Using ${articlesResult.rows.length} top articles for draft generation`
+	);
 
 	// Gather enrichment data for drafters
 	const [quotesResult, statsResult] = await Promise.all([
 		query<{ body: string }>(
 			`SELECT body FROM content_drafts
 			 WHERE status = 'approved'
-			 ORDER BY created_at DESC LIMIT 3`,
+			 ORDER BY created_at DESC LIMIT 3`
 		).catch(() => ({ rows: [] as { body: string }[] })),
-		query<{ source_platform: string; article_count: string; avg_score: string; total_comments: string }>(
+		query<{
+			source_platform: string;
+			article_count: string;
+			avg_score: string;
+			total_comments: string;
+		}>(
 			`SELECT source_platform, count(*) AS article_count,
 			        avg(score)::numeric(10,2) AS avg_score,
 			        sum(comment_count) AS total_comments
 			 FROM articles
 			 WHERE published_at > now() - interval '7 days'
-			 GROUP BY source_platform ORDER BY article_count DESC`,
-		).catch(() => ({ rows: [] as { source_platform: string; article_count: string; avg_score: string; total_comments: string }[] })),
+			 GROUP BY source_platform ORDER BY article_count DESC`
+		).catch(() => ({
+			rows: [] as {
+				source_platform: string;
+				article_count: string;
+				avg_score: string;
+				total_comments: string;
+			}[]
+		}))
 	]);
 
 	const quotes = quotesResult.rows.map((r) => r.body);
 	const dataPoints = {
 		platformStats: statsResult.rows.map((r) => ({
 			platform: r.source_platform,
-			articleCount: parseInt(r.article_count),
-			avgScore: parseFloat(r.avg_score),
-			totalComments: parseInt(r.total_comments),
-		})),
+			articleCount: Number.parseInt(r.article_count),
+			avgScore: Number.parseFloat(r.avg_score),
+			totalComments: Number.parseInt(r.total_comments)
+		}))
 	};
 
 	// Content-drafts receives the content_recommendations text and supporting context
@@ -873,12 +993,12 @@ async function runContentDrafts(
 			executiveSummary: sections.executiveSummary.text,
 			contentRecommendations: sections.contentRecommendations.text,
 			trendingTopics: sections.technologyTrends.data.topics.slice(0, 5),
-			emergingTopics: sections.technologyTrends.data.emergingTopics,
+			emergingTopics: sections.technologyTrends.data.emergingTopics
 		},
 		topArticles: articlesResult.rows,
 		rocketrideContext,
 		quotes,
-		dataPoints,
+		dataPoints
 	};
 
 	// Send to RocketRide
@@ -886,17 +1006,12 @@ async function runContentDrafts(
 	await logRun(runId, 'info', 'content-drafts', 'Sending data to AI for draft generation...');
 
 	const result = await client.use({
-		filepath: path.join(PIPELINES_DIR, 'content-drafts.pipe'),
+		filepath: path.join(PIPELINES_DIR, 'content-drafts.pipe')
 	});
 	const token = result.token;
 	setActiveToken(runId, client, token);
 
-	const response = await client.send(
-		token,
-		JSON.stringify(payload),
-		{},
-		'application/json',
-	);
+	const response = await client.send(token, JSON.stringify(payload), {}, 'application/json');
 
 	await client.terminate(token);
 
@@ -923,7 +1038,12 @@ async function runContentDrafts(
 				if (typeof parsed[p] === 'string') drafts[p] = parsed[p];
 			}
 		} catch {
-			await logRun(runId, 'warn', 'content-drafts', `Could not parse drafter answer. Raw (first 300 chars): ${str.slice(0, 300)}`);
+			await logRun(
+				runId,
+				'warn',
+				'content-drafts',
+				`Could not parse drafter answer. Raw (first 300 chars): ${str.slice(0, 300)}`
+			);
 		}
 	}
 
@@ -937,7 +1057,7 @@ async function runContentDrafts(
 		hackernews: { contentType: 'article' },
 		linkedin: { contentType: 'social' },
 		twitter: { contentType: 'social' },
-		discord: { contentType: 'social' },
+		discord: { contentType: 'social' }
 	};
 
 	let savedCount = 0;
@@ -953,7 +1073,7 @@ async function runContentDrafts(
 			await query(
 				`INSERT INTO content_drafts (run_id, report_id, platform, content_type, body)
 				 VALUES ($1, $2, $3, $4, $5)`,
-				[runId, reportId, platform, platformMapping[platform].contentType, content],
+				[runId, reportId, platform, platformMapping[platform].contentType, content]
 			);
 			savedCount++;
 		} catch (err) {
@@ -961,7 +1081,12 @@ async function runContentDrafts(
 		}
 	}
 
-	await logRun(runId, 'success', 'content-drafts', `Content drafts saved: ${savedCount} of ${Object.keys(drafts).length} platforms`);
+	await logRun(
+		runId,
+		'success',
+		'content-drafts',
+		`Content drafts saved: ${savedCount} of ${Object.keys(drafts).length} platforms`
+	);
 
 	if (savedCount > 0) {
 		await query(
@@ -972,8 +1097,8 @@ async function runContentDrafts(
 				'Content Drafts Ready',
 				`${savedCount} platform drafts generated and ready for review.`,
 				'/drafts',
-				reportId,
-			],
+				reportId
+			]
 		);
 	}
 
@@ -992,11 +1117,16 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 	try {
 		const runResult = await query<{ id: string }>(
 			"INSERT INTO runs (trigger, run_type) VALUES ($1, 'pipeline') RETURNING id",
-			[trigger],
+			[trigger]
 		);
 		runId = runResult.rows[0].id;
 	} catch (err: unknown) {
-		if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === '23505') {
+		if (
+			err &&
+			typeof err === 'object' &&
+			'code' in err &&
+			(err as { code: string }).code === '23505'
+		) {
 			console.log('[Pipeline] Skipped — another pipeline is already running.');
 			return { runId: null, reportId: null };
 		}
@@ -1017,7 +1147,7 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 
 		// Fetch RocketRide product context once for both pipelines
 		await logRun(runId, 'info', 'context', 'Fetching RocketRide product context...');
-		const rocketrideContext = await fetchRocketRideContext(client);
+		const rocketrideContext = await fetchRocketRideContext(client, runId);
 		if (rocketrideContext) {
 			await validateAndPersist(runId, 'rocketride-context.pipe', rocketrideContext);
 		}
@@ -1027,7 +1157,7 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 			'context',
 			rocketrideContext
 				? `RocketRide context fetched (${rocketrideContext.fetched_at})`
-				: 'Failed to fetch RocketRide context, proceeding without it',
+				: 'Failed to fetch RocketRide context, proceeding without it'
 		);
 
 		// Sequential pipeline execution: trend report, predictions extraction, content drafts
@@ -1038,7 +1168,7 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 			// Phase D.2: extract time-bounded predictions from the finished report
 			const reportRow = await query<{ report_data: ReportData }>(
 				'SELECT report_data FROM reports WHERE id = $1',
-				[reportId],
+				[reportId]
 			);
 			if (reportRow.rows.length > 0) {
 				await extractPredictions(client, runId, reportId, reportRow.rows[0].report_data);
@@ -1067,10 +1197,7 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 			}
 		}
 
-		await query(
-			"UPDATE runs SET completed_at = now(), status = 'complete' WHERE id = $1",
-			[runId],
-		);
+		await query("UPDATE runs SET completed_at = now(), status = 'complete' WHERE id = $1", [runId]);
 
 		await logRun(runId, 'success', 'complete', 'All pipelines complete');
 
@@ -1082,10 +1209,11 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 		const status = cancelled ? 'cancelled' : 'failed';
 		const message = cancelled ? 'Run was cancelled by user' : String(err);
 		await logRun(runId, 'error', 'fatal', message);
-		await query(
-			'UPDATE runs SET completed_at = now(), status = $1, error_log = $2 WHERE id = $3',
-			[status, message, runId],
-		);
+		await query('UPDATE runs SET completed_at = now(), status = $1, error_log = $2 WHERE id = $3', [
+			status,
+			message,
+			runId
+		]);
 		if (!cancelled) throw err;
 		return { runId, reportId: null };
 	}
