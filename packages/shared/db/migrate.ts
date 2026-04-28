@@ -265,6 +265,66 @@ async function migratePostgres() {
     ON retrospective_grades (graded_at DESC)
   `);
 
+	// ---------------------------------------------------------------------------
+	// Observability (RocketRide runtime event ingestion)
+	// ---------------------------------------------------------------------------
+
+	await query(`
+    CREATE TABLE IF NOT EXISTS pipeline_run_traces (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      run_id UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+      rr_token TEXT,
+      pipeline TEXT NOT NULL,
+      pipe_id INT NOT NULL,
+      op TEXT NOT NULL,
+      component TEXT,
+      trace JSONB NOT NULL,
+      result JSONB,
+      rr_seq BIGINT,
+      occurred_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
+	await query(`
+    CREATE INDEX IF NOT EXISTS idx_pipeline_run_traces_run_id
+    ON pipeline_run_traces (run_id, occurred_at)
+  `);
+
+	await query(`
+    CREATE INDEX IF NOT EXISTS idx_pipeline_run_traces_pipe
+    ON pipeline_run_traces (run_id, pipeline, pipe_id, occurred_at)
+  `);
+
+	await query(`
+    CREATE TABLE IF NOT EXISTS orphan_events (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_type TEXT NOT NULL,
+      rr_token TEXT,
+      project_id TEXT,
+      source TEXT,
+      body JSONB NOT NULL,
+      received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
+	await query(`
+    CREATE INDEX IF NOT EXISTS idx_orphan_events_received_at
+    ON orphan_events (received_at DESC)
+  `);
+
+	await query(`
+    ALTER TABLE run_logs ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'pulsar'
+  `);
+
+	await query(`
+    ALTER TABLE run_logs ADD COLUMN IF NOT EXISTS trace_id UUID
+  `);
+
+	await query(`
+    CREATE INDEX IF NOT EXISTS idx_run_logs_run_source
+    ON run_logs (run_id, source, logged_at)
+  `);
+
 	// Seed defaults if table is empty
 	await query(`
     INSERT INTO schedules (type, hour, minute, days)

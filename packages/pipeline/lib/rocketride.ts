@@ -29,3 +29,25 @@ export async function disconnectClient(): Promise<void> {
 		client = null;
 	}
 }
+
+export interface UsePipelineResult {
+	token: string;
+	response: Awaited<ReturnType<RocketRideClient['use']>>;
+}
+
+/**
+ * Centralized chokepoint for invoking a RocketRide pipeline.
+ *
+ * Currently a thin pass-through over `client.use()`. Future commits attach
+ * observability here: run-id correlation registration, `pipelineTraceLevel`
+ * enforcement, and listener wiring. Call this instead of `client.use()`
+ * directly so that work lands in one place.
+ */
+export async function usePipeline(
+	client: RocketRideClient,
+	_runId: string,
+	filepath: string
+): Promise<UsePipelineResult> {
+	const response = await client.use({ filepath });
+	return { token: response.token, response };
+}
