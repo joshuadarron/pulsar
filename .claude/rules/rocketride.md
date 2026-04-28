@@ -24,6 +24,7 @@ Full docs: `.rocketride/docs/`
 | ROCKETRIDE_COMMON_MISTAKES.md     | Before finalizing — known pitfalls to avoid                       |
 | ROCKETRIDE_python_API.md          | Python SDK — client methods, types, patterns                      |
 | ROCKETRIDE_typescript_API.md      | TypeScript SDK — client methods, types, patterns                  |
+| ROCKETRIDE_OBSERVABILITY.md       | Capturing live runtime events — DAP wire protocol, `rrext_monitor` subscription, event payload schemas, ingestion design |
 
 ## Before Writing ANY RocketRide Code
 
