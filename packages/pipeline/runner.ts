@@ -1,4 +1,4 @@
-import { getClient, disconnectClient } from './lib/rocketride.js';
+import { getClient, disconnectClient, usePipeline, terminatePipeline } from './lib/rocketride.js';
 import { sendReportEmail } from './notify.js';
 import { extractJson } from './lib/parse-json.js';
 import { runValidators, VALIDATOR_SUITES } from './lib/evals/validators.js';
@@ -334,7 +334,7 @@ export function cancelRun(runId: string): boolean {
 	const active = activeRuns.get(runId);
 	if (!active) return false;
 	active.aborted = true;
-	active.client.terminate(active.token).catch(() => {});
+	terminatePipeline(active.client, active.token).catch(() => {});
 	return true;
 }
 
@@ -383,13 +383,12 @@ async function runSection(
 		data
 	};
 
-	const result = await client.use({ filepath: TREND_REPORT_PIPE });
-	const token = result.token;
+	const { token } = await usePipeline(client, runId, TREND_REPORT_PIPE);
 	setActiveToken(runId, client, token);
 
 	const response = await client.send(token, JSON.stringify(payload), {}, 'application/json');
 
-	await client.terminate(token);
+	await terminatePipeline(client, token);
 
 	const raw = response?.answers?.[0];
 
@@ -926,15 +925,16 @@ async function runContentDrafts(
 	checkCancelled(runId);
 	await logRun(runId, 'info', 'content-drafts', 'Sending data to AI for draft generation...');
 
-	const result = await client.use({
-		filepath: path.join(PIPELINES_DIR, 'content-drafts.pipe')
-	});
-	const token = result.token;
+	const { token } = await usePipeline(
+		client,
+		runId,
+		path.join(PIPELINES_DIR, 'content-drafts.pipe')
+	);
 	setActiveToken(runId, client, token);
 
 	const response = await client.send(token, JSON.stringify(payload), {}, 'application/json');
 
-	await client.terminate(token);
+	await terminatePipeline(client, token);
 
 	// Parse JSON responses from fan-out: each drafter returns {"platform": "content"}
 	// response.answers is an array with one entry per drafter agent

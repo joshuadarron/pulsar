@@ -4,7 +4,7 @@ import { query } from '@pulsar/shared/db/postgres';
 import { logRun } from '@pulsar/shared/run-logger';
 import type { DraftEvalSummary, EvaluationSummary } from '@pulsar/shared/types';
 import { extractJson } from '../parse-json.js';
-import type { getClient } from '../rocketride.js';
+import { type getClient, terminatePipeline, usePipeline } from '../rocketride.js';
 import { CONTENT_DRAFT_RUBRIC, TREND_REPORT_RUBRIC, type RubricDimension } from './rubrics.js';
 import { runSubChecks } from './sub-checks.js';
 
@@ -40,13 +40,13 @@ interface BatchEvaluationResponse {
 
 async function callEvaluationPipe(
 	client: Awaited<ReturnType<typeof getClient>>,
+	runId: string,
 	items: BatchItem[]
 ): Promise<BatchEvaluationResponse | null> {
 	try {
-		const result = await client.use({ filepath: EVALUATION_PIPE });
-		const token = result.token;
+		const { token } = await usePipeline(client, runId, EVALUATION_PIPE);
 		const response = await client.send(token, JSON.stringify({ items }), {}, 'application/json');
-		await client.terminate(token);
+		await terminatePipeline(client, token);
 
 		const raw = response?.answers?.[0];
 		if (!raw) return null;
@@ -173,7 +173,7 @@ export async function runEvaluations(
 		)
 	];
 
-	const batch = await callEvaluationPipe(client, items);
+	const batch = await callEvaluationPipe(client, runId, items);
 	const results = batch?.results ?? [];
 
 	if (results.length === 0) {

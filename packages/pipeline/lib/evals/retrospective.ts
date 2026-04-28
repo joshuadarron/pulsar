@@ -4,7 +4,7 @@ import { query } from '@pulsar/shared/db/postgres';
 import { logRun } from '@pulsar/shared/run-logger';
 import type { RetrospectiveOutcome } from '@pulsar/shared/types';
 import { extractJson } from '../parse-json.js';
-import { getClient, disconnectClient } from '../rocketride.js';
+import { disconnectClient, getClient, terminatePipeline, usePipeline } from '../rocketride.js';
 import { JUDGE_MODEL } from './runner.js';
 
 const PIPELINES_DIR = path.resolve(fileURLToPath(import.meta.url), '../../../pipelines');
@@ -78,10 +78,9 @@ async function gradePrediction(
 			query_window: { start_date: startDate, end_date: endDate }
 		};
 
-		const result = await client.use({ filepath: RETROSPECTIVE_PIPE });
-		const token = result.token;
+		const { token } = await usePipeline(client, runId, RETROSPECTIVE_PIPE);
 		const response = await client.send(token, JSON.stringify(payload), {}, 'application/json');
-		await client.terminate(token);
+		await terminatePipeline(client, token);
 
 		const raw = response?.answers?.[0];
 		if (!raw) {
