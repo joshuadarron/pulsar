@@ -22,8 +22,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 			level: string;
 			stage: string;
 			message: string;
+			source: string | null;
+			trace_id: string | null;
 		}>(
-			'SELECT id, logged_at, level, stage, message FROM run_logs WHERE run_id = $1 ORDER BY logged_at ASC',
+			`SELECT id, logged_at, level, stage, message, source, trace_id
+			 FROM run_logs
+			 WHERE run_id = $1
+			 ORDER BY logged_at ASC`,
 			[id]
 		)
 	]);

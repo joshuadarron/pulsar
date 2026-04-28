@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import PipelineTraces from '@/components/PipelineTraces';
 import RunEvalsSection from '@/components/RunEvalsSection';
 
 interface Run {
@@ -23,7 +24,11 @@ interface LogEntry {
 	level: string;
 	stage: string;
 	message: string;
+	source: string | null;
+	trace_id: string | null;
 }
+
+type SourceFilter = 'all' | 'pulsar' | 'rocketride';
 
 function formatDuration(startedAt: string, completedAt: string | null): string {
 	const start = new Date(startedAt).getTime();
@@ -58,6 +63,7 @@ export default function RunDetailPage() {
 	const [duration, setDuration] = useState('');
 	const [loading, setLoading] = useState(true);
 	const [cancelling, setCancelling] = useState(false);
+	const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
 	const logEndRef = useRef<HTMLDivElement>(null);
 
 	// Fetch run data and poll while running
@@ -115,14 +121,20 @@ export default function RunDetailPage() {
 		return <p className="py-20 text-center text-gray-400 dark:text-neutral-500">Run not found.</p>;
 	}
 
-	// Derive unique stages for the timeline
-	const stages = [...new Map(logs.map((l) => [l.stage, l])).keys()];
+	// Stage timeline derives from Pulsar-side logs only — RR stages are too
+	// granular to be useful as phase badges and would dwarf the timeline.
+	const pulsarLogs = logs.filter((l) => (l.source ?? 'pulsar') === 'pulsar');
+	const stages = [...new Map(pulsarLogs.map((l) => [l.stage, l])).keys()];
 	const stageStatus = (stage: string) => {
-		const stageLogs = logs.filter((l) => l.stage === stage);
+		const stageLogs = pulsarLogs.filter((l) => l.stage === stage);
 		if (stageLogs.some((l) => l.level === 'error')) return 'error';
 		if (stageLogs.some((l) => l.level === 'success')) return 'success';
 		return 'running';
 	};
+
+	const filteredLogs =
+		sourceFilter === 'all' ? logs : logs.filter((l) => (l.source ?? 'pulsar') === sourceFilter);
+	const rrLogCount = logs.length - pulsarLogs.length;
 
 	return (
 		<div>
@@ -214,10 +226,28 @@ export default function RunDetailPage() {
 
 			{/* Live Logs */}
 			<div className="mt-4 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
-				<div className="flex items-center justify-between">
-					<h2 className="text-sm font-semibold uppercase text-gray-500 dark:text-neutral-400">
-						Logs
-					</h2>
+				<div className="flex items-center justify-between gap-3">
+					<div className="flex items-center gap-3">
+						<h2 className="text-sm font-semibold uppercase text-gray-500 dark:text-neutral-400">
+							Logs
+						</h2>
+						<div className="flex items-center gap-1 rounded-md bg-gray-100 dark:bg-neutral-800 p-0.5 text-xs">
+							{(['all', 'pulsar', 'rocketride'] as const).map((opt) => (
+								<button
+									type="button"
+									key={opt}
+									onClick={() => setSourceFilter(opt)}
+									className={`rounded px-2 py-0.5 capitalize transition ${
+										sourceFilter === opt
+											? 'bg-white dark:bg-neutral-700 text-gray-900 dark:text-neutral-100 shadow-sm'
+											: 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'
+									}`}
+								>
+									{opt === 'rocketride' ? `RocketRide${rrLogCount ? ` (${rrLogCount})` : ''}` : opt}
+								</button>
+							))}
+						</div>
+					</div>
 					{run.status === 'running' && (
 						<span className="flex items-center gap-1.5 text-xs text-yellow-600 dark:text-yellow-400">
 							<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-500" />
@@ -225,26 +255,40 @@ export default function RunDetailPage() {
 						</span>
 					)}
 				</div>
-				<div className="mt-3 max-h-[400px] overflow-y-auto rounded-lg bg-gray-50 dark:bg-neutral-950 p-4 font-mono text-xs">
-					{logs.length === 0 ? (
+				<div className="mt-3 max-h-[70vh] overflow-y-auto rounded-lg bg-gray-50 dark:bg-neutral-950 p-4 font-mono text-xs">
+					{filteredLogs.length === 0 ? (
 						<p className="text-gray-400 dark:text-neutral-500">No log entries yet.</p>
 					) : (
-						logs.map((log) => (
-							<div key={log.id} className="flex gap-3 py-0.5">
-								<span className="flex-shrink-0 text-gray-400 dark:text-neutral-600">
-									{new Date(log.logged_at).toLocaleTimeString()}
-								</span>
-								<span
-									className={`flex-shrink-0 w-14 text-right uppercase ${LEVEL_STYLES[log.level] || ''}`}
+						filteredLogs.map((log) => {
+							const isRr = (log.source ?? 'pulsar') === 'rocketride';
+							return (
+								<div
+									key={log.id}
+									className={`flex gap-3 py-0.5 ${
+										isRr ? 'border-l-2 border-indigo-300 dark:border-indigo-600 pl-2 -ml-2' : ''
+									}`}
 								>
-									{log.level}
-								</span>
-								<span className="flex-shrink-0 text-gray-500 dark:text-neutral-500 w-28 truncate">
-									[{log.stage}]
-								</span>
-								<span className="text-gray-800 dark:text-neutral-200">{log.message}</span>
-							</div>
-						))
+									<span className="flex-shrink-0 text-gray-400 dark:text-neutral-600">
+										{new Date(log.logged_at).toLocaleTimeString()}
+									</span>
+									<span
+										className={`flex-shrink-0 w-14 text-right uppercase ${LEVEL_STYLES[log.level] || ''}`}
+									>
+										{log.level}
+									</span>
+									<span
+										className={`flex-shrink-0 w-40 truncate ${
+											isRr
+												? 'text-indigo-600 dark:text-indigo-400'
+												: 'text-gray-500 dark:text-neutral-500'
+										}`}
+									>
+										[{log.stage}]
+									</span>
+									<span className="text-gray-800 dark:text-neutral-200">{log.message}</span>
+								</div>
+							);
+						})
 					)}
 					<div ref={logEndRef} />
 				</div>
@@ -260,6 +304,7 @@ export default function RunDetailPage() {
 				</div>
 			)}
 
+			<PipelineTraces runId={id} />
 			<RunEvalsSection runId={id} />
 		</div>
 	);
