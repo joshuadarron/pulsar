@@ -19,32 +19,42 @@ interface ScoreEntry {
 	rationale?: string;
 }
 
-interface EvaluationResponse {
+type TargetType = 'trend_report' | 'content_draft';
+
+interface BatchItem {
+	type: TargetType;
+	id: string | null;
+	artifact: unknown;
+	rubric: RubricDimension[];
+}
+
+interface BatchResult {
+	type: TargetType;
+	id: string | null;
 	scores: ScoreEntry[];
+}
+
+interface BatchEvaluationResponse {
+	results: BatchResult[];
 }
 
 async function callEvaluationPipe(
 	client: Awaited<ReturnType<typeof getClient>>,
-	payload: {
-		target_type: 'trend_report' | 'content_draft';
-		target_id: string | null;
-		artifact: unknown;
-		rubric: RubricDimension[];
-	}
-): Promise<EvaluationResponse | null> {
+	items: BatchItem[]
+): Promise<BatchEvaluationResponse | null> {
 	try {
 		const result = await client.use({ filepath: EVALUATION_PIPE });
 		const token = result.token;
-		const response = await client.send(token, JSON.stringify(payload), {}, 'application/json');
+		const response = await client.send(token, JSON.stringify({ items }), {}, 'application/json');
 		await client.terminate(token);
 
 		const raw = response?.answers?.[0];
 		if (!raw) return null;
 		if (typeof raw === 'object' && !Array.isArray(raw)) {
-			return raw as unknown as EvaluationResponse;
+			return raw as unknown as BatchEvaluationResponse;
 		}
 		const str = typeof raw === 'string' ? raw : JSON.stringify(raw);
-		return extractJson<EvaluationResponse>(str);
+		return extractJson<BatchEvaluationResponse>(str);
 	} catch (err) {
 		console.error('[evaluation.pipe] failed:', err);
 		return null;
@@ -53,7 +63,7 @@ async function callEvaluationPipe(
 
 async function persistScores(
 	runId: string,
-	targetType: 'trend_report' | 'content_draft',
+	targetType: TargetType,
 	targetId: string | null,
 	scores: ScoreEntry[]
 ): Promise<void> {
@@ -113,12 +123,20 @@ function summarizeReport(scores: ScoreEntry[]): EvaluationSummary['reportScore']
 	};
 }
 
+function pickResult(
+	results: BatchResult[],
+	type: TargetType,
+	id: string | null
+): BatchResult | undefined {
+	return results.find((r) => r.type === type && (r.id ?? null) === id);
+}
+
 export async function runEvaluations(
 	client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
 	reportId: string
 ): Promise<EvaluationSummary | null> {
-	await logRun(runId, 'info', 'evaluations', 'Starting LLM evaluations (Haiku)...');
+	await logRun(runId, 'info', 'evaluations', 'Starting LLM evaluations (Haiku, batch)...');
 
 	const reportRow = await query<{ report_data: unknown }>(
 		'SELECT report_data FROM reports WHERE id = $1',
@@ -137,17 +155,36 @@ export async function runEvaluations(
 	const drafts: Record<string, string> = {};
 	for (const r of draftRows.rows) drafts[r.platform] = r.body;
 
-	// 1) Trend report (sequential, RocketRide runs one pipe at a time)
-	const reportResp = await callEvaluationPipe(client, {
-		target_type: 'trend_report',
-		target_id: null,
-		artifact: reportData,
-		rubric: TREND_REPORT_RUBRIC
-	});
+	// Build batch payload: 1 trend report + N drafts
+	const items: BatchItem[] = [
+		{
+			type: 'trend_report',
+			id: null,
+			artifact: reportData,
+			rubric: TREND_REPORT_RUBRIC
+		},
+		...Object.entries(drafts).map(
+			([platform, body]): BatchItem => ({
+				type: 'content_draft',
+				id: platform,
+				artifact: body,
+				rubric: CONTENT_DRAFT_RUBRIC
+			})
+		)
+	];
 
+	const batch = await callEvaluationPipe(client, items);
+	const results = batch?.results ?? [];
+
+	if (results.length === 0) {
+		await logRun(runId, 'warn', 'evaluations', 'Batch grading returned no results');
+	}
+
+	// Trend report scoring
+	const reportResult = pickResult(results, 'trend_report', null);
 	let reportScores: ScoreEntry[] = [];
-	if (reportResp?.scores && Array.isArray(reportResp.scores)) {
-		reportScores = reportResp.scores;
+	if (reportResult?.scores && Array.isArray(reportResult.scores)) {
+		reportScores = reportResult.scores;
 		await persistScores(runId, 'trend_report', null, reportScores);
 		await logRun(
 			runId,
@@ -156,28 +193,21 @@ export async function runEvaluations(
 			`Trend report graded: ${reportScores.length} dimensions`
 		);
 	} else {
-		await logRun(runId, 'warn', 'evaluations', 'Trend report grading failed or returned no scores');
+		await logRun(runId, 'warn', 'evaluations', 'Trend report grading missing from batch');
 	}
 
-	// 2) Content drafts (sequential, since RocketRide runs one pipe at a time)
+	// Per-draft scoring + deterministic sub-checks
 	const draftSummaries: DraftEvalSummary[] = [];
 	for (const [platform, body] of Object.entries(drafts)) {
-		// LLM grading
-		const draftResp = await callEvaluationPipe(client, {
-			target_type: 'content_draft',
-			target_id: platform,
-			artifact: body,
-			rubric: CONTENT_DRAFT_RUBRIC
-		});
+		const draftResult = pickResult(results, 'content_draft', platform);
 		let llmScores: ScoreEntry[] = [];
-		if (draftResp?.scores && Array.isArray(draftResp.scores)) {
-			llmScores = draftResp.scores;
+		if (draftResult?.scores && Array.isArray(draftResult.scores)) {
+			llmScores = draftResult.scores;
 			await persistScores(runId, 'content_draft', platform, llmScores);
 		} else {
-			await logRun(runId, 'warn', 'evaluations', `Draft grading failed for ${platform}`);
+			await logRun(runId, 'warn', 'evaluations', `Draft grading missing for ${platform}`);
 		}
 
-		// Deterministic sub-checks
 		const sub = runSubChecks(platform, body);
 		await persistSubCheckRows(runId, platform, sub.checks);
 
@@ -202,7 +232,7 @@ export async function runEvaluations(
 		runId,
 		'success',
 		'evaluations',
-		`Evaluations complete: report + ${draftSummaries.length} drafts`
+		`Evaluations complete: report + ${draftSummaries.length} drafts (1 LLM call)`
 	);
 
 	return {
