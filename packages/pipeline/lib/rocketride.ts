@@ -2,14 +2,33 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { RocketRideClient } from 'rocketride';
 import { env } from '@pulsar/shared/config/env';
+import { logRun } from '@pulsar/shared/run-logger';
 import {
 	dispatchEvent,
 	ensureMonitorSubscription,
+	getActiveRuns,
 	registerToken,
 	unregisterToken
 } from './rocketride-listener.js';
 
 let client: RocketRideClient | null = null;
+let lastDisconnectAt: number | null = null;
+
+async function emitReconnectGapWarn(disconnectAt: number, reconnectAt: number): Promise<void> {
+	const active = getActiveRuns();
+	if (active.length === 0) return;
+	const gapSeconds = Math.max(1, Math.round((reconnectAt - disconnectAt) / 1000));
+	const fromIso = new Date(disconnectAt).toISOString();
+	const toIso = new Date(reconnectAt).toISOString();
+	const message = `RocketRide WS reconnected after ${gapSeconds}s; events between ${fromIso} and ${toIso} may be missing`;
+	for (const { runId, pipeline } of active) {
+		try {
+			await logRun(runId, 'warn', `rr:${pipeline}:gap`, message, 'rocketride');
+		} catch (err) {
+			console.warn('[RocketRide] Failed to write reconnect-gap log:', err);
+		}
+	}
+}
 
 export async function getClient(): Promise<RocketRideClient> {
 	if (client?.isConnected()) return client;
@@ -23,6 +42,20 @@ export async function getClient(): Promise<RocketRideClient> {
 		onConnected: async () => {
 			console.log('[RocketRide] Connected');
 			if (!client) return;
+
+			// Reconnect handling: any in-flight runs that were correlated when
+			// the connection dropped get a warn log noting the gap window so
+			// the run-detail timeline shows where events may be missing.
+			if (lastDisconnectAt !== null) {
+				const reconnectAt = Date.now();
+				try {
+					await emitReconnectGapWarn(lastDisconnectAt, reconnectAt);
+				} catch (err) {
+					console.warn('[RocketRide] reconnect-gap warn failed:', err);
+				}
+				lastDisconnectAt = null;
+			}
+
 			try {
 				await ensureMonitorSubscription(client);
 				console.log('[RocketRide] Monitor subscription active');
@@ -31,7 +64,10 @@ export async function getClient(): Promise<RocketRideClient> {
 			}
 		},
 		onDisconnected: async (reason, hasError) => {
-			if (hasError) console.warn('[RocketRide] Disconnected:', reason);
+			if (hasError) {
+				console.warn('[RocketRide] Disconnected:', reason);
+				lastDisconnectAt = Date.now();
+			}
 		}
 	});
 

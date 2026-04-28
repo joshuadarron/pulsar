@@ -116,6 +116,23 @@ export function __resetForTesting(): void {
 	seenStatus.clear();
 }
 
+/**
+ * Snapshot of currently-correlated runs. Deduplicated by (runId, pipeline)
+ * so multi-token runs (e.g. trend-report's 5 sequential section calls)
+ * collapse into one entry per pipeline.
+ */
+export function getActiveRuns(): Array<{ runId: string; pipeline: string }> {
+	const seen = new Set<string>();
+	const out: Array<{ runId: string; pipeline: string }> = [];
+	for (const corr of runByToken.values()) {
+		const key = `${corr.runId}|${corr.pipeline}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		out.push({ runId: corr.runId, pipeline: corr.pipeline });
+	}
+	return out;
+}
+
 // ---------------------------------------------------------------------------
 // Correlation resolution
 // ---------------------------------------------------------------------------
