@@ -64,7 +64,7 @@ export default function RunDetailPage() {
 	const [loading, setLoading] = useState(true);
 	const [cancelling, setCancelling] = useState(false);
 	const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
-	const logEndRef = useRef<HTMLDivElement>(null);
+	const logPaneRef = useRef<HTMLDivElement>(null);
 
 	// Fetch run data and poll while running
 	useEffect(() => {
@@ -104,9 +104,12 @@ export default function RunDetailPage() {
 		}
 	}, [run]);
 
-	// Auto-scroll logs
+	// Auto-scroll the log pane to the latest entry — operate on the pane's
+	// own scrollTop so only the terminal view scrolls, not the whole page.
 	useEffect(() => {
-		logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+		const pane = logPaneRef.current;
+		if (!pane) return;
+		pane.scrollTop = pane.scrollHeight;
 	}, [logs]);
 
 	if (loading) {
@@ -255,7 +258,10 @@ export default function RunDetailPage() {
 						</span>
 					)}
 				</div>
-				<div className="mt-3 max-h-[70vh] overflow-y-auto rounded-lg bg-gray-50 dark:bg-neutral-950 p-4 font-mono text-xs">
+				<div
+					ref={logPaneRef}
+					className="mt-3 max-h-[70vh] overflow-y-auto rounded-lg bg-gray-50 dark:bg-neutral-950 p-4 font-mono text-xs"
+				>
 					{filteredLogs.length === 0 ? (
 						<p className="text-gray-400 dark:text-neutral-500">No log entries yet.</p>
 					) : (
@@ -290,7 +296,6 @@ export default function RunDetailPage() {
 							);
 						})
 					)}
-					<div ref={logEndRef} />
 				</div>
 			</div>
 
