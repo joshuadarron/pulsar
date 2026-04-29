@@ -2,7 +2,20 @@
   <img src="assets/banner.svg" alt="Pulsar — Market Intelligence Agent" width="100%"/>
 </p>
 
-Automated market intelligence agent. Scrapes free developer sources, runs AI analysis via RocketRide pipelines, and outputs trend reports + content drafts for human review.
+<p align="center">
+  Automated market intelligence agent. Scrapes free developer sources, runs AI analysis via RocketRide pipelines, and outputs trend reports + content drafts for human review.
+</p>
+
+<p align="center">
+  <a href="https://github.com/JoshuaDarron/pulsar/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/JoshuaDarron/pulsar/ci.yml?branch=main&label=CI&logo=githubactions&logoColor=white" alt="CI"/></a>
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript"/>
+  <img src="https://img.shields.io/badge/Next.js-15-000?logo=nextdotjs&logoColor=white" alt="Next.js 15"/>
+  <img src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=nodedotjs&logoColor=white" alt="Node.js 20+"/>
+  <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 16"/>
+  <img src="https://img.shields.io/badge/Neo4j-5.x-008CC1?logo=neo4j&logoColor=white" alt="Neo4j 5.x"/>
+  <img src="https://img.shields.io/badge/Tailwind%20CSS-06B6D4?logo=tailwindcss&logoColor=white" alt="Tailwind CSS"/>
+  <img src="https://img.shields.io/badge/Biome-60A5FA?logo=biome&logoColor=white" alt="Biome"/>
+</p>
 
 ## Setup
 
@@ -35,29 +48,17 @@ pnpm install
 cp .env.example .env.local
 ```
 
-5. Open `.env.local` in your editor and fill in the following values
-```
-ROCKETRIDE_APIKEY=
-ROCKETRIDE_ANTHROPIC_KEY=
-NEXTAUTH_SECRET=
-GITHUB_CLIENT_ID=
-GITHUB_CLIENT_SECRET=
-SMTP_USER=
-SMTP_PASSWORD=
-NOTIFY_EMAIL_TO=
-```
-
-6. Run database migrations
+5. Run database migrations
 ```bash
 pnpm run db:migrate
 ```
 
-7. Run initial data collection
+6. Run initial data collection
 ```bash
 pnpm run scrape
 ```
 
-8. Start the app
+7. Start the app
 ```bash
 pnpm dev
 ```
