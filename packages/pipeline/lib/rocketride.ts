@@ -131,7 +131,7 @@ export async function usePipeline(
 	// fresh connect rather than throwing "Server is not connected" on use().
 	const client = await getClient();
 
-	const response = await client.use({ filepath, pipelineTraceLevel: 'summary' });
+	const response = await client.use({ filepath, pipelineTraceLevel: 'full' });
 
 	const useResp = response as Record<string, unknown> & { token: string };
 	const projectIdFromResp =

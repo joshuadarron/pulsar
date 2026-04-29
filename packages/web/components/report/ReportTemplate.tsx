@@ -7,7 +7,12 @@
 // Any change to section order, data access, or formatting happens HERE.
 // ---------------------------------------------------------------------------
 
-import type React from 'react';
+// React must remain a value import even though every direct reference here is
+// a type annotation: when the pipeline package renders this template via
+// renderToStaticMarkup, the JSX compiles to React.createElement(...) calls
+// that require React in runtime scope.
+// biome-ignore lint/style/useImportType: see comment above
+import React from 'react';
 import type {
 	ReportData,
 	TrendingKeyword,

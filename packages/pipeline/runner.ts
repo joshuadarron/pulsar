@@ -958,12 +958,21 @@ async function runContentDrafts(
 			for (const p of DRAFT_PLATFORMS) {
 				if (typeof parsed[p] === 'string') drafts[p] = parsed[p];
 			}
-		} catch {
+		} catch (parseErr) {
+			// Capture enough of the raw response to diagnose where the JSON
+			// breaks. First 1500 + length + last 600 covers both ends of a
+			// truncation or an unescaped quote partway through.
+			const head = str.slice(0, 1500);
+			const tail = str.length > 2100 ? str.slice(-600) : '';
+			const preview = tail
+				? `[${str.length} chars] ${head}\n…[middle elided]…\n${tail}`
+				: `[${str.length} chars] ${str}`;
+			const reason = parseErr instanceof Error ? parseErr.message : String(parseErr);
 			await logRun(
 				runId,
 				'warn',
 				'content-drafts',
-				`Could not parse drafter answer. Raw (first 300 chars): ${str.slice(0, 300)}`
+				`Could not parse drafter answer (${reason}). Raw: ${preview}`
 			);
 		}
 	}
