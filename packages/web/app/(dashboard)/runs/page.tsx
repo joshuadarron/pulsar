@@ -173,8 +173,13 @@ export default function RunsPage() {
 	}
 
 	const fetchRuns = useCallback(() => {
+		const params = new URLSearchParams({
+			page: String(page),
+			limit: String(pageSize),
+			sort: sortParam
+		});
 		Promise.all([
-			fetch(`/api/runs?page=${page}&limit=${pageSize}&sort=${sortParam}`).then((r) => r.json()),
+			fetch(`/api/runs?${params}`).then((r) => r.json()),
 			fetch('/api/runs/trigger').then((r) => r.json())
 		]).then(([runsData, statusData]) => {
 			setRuns(runsData.runs);
@@ -208,8 +213,13 @@ export default function RunsPage() {
 				setPage(1);
 				// Poll rapidly until the new run appears
 				let attempts = 0;
+				const pollParams = new URLSearchParams({
+					page: '1',
+					limit: String(pageSize),
+					sort: sortParam
+				});
 				const poll = setInterval(async () => {
-					const r = await fetch(`/api/runs?page=1&limit=${pageSize}&sort=${sortParam}`);
+					const r = await fetch(`/api/runs?${pollParams}`);
 					const data = await r.json();
 					setRuns(data.runs);
 					setTotal(data.total);
@@ -424,8 +434,8 @@ function SortHeader({
 	const showRank = sorts.length > 1 && active;
 	return (
 		<th
-			onClick={(e) => onSort(sortKey, e.shiftKey)}
-			title="Click to sort. Shift-click to add as a secondary sort."
+			onClick={(e) => onSort(sortKey, e.shiftKey || e.metaKey || e.ctrlKey)}
+			title="Click to sort. Shift-click (or ⌘/Ctrl-click) to add as a secondary sort."
 			className="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 transition"
 		>
 			<span className="inline-flex items-center gap-1">
