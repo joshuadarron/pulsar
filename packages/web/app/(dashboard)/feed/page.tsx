@@ -101,76 +101,78 @@ export default function FeedPage() {
 				</select>
 			</div>
 
-			<div className="mt-6 max-w-3xl space-y-3">
-				{articles.map((article) => (
-					<a
-						key={article.id}
-						href={article.url}
-						target="_blank"
-						rel="noopener noreferrer"
-						className="block rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-4 transition hover:border-indigo-300 hover:shadow-sm"
-					>
-						<div className="flex items-start justify-between gap-4">
-							<div className="flex-1">
-								<h3 className="text-sm font-medium text-gray-900 dark:text-neutral-100">
-									{article.title}
-								</h3>
-								{article.summary && (
-									<p className="mt-1 text-sm text-gray-500 dark:text-neutral-400 line-clamp-2">
-										{article.summary}
+			<div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+				<div className="max-w-3xl space-y-3">
+					{articles.map((article) => (
+						<a
+							key={article.id}
+							href={article.url}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="block rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-4 transition hover:border-indigo-300 hover:shadow-sm"
+						>
+							<div className="flex items-start justify-between gap-4">
+								<div className="flex-1">
+									<h3 className="text-sm font-medium text-gray-900 dark:text-neutral-100">
+										{article.title}
+									</h3>
+									{article.summary && (
+										<p className="mt-1 text-sm text-gray-500 dark:text-neutral-400 line-clamp-2">
+											{article.summary}
+										</p>
+									)}
+									<div className="mt-2 flex flex-wrap gap-1.5">
+										<span className="rounded bg-gray-100 dark:bg-neutral-800 px-2 py-0.5 text-xs text-gray-600 dark:text-neutral-400">
+											{article.source_name}
+										</span>
+										{article.content_type && (
+											<span className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600">
+												{article.content_type}
+											</span>
+										)}
+										{article.sentiment && (
+											<span
+												className={`rounded px-2 py-0.5 text-xs ${
+													article.sentiment === 'positive'
+														? 'bg-green-50 text-green-600 dark:bg-green-900 dark:text-green-300'
+														: article.sentiment === 'negative'
+															? 'bg-red-50 text-red-600 dark:bg-red-900 dark:text-red-300'
+															: 'bg-gray-50 text-gray-600 dark:bg-neutral-800 dark:text-neutral-400'
+												}`}
+											>
+												{article.sentiment}
+											</span>
+										)}
+										{article.topic_tags?.slice(0, 3).map((tag) => (
+											<span
+												key={tag}
+												className="rounded bg-indigo-50 px-2 py-0.5 text-xs text-indigo-600"
+											>
+												{tag}
+											</span>
+										))}
+									</div>
+								</div>
+								<div className="text-right flex-shrink-0">
+									{article.score != null && (
+										<span className="text-sm font-semibold text-gray-700 dark:text-neutral-300">
+											{article.score}
+										</span>
+									)}
+									<p className="text-xs text-gray-400 dark:text-neutral-500">
+										{article.published_at && new Date(article.published_at).toLocaleDateString()}
 									</p>
-								)}
-								<div className="mt-2 flex flex-wrap gap-1.5">
-									<span className="rounded bg-gray-100 dark:bg-neutral-800 px-2 py-0.5 text-xs text-gray-600 dark:text-neutral-400">
-										{article.source_name}
-									</span>
-									{article.content_type && (
-										<span className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600">
-											{article.content_type}
-										</span>
-									)}
-									{article.sentiment && (
-										<span
-											className={`rounded px-2 py-0.5 text-xs ${
-												article.sentiment === 'positive'
-													? 'bg-green-50 text-green-600 dark:bg-green-900 dark:text-green-300'
-													: article.sentiment === 'negative'
-														? 'bg-red-50 text-red-600 dark:bg-red-900 dark:text-red-300'
-														: 'bg-gray-50 text-gray-600 dark:bg-neutral-800 dark:text-neutral-400'
-											}`}
-										>
-											{article.sentiment}
-										</span>
-									)}
-									{article.topic_tags?.slice(0, 3).map((tag) => (
-										<span
-											key={tag}
-											className="rounded bg-indigo-50 px-2 py-0.5 text-xs text-indigo-600"
-										>
-											{tag}
-										</span>
-									))}
 								</div>
 							</div>
-							<div className="text-right flex-shrink-0">
-								{article.score != null && (
-									<span className="text-sm font-semibold text-gray-700 dark:text-neutral-300">
-										{article.score}
-									</span>
-								)}
-								<p className="text-xs text-gray-400 dark:text-neutral-500">
-									{article.published_at && new Date(article.published_at).toLocaleDateString()}
-								</p>
-							</div>
-						</div>
-					</a>
-				))}
+						</a>
+					))}
 
-				{articles.length === 0 && (
-					<div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-8 text-center text-gray-400 dark:text-neutral-500">
-						No articles found. Run a scrape to populate the feed.
-					</div>
-				)}
+					{articles.length === 0 && (
+						<div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-8 text-center text-gray-400 dark:text-neutral-500">
+							No articles found. Run a scrape to populate the feed.
+						</div>
+					)}
+				</div>
 			</div>
 
 			{total > 20 && (
