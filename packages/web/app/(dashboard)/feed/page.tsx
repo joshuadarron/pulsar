@@ -101,8 +101,8 @@ export default function FeedPage() {
 				</select>
 			</div>
 
-			<div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-				<div className="max-w-3xl space-y-3">
+			<div className="mt-6">
+				<div className="max-w-[37rem] space-y-3">
 					{articles.map((article) => (
 						<a
 							key={article.id}

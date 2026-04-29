@@ -40,8 +40,8 @@ export default function ReportsPage() {
 				AI-generated trend reports from your data
 			</p>
 
-			<div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-				<div className="max-w-3xl space-y-4">
+			<div className="mt-6">
+				<div className="max-w-[37rem] space-y-4">
 					{reports.length === 0 ? (
 						<div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-8 text-center text-gray-400 dark:text-neutral-500">
 							No reports generated yet. Run the pipeline to generate your first report.
