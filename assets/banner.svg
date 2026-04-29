@@ -114,8 +114,8 @@
         filter="url(#text-glow)">Pulsar</text>
 
   <g transform="translate(1020 150)" filter="url(#logo-glow)">
-    <circle cx="0" cy="0" r="71.5" fill="none" stroke="#ffffff" stroke-width="8.25" opacity="0.3"/>
-    <circle cx="0" cy="0" r="49.5" fill="none" stroke="#ffffff" stroke-width="8.25" opacity="0.6"/>
-    <circle cx="0" cy="0" r="27.5" fill="#ffffff"/>
+    <circle cx="0" cy="0" r="71.5" fill="none" stroke="#c084fc" stroke-width="4" opacity="0.3"/>
+    <circle cx="0" cy="0" r="49.5" fill="none" stroke="#c084fc" stroke-width="4" opacity="0.6"/>
+    <circle cx="0" cy="0" r="27.5" fill="#c084fc"/>
   </g>
 </svg>
