@@ -65,22 +65,60 @@ type SortKey =
 	| 'articles_scraped'
 	| 'articles_new';
 type SortOrder = 'asc' | 'desc';
+type SortSpec = { key: SortKey; order: SortOrder };
+
+const SORT_KEYS: ReadonlySet<SortKey> = new Set([
+	'run_type',
+	'trigger',
+	'started_at',
+	'completed_at',
+	'status',
+	'articles_scraped',
+	'articles_new'
+]);
+const DEFAULT_SORTS: SortSpec[] = [{ key: 'started_at', order: 'desc' }];
+const SORTS_STORAGE_KEY = 'runs_sorts';
+
+function isValidSpec(s: unknown): s is SortSpec {
+	if (!s || typeof s !== 'object') return false;
+	const obj = s as { key?: unknown; order?: unknown };
+	return (
+		typeof obj.key === 'string' &&
+		SORT_KEYS.has(obj.key as SortKey) &&
+		(obj.order === 'asc' || obj.order === 'desc')
+	);
+}
+
+function readStoredSorts(): SortSpec[] {
+	if (typeof window === 'undefined') return DEFAULT_SORTS;
+	try {
+		const raw = localStorage.getItem(SORTS_STORAGE_KEY);
+		if (raw) {
+			const parsed = JSON.parse(raw);
+			if (Array.isArray(parsed)) {
+				const valid = parsed.filter(isValidSpec);
+				if (valid.length > 0) return valid;
+			}
+		}
+	} catch {
+		// fall through to legacy migration
+	}
+	// Migrate from the old single-column storage keys, written as a one-shot.
+	const legacyKey = localStorage.getItem('runs_sortBy');
+	const legacyOrder = localStorage.getItem('runs_sortOrder');
+	if (legacyKey && SORT_KEYS.has(legacyKey as SortKey)) {
+		const order: SortOrder = legacyOrder === 'asc' ? 'asc' : 'desc';
+		return [{ key: legacyKey as SortKey, order }];
+	}
+	return DEFAULT_SORTS;
+}
 
 export default function RunsPage() {
 	const router = useRouter();
 	const [runs, setRuns] = useState<Run[]>([]);
 	const [total, setTotal] = useState(0);
 	const [page, setPage] = useState(1);
-	const [sortBy, setSortBy] = useState<SortKey>(() => {
-		if (typeof window !== 'undefined')
-			return (localStorage.getItem('runs_sortBy') as SortKey) || 'started_at';
-		return 'started_at';
-	});
-	const [sortOrder, setSortOrder] = useState<SortOrder>(() => {
-		if (typeof window !== 'undefined')
-			return (localStorage.getItem('runs_sortOrder') as SortOrder) || 'desc';
-		return 'desc';
-	});
+	const [sorts, setSorts] = useState<SortSpec[]>(readStoredSorts);
 	const [pageSize, setPageSize] = useState(() => {
 		if (typeof window !== 'undefined') {
 			const saved = Number.parseInt(localStorage.getItem('runs_pageSize') || '');
@@ -93,6 +131,7 @@ export default function RunsPage() {
 	const [runningTypes, setRunningTypes] = useState<Record<string, string>>({});
 
 	const totalPages = Math.max(1, Math.ceil(total / pageSize));
+	const sortParam = sorts.map((s) => `${s.key}:${s.order}`).join(',');
 
 	function handlePageSizeChange(size: number) {
 		setPageSize(size);
@@ -100,32 +139,49 @@ export default function RunsPage() {
 		setPage(1);
 	}
 
-	function handleSort(key: SortKey) {
-		let newOrder: SortOrder = 'desc';
-		if (sortBy === key) {
-			newOrder = sortOrder === 'desc' ? 'asc' : 'desc';
-			setSortOrder(newOrder);
-		} else {
-			setSortBy(key);
-			setSortOrder(newOrder);
-		}
-		localStorage.setItem('runs_sortBy', key);
-		localStorage.setItem('runs_sortOrder', newOrder);
+	/**
+	 * Plain click → single-column sort on this key (flips direction if it was
+	 * already the primary sort). Shift-click → toggle this column inside the
+	 * existing sort list (cycle desc → asc → removed). At least one column is
+	 * always retained so the table stays deterministic.
+	 */
+	function handleSort(key: SortKey, additive: boolean) {
+		setSorts((prev) => {
+			let next: SortSpec[];
+			if (additive) {
+				const idx = prev.findIndex((s) => s.key === key);
+				if (idx === -1) {
+					next = [...prev, { key, order: 'desc' }];
+				} else if (prev[idx].order === 'desc') {
+					next = prev.map((s, i) => (i === idx ? { ...s, order: 'asc' } : s));
+				} else {
+					next = prev.filter((_, i) => i !== idx);
+				}
+			} else {
+				const primary = prev[0];
+				if (primary && primary.key === key) {
+					next = [{ key, order: primary.order === 'desc' ? 'asc' : 'desc' }];
+				} else {
+					next = [{ key, order: 'desc' }];
+				}
+			}
+			if (next.length === 0) next = DEFAULT_SORTS;
+			localStorage.setItem(SORTS_STORAGE_KEY, JSON.stringify(next));
+			return next;
+		});
 		setPage(1);
 	}
 
 	const fetchRuns = useCallback(() => {
 		Promise.all([
-			fetch(`/api/runs?page=${page}&limit=${pageSize}&sort=${sortBy}&order=${sortOrder}`).then(
-				(r) => r.json()
-			),
+			fetch(`/api/runs?page=${page}&limit=${pageSize}&sort=${sortParam}`).then((r) => r.json()),
 			fetch('/api/runs/trigger').then((r) => r.json())
 		]).then(([runsData, statusData]) => {
 			setRuns(runsData.runs);
 			setTotal(runsData.total);
 			setRunningTypes(statusData.running);
 		});
-	}, [page, pageSize, sortBy, sortOrder]);
+	}, [page, pageSize, sortParam]);
 
 	useEffect(() => {
 		fetchRuns();
@@ -153,9 +209,7 @@ export default function RunsPage() {
 				// Poll rapidly until the new run appears
 				let attempts = 0;
 				const poll = setInterval(async () => {
-					const r = await fetch(
-						`/api/runs?page=1&limit=${pageSize}&sort=${sortBy}&order=${sortOrder}`
-					);
+					const r = await fetch(`/api/runs?page=1&limit=${pageSize}&sort=${sortParam}`);
 					const data = await r.json();
 					setRuns(data.runs);
 					setTotal(data.total);
@@ -218,51 +272,20 @@ export default function RunsPage() {
 				<table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
 					<thead className="bg-gray-50 dark:bg-neutral-800">
 						<tr>
-							<SortHeader
-								label="Type"
-								sortKey="run_type"
-								current={sortBy}
-								order={sortOrder}
-								onSort={handleSort}
-							/>
-							<SortHeader
-								label="Trigger"
-								sortKey="trigger"
-								current={sortBy}
-								order={sortOrder}
-								onSort={handleSort}
-							/>
-							<SortHeader
-								label="Started"
-								sortKey="started_at"
-								current={sortBy}
-								order={sortOrder}
-								onSort={handleSort}
-							/>
+							<SortHeader label="Type" sortKey="run_type" sorts={sorts} onSort={handleSort} />
+							<SortHeader label="Trigger" sortKey="trigger" sorts={sorts} onSort={handleSort} />
+							<SortHeader label="Started" sortKey="started_at" sorts={sorts} onSort={handleSort} />
 							<th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400">
 								Duration
 							</th>
-							<SortHeader
-								label="Status"
-								sortKey="status"
-								current={sortBy}
-								order={sortOrder}
-								onSort={handleSort}
-							/>
+							<SortHeader label="Status" sortKey="status" sorts={sorts} onSort={handleSort} />
 							<SortHeader
 								label="Articles"
 								sortKey="articles_scraped"
-								current={sortBy}
-								order={sortOrder}
+								sorts={sorts}
 								onSort={handleSort}
 							/>
-							<SortHeader
-								label="New"
-								sortKey="articles_new"
-								current={sortBy}
-								order={sortOrder}
-								onSort={handleSort}
-							/>
+							<SortHeader label="New" sortKey="articles_new" sorts={sorts} onSort={handleSort} />
 						</tr>
 					</thead>
 					<tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
@@ -387,20 +410,22 @@ export default function RunsPage() {
 function SortHeader({
 	label,
 	sortKey,
-	current,
-	order,
+	sorts,
 	onSort
 }: {
 	label: string;
 	sortKey: SortKey;
-	current: SortKey;
-	order: SortOrder;
-	onSort: (key: SortKey) => void;
+	sorts: SortSpec[];
+	onSort: (key: SortKey, additive: boolean) => void;
 }) {
-	const active = current === sortKey;
+	const idx = sorts.findIndex((s) => s.key === sortKey);
+	const active = idx !== -1;
+	const order = active ? sorts[idx].order : null;
+	const showRank = sorts.length > 1 && active;
 	return (
 		<th
-			onClick={() => onSort(sortKey)}
+			onClick={(e) => onSort(sortKey, e.shiftKey)}
+			title="Click to sort. Shift-click to add as a secondary sort."
 			className="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 transition"
 		>
 			<span className="inline-flex items-center gap-1">
@@ -410,8 +435,13 @@ function SortHeader({
 					viewBox="0 0 12 12"
 					fill="currentColor"
 				>
-					{order === 'desc' ? <path d="M6 8L2 4h8L6 8z" /> : <path d="M6 4L2 8h8L6 4z" />}
+					{order === 'asc' ? <path d="M6 4L2 8h8L6 4z" /> : <path d="M6 8L2 4h8L6 8z" />}
 				</svg>
+				{showRank && (
+					<span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900 px-1 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
+						{idx + 1}
+					</span>
+				)}
 			</span>
 		</th>
 	);
