@@ -376,3 +376,36 @@ export interface EvaluationSummary {
 	reportScore: { total: number; max: number; lowestDim: { name: string; score: number } | null };
 	draftScores: DraftEvalSummary[];
 }
+
+// ---------------------------------------------------------------------------
+// App framework
+//
+// Each app under `packages/apps/<name>/` exports an `AppConfig` from its
+// `app.config.ts`. The config declares the app's name, its scheduling
+// requirements, what kind of output it produces, what shape it expects
+// from `.context/` and `.voice/`, and which render mode the UI should use.
+// ---------------------------------------------------------------------------
+
+export interface AppScheduleEntry {
+	hour: number;
+	minute: number;
+}
+
+export interface AppSchedule {
+	trendReport?: AppScheduleEntry;
+	contentDrafts?: string | AppScheduleEntry;
+}
+
+export type AppOutputType = 'report' | 'brief' | 'draft';
+
+export type AppRenderMode = 'technical' | 'newsletter';
+
+export interface AppConfig {
+	name: string;
+	description: string;
+	schedule: AppSchedule;
+	outputType: AppOutputType;
+	renderMode: AppRenderMode;
+	expectedContext: string[];
+	expectedVoiceFormats: string[];
+}

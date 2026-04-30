@@ -13,6 +13,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@pulsar/app-market-analysis": "workspace:*",
 		"@pulsar/context": "workspace:*",
 		"@pulsar/shared": "workspace:*",
 		"@auth/core": "^0.37.0",

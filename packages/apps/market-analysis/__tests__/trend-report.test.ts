@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 
 import type { OperatorContext } from '@pulsar/context';
 
-import { buildSectionPrompts, buildSystemPrompt } from '../trend-report-prompts.js';
+import { buildSectionPrompts, buildSystemPrompt } from '../prompts/trend-report.js';
 
 function makeStubContext(overrides: Partial<OperatorContext> = {}): OperatorContext {
 	return {

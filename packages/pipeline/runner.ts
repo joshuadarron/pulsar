@@ -1,5 +1,9 @@
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { pipelinesDir as PIPELINES_DIR } from '@pulsar/app-market-analysis/pipelines';
+import {
+	buildSectionPrompts,
+	buildSystemPrompt
+} from '@pulsar/app-market-analysis/prompts/trend-report';
 import {
 	type OperatorContext,
 	OperatorContextNotConfiguredError,
@@ -28,9 +32,7 @@ import { type RocketRideContext, fetchRocketRideContext } from './lib/fetch-rock
 import { extractJson } from './lib/parse-json.js';
 import { disconnectClient, getClient, terminatePipeline, usePipeline } from './lib/rocketride.js';
 import { sendReportEmail } from './notify.js';
-import { buildSectionPrompts, buildSystemPrompt } from './trend-report-prompts.js';
 
-const PIPELINES_DIR = path.resolve(fileURLToPath(import.meta.url), '../pipelines');
 const TREND_REPORT_PIPE = path.join(PIPELINES_DIR, 'trend-report.pipe');
 
 const MAX_SNAPSHOT_AGE_HOURS = 48;

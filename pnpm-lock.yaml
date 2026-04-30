@@ -18,6 +18,34 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/apps/market-analysis:
+    dependencies:
+      '@pulsar/context':
+        specifier: workspace:*
+        version: link:../../context
+      '@pulsar/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      '@pulsar/voice':
+        specifier: workspace:*
+        version: link:../../voice
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.17
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.14
+      react:
+        specifier: ^19.0.0
+        version: 19.2.5
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   packages/cli:
     dependencies:
       '@inquirer/prompts':
@@ -58,6 +86,9 @@ importers:
 
   packages/pipeline:
     dependencies:
+      '@pulsar/app-market-analysis':
+        specifier: workspace:*
+        version: link:../apps/market-analysis
       '@pulsar/context':
         specifier: workspace:*
         version: link:../context
@@ -191,6 +222,9 @@ importers:
       '@auth/core':
         specifier: ^0.37.0
         version: 0.37.4
+      '@pulsar/app-market-analysis':
+        specifier: workspace:*
+        version: link:../apps/market-analysis
       '@pulsar/context':
         specifier: workspace:*
         version: link:../context

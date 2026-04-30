@@ -1,0 +1,155 @@
+{
+  "components": [
+    {
+      "id": "webhook_1",
+      "provider": "webhook",
+      "name": "Web Hook",
+      "config": {
+        "hideForm": true,
+        "mode": "Source",
+        "parameters": {},
+        "type": "webhook"
+      },
+      "ui": {
+        "position": {
+          "x": 12,
+          "y": 12
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      }
+    },
+    {
+      "id": "parse_1",
+      "provider": "parse",
+      "name": "Parser",
+      "config": {},
+      "ui": {
+        "position": {
+          "x": 242,
+          "y": 21
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "tags",
+          "from": "webhook_1"
+        }
+      ]
+    },
+    {
+      "id": "question_1",
+      "provider": "question",
+      "name": "Question",
+      "config": {
+        "profile": "default",
+        "default": {
+          "question": "You will receive a JSON payload with an items array. Grade EVERY item against its rubric and return a results array in the same order. Respond with ONLY the raw JSON object specified in your system instructions, no preamble, no markdown fences."
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 472,
+          "y": 56
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "text",
+          "from": "parse_1"
+        }
+      ]
+    },
+    {
+      "id": "judge_agent",
+      "provider": "agent_crewai",
+      "name": "Batch Evaluation Judge",
+      "config": {
+        "instructions": [
+          "You are an evaluation judge. You grade artifacts against fixed rubrics. You do NOT write content, you do NOT suggest improvements. You produce one numeric or binary score per rubric dimension plus a one-sentence rationale per score.",
+          "INPUT FORMAT: A JSON object with an items array. Each item has: type ('trend_report' or 'content_draft'), id (platform name for drafts, null for reports), artifact (the text or JSON to grade), rubric (array of dimensions, each with name, scale, description).",
+          "OUTPUT FORMAT: Respond with ONLY a raw JSON object: {\"results\": [...]}. The results array must contain ONE entry per input item, in the SAME ORDER as input. Each result has: type (copied from input), id (copied from input), scores (array of one entry per rubric dimension). Each score entry: {\"dimension\": \"<name>\", \"score\": <integer 1-5 if scale is 1-5, otherwise omit>, \"passed\": <true or false if scale is binary, otherwise omit>, \"rationale\": \"<one sentence explaining the score>\"}.",
+          "GRADING DISCIPLINE: Be strict. Do not give 5/5 unless the artifact has no defects on that dimension. Do not give 1/5 unless the artifact fails the dimension entirely. Grade each item independently against its OWN rubric (a content_draft item is graded against its rubric, a trend_report item against its). No em-dashes anywhere, use commas, colons, periods, or parentheses instead.",
+          "OUTPUT DISCIPLINE: No preamble, no markdown fences around the outer JSON, no commentary. Inside each rationale string, escape literal double-quotes as \\\" and literal newlines as \\n so the outer JSON parses cleanly."
+        ],
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 702,
+          "y": 40.5
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "questions",
+          "from": "question_1"
+        }
+      ]
+    },
+    {
+      "id": "llm_anthropic_1",
+      "provider": "llm_anthropic",
+      "name": "Anthropic Haiku",
+      "config": {
+        "profile": "claude-haiku-4-5",
+        "claude-haiku-4-5": {
+          "apikey": "${ROCKETRIDE_ANTHROPIC_KEY}"
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 600,
+          "y": 210
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "llm",
+          "from": "judge_agent"
+        }
+      ]
+    },
+    {
+      "id": "response_answers_1",
+      "provider": "response_answers",
+      "name": "Return Answers",
+      "config": {
+        "laneName": "answers"
+      },
+      "ui": {
+        "position": {
+          "x": 932,
+          "y": 173
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "answers",
+          "from": "judge_agent"
+        }
+      ]
+    }
+  ],
+  "project_id": "e93a198a-3576-4e16-93d4-48d01a68a170",
+  "version": 1,
+  "isLocked": false,
+  "snapToGrid": true,
+  "snapGridSize": [
+    10,
+    10
+  ],
+  "docRevision": 3
+}

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### [2026-04-30] Phase 1: Apps framework
+
+#### Added
+
+- `packages/apps/` directory housing self-contained domain workflows
+- `@pulsar/app-market-analysis` workspace package containing the existing market-analysis pipelines, prompts, and UI
+- `app.config.ts` per-app configuration declaring schedule defaults, expected context fields, and render mode
+- `packages/apps/README.md` documenting the app contract and future-app scaffolds (technical-roadmap, financial-analysis, onboarding)
+
+#### Changed
+
+- `.pipe` files now live under `packages/apps/market-analysis/pipelines/` and are tracked in git (Postgres password templated to `${POSTGRES_PASSWORD}`)
+- `packages/pipeline/runner.ts` imports prompts and pipelines directory from `@pulsar/app-market-analysis`
+- `packages/web/app/(dashboard)/drafts/page.tsx` is now a thin re-export shim; the implementation lives in `@pulsar/app-market-analysis/ui/drafts`
+- `pnpm-workspace.yaml` includes `packages/apps/*`
+
 ### Phase 0 (2026-04-30)
 
 #### Added

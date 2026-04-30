@@ -1,0 +1,243 @@
+{
+  "components": [
+    {
+      "id": "webhook_1",
+      "provider": "webhook",
+      "name": "Web Hook",
+      "config": {
+        "hideForm": true,
+        "mode": "Source",
+        "parameters": {},
+        "type": "webhook"
+      },
+      "ui": {
+        "position": {
+          "x": 30,
+          "y": 30
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      }
+    },
+    {
+      "id": "parse_1",
+      "provider": "parse",
+      "name": "Parser",
+      "config": {},
+      "ui": {
+        "position": {
+          "x": 250,
+          "y": 10
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "tags",
+          "from": "webhook_1"
+        }
+      ]
+    },
+    {
+      "id": "question_1",
+      "provider": "question",
+      "name": "Question",
+      "config": {
+        "profile": "default",
+        "default": {
+          "question": "You will receive a JSON payload with two fields: \"prompt\" (your task instructions for this pass) and \"data\" (read-only input, either structured data or text from prior passes). Follow the prompt instructions exactly. Respond with ONLY a raw JSON object as specified in your system instructions. No markdown fences, no preamble."
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 470,
+          "y": 60
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "text",
+          "from": "parse_1"
+        }
+      ]
+    },
+    {
+      "id": "agent_rocketride_1",
+      "provider": "agent_deepagent",
+      "name": "Trend Analyst",
+      "config": {
+        "default": {
+          "advanced_mode": false,
+          "instructions": [
+            "You are the market analysis agent for Pulsar, an intelligence system serving the DevRel and marketing team at RocketRide. RocketRide is an AI runtime (not a platform). Canonical positioning: the AI execution layer in your stack.",
+            "You receive structured data and produce analytical text. You NEVER mutate the provided data. You write ONLY to text and research fields. No em-dashes anywhere. Tone: technical, builder-oriented, one engineer talking to another. No marketing-speak or hype words.",
+            "OUTPUT FORMAT: Respond with ONLY a raw JSON object. For analysis sections: {\"text\": \"...\", \"research\": [...]}. For executive summary: {\"text\": \"...\"}. Omit research if empty. Every claim in text must trace to provided data or a research citation.",
+            "TOOLS: Use PostgreSQL (SELECT only), Neo4j (MATCH only), and Python to substantiate claims or add context. RocketRide product context (packages, sites, docs) is provided in the data payload under the rocketrideContext field. Do not attempt to fetch this data via other tools. Research citations must include: url, sourceType (documentation|blog|repository|social|news), claimSupported, excerpt, retrievedAt (ISO-8601)."
+          ]
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 702,
+          "y": 61.8
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "questions",
+          "from": "question_1"
+        }
+      ]
+    },
+    {
+      "id": "llm_anthropic_1",
+      "provider": "llm_anthropic",
+      "name": "Anthropic",
+      "config": {
+        "profile": "claude-sonnet-4-6",
+        "claude-sonnet-4-6": {
+          "apikey": "${ROCKETRIDE_ANTHROPIC_KEY}"
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 500,
+          "y": 250
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "llm",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    },
+    {
+      "id": "db_postgres_1",
+      "provider": "db_postgres",
+      "name": "PostgreSQL",
+      "config": {
+        "profile": "default",
+        "default": {
+          "host": "localhost",
+          "user": "pulsar",
+          "password": "${POSTGRES_PASSWORD}",
+          "database": "pulsar",
+          "table": "articles",
+          "db_description": "Pulsar market intelligence database. Key tables: articles (id, url, title, summary, content_type, sentiment, topic_tags[], entity_mentions jsonb, published_at, source_name, source_platform, score, comment_count), articles_raw (url_hash, raw_payload jsonb), reports (report_data jsonb, article_count, period_start, period_end), content_drafts (platform, content_type, body, status), runs (status, run_type, articles_scraped, articles_new). Use SELECT only.",
+          "max_attempts": 3
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 1060,
+          "y": 250
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "tool",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    },
+    {
+      "id": "db_neo4j_1",
+      "provider": "db_neo4j",
+      "name": "Neo4J",
+      "config": {
+        "profile": "default",
+        "default": {
+          "uri": "bolt://localhost:7687",
+          "auth_method": "userpass",
+          "user": "neo4j",
+          "password": "${POSTGRES_PASSWORD}",
+          "database": "neo4j",
+          "db_description": "Pulsar knowledge graph. Nodes: Article (id, url, title, publishedAt, sourcePlatform, score), Topic (name, category, trendScore, firstSeen, lastSeen), Entity (name, type: company|tool|model|language|concept), Author (handle, platform), Source (name, platform, type). Relationships: Article-[:TAGGED_WITH]->Topic, Article-[:MENTIONS]->Entity, Article-[:FROM_SOURCE]->Source, Article-[:AUTHORED_BY]->Author, Topic-[:RELATED_TO {weight}]-Topic. Use MATCH queries only, no writes.",
+          "max_attempts": 3
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 720,
+          "y": 250
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "tool",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    },
+    {
+      "id": "tool_python_1",
+      "provider": "tool_python",
+      "name": "Python",
+      "config": {
+        "type": "tool_python"
+      },
+      "ui": {
+        "position": {
+          "x": 890,
+          "y": 250
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "tool",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    },
+    {
+      "id": "response_answers_1",
+      "provider": "response_answers",
+      "name": "Return Answers",
+      "config": {
+        "laneName": "answers"
+      },
+      "ui": {
+        "position": {
+          "x": 970,
+          "y": 60
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "answers",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    }
+  ],
+  "project_id": "24666bde-571d-44e2-ad4d-6c278ed9fc84",
+  "version": 1,
+  "isLocked": false,
+  "snapToGrid": true,
+  "snapGridSize": [
+    10,
+    10
+  ],
+  "docRevision": 35
+}

@@ -1,0 +1,239 @@
+{
+  "components": [
+    {
+      "id": "webhook_1",
+      "provider": "webhook",
+      "name": "Web Hook",
+      "config": {
+        "hideForm": true,
+        "mode": "Source",
+        "parameters": {},
+        "type": "webhook"
+      },
+      "ui": {
+        "position": {
+          "x": 12,
+          "y": 51
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      }
+    },
+    {
+      "id": "parse_1",
+      "provider": "parse",
+      "name": "Parser",
+      "config": {},
+      "ui": {
+        "position": {
+          "x": 242,
+          "y": 51
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "tags",
+          "from": "webhook_1"
+        }
+      ]
+    },
+    {
+      "id": "question_1",
+      "provider": "question",
+      "name": "Question",
+      "config": {
+        "profile": "default",
+        "default": {
+          "question": "Grade the past prediction in the payload using the data from start_date forward. Use Postgres, Neo4j, and Python to gather evidence. Return only the JSON envelope specified in your system instructions, no preamble, no markdown fences."
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 472,
+          "y": 86
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "text",
+          "from": "parse_1"
+        }
+      ]
+    },
+    {
+      "id": "grader_agent",
+      "provider": "agent_deepagent",
+      "name": "Retrospective Grader",
+      "config": {
+        "default": {
+          "advanced_mode": true,
+          "agent_description": "Grades a single past prediction against the data accumulated since the prediction date. Uses Postgres for article/topic/entity counts and graph snapshot diffs, Neo4j for live graph traversal, Python for numerical comparisons. Returns a verdict with evidence.",
+          "system_prompt": "You grade a single past prediction. Input payload: prediction (prediction_text, predicted_entities, predicted_topics, prediction_type, made_at), query_window (start_date, end_date).\n\nUse your tools to gather evidence:\n- Postgres: count articles mentioning the predicted entities and topics by week in the query window. Look at sentiment shifts, topic frequencies. Read graph_snapshots rows with computed_at near start_date and end_date to compute PageRank rank deltas for predicted entities and mention count growth.\n- Neo4j: confirm live graph traversal where helpful (entity neighborhoods, topic co-occurrence shifts).\n- Python: numerical comparisons, deltas.\n\nRender a verdict using exactly one outcome value:\n- confirmed: the prediction landed (predicted entities/topics rose significantly per the data)\n- partially_confirmed: directionally right, magnitude or specifics off\n- refuted: the predicted thing did not happen, or the opposite happened\n- inconclusive: insufficient signal in the data to grade\n\nBe conservative: if evidence is mixed, prefer partially_confirmed over confirmed. If evidence is missing, use inconclusive. No em-dashes anywhere. Use commas, colons, periods, parentheses.\n\nOutput exactly this JSON shape, no preamble, no markdown fences:\n\n{\"outcome\": \"confirmed|partially_confirmed|refuted|inconclusive\", \"evidence_summary\": \"2-3 sentences citing specific numbers from your queries\", \"evidence_data\": {\"queries_run\": [\"...\"], \"key_metrics\": {}}}"
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 702,
+          "y": 62
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "questions",
+          "from": "question_1"
+        }
+      ]
+    },
+    {
+      "id": "llm_anthropic_1",
+      "provider": "llm_anthropic",
+      "name": "Anthropic Haiku",
+      "config": {
+        "profile": "claude-haiku-4-5",
+        "claude-haiku-4-5": {
+          "apikey": "${ROCKETRIDE_ANTHROPIC_KEY}"
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 530,
+          "y": 230
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "llm",
+          "from": "grader_agent"
+        }
+      ]
+    },
+    {
+      "id": "db_postgres_1",
+      "provider": "db_postgres",
+      "name": "PostgreSQL",
+      "config": {
+        "profile": "default",
+        "default": {
+          "host": "localhost",
+          "user": "pulsar",
+          "password": "${POSTGRES_PASSWORD}",
+          "database": "pulsar",
+          "table": "articles",
+          "db_description": "Pulsar market intelligence database. Key tables: articles (id, url, title, summary, content_type, sentiment, topic_tags[], entity_mentions jsonb, published_at, source_name, source_platform, score, comment_count), reports (report_data jsonb, generated_at), graph_snapshots (computed_at, topic_clusters jsonb, entity_importance jsonb, metadata jsonb). Use SELECT only.",
+          "max_attempts": 3
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 942,
+          "y": 200
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "tool",
+          "from": "grader_agent"
+        }
+      ]
+    },
+    {
+      "id": "db_neo4j_1",
+      "provider": "db_neo4j",
+      "name": "Neo4J",
+      "config": {
+        "profile": "default",
+        "default": {
+          "uri": "bolt://localhost:7687",
+          "auth_method": "userpass",
+          "user": "neo4j",
+          "password": "${POSTGRES_PASSWORD}",
+          "database": "neo4j",
+          "db_description": "Pulsar knowledge graph. Nodes: Article (id, publishedAt), Topic (name, trendScore), Entity (name, type), Author, Source. Relationships: Article-[:TAGGED_WITH]->Topic, Article-[:MENTIONS]->Entity, Topic-[:RELATED_TO {weight}]-Topic. Use MATCH queries only, no writes. Note: graph snapshots themselves live in Postgres (graph_snapshots table), not in Neo4j.",
+          "max_attempts": 3
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 730,
+          "y": 320
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "tool",
+          "from": "grader_agent"
+        }
+      ]
+    },
+    {
+      "id": "tool_python_1",
+      "provider": "tool_python",
+      "name": "Python",
+      "config": {
+        "type": "tool_python"
+      },
+      "ui": {
+        "position": {
+          "x": 890,
+          "y": 450
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "tool",
+          "from": "grader_agent"
+        }
+      ]
+    },
+    {
+      "id": "response_answers_1",
+      "provider": "response_answers",
+      "name": "Return Answers",
+      "config": {
+        "laneName": "answers"
+      },
+      "ui": {
+        "position": {
+          "x": 942,
+          "y": 62
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "answers",
+          "from": "grader_agent"
+        }
+      ]
+    }
+  ],
+  "project_id": "e1b1f3d2-0558-482c-9953-f4a67ee006ab",
+  "version": 1,
+  "isLocked": false,
+  "snapToGrid": true,
+  "snapGridSize": [
+    10,
+    10
+  ],
+  "docRevision": 4
+}

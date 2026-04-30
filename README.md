@@ -16,6 +16,20 @@ _Automated market intelligence agent. Scrapes free developer sources, runs AI an
   <img src="https://img.shields.io/badge/Neo4j-5.x-008CC1?logo=neo4j&logoColor=white" alt="Neo4j 5.x"/>
 </p>
 
+## Apps
+
+Pulsar is structured as a configurable agent framework. The Pulsar core
+(scheduler, scraper, analysis, content drafter) is shared, and domain-specific
+workflows live as self-contained apps under `packages/apps/`.
+
+The current shipping app is [`market-analysis/`](packages/apps/market-analysis/README.md),
+which generates a weekly developer-market trend report and per-platform
+content drafts. Future apps (technical roadmap, financial analysis,
+onboarding) live alongside it under the same contract.
+
+See [`packages/apps/README.md`](packages/apps/README.md) for the full app
+contract and the directory layout each app must follow.
+
 ## Setup
 
 ### Prerequisites
@@ -132,7 +146,7 @@ All free, no API keys required for scraping:
 | `pnpm dev` | Start Next.js dev server |
 | `pnpm run scrape` | Manual full scrape (all sources) |
 | `pnpm run scrape -- --source=hackernews` | Scrape a single source |
-| `pnpm run pipeline` | Manual pipeline run |
+| `pnpm run pipeline` | Manual pipeline run (loads `.pipe` files from `packages/apps/market-analysis/pipelines/`) |
 | `pnpm run scrape-scheduler` | Start scheduler (scrape at 5:30am, pipeline after) |
 | `pnpm run db:migrate` | Run database migrations |
 | `pnpm build` | Production build |
@@ -141,12 +155,14 @@ All free, no API keys required for scraping:
 
 ```
 packages/
-  shared/     @pulsar/shared    — Config, DB clients, types, utilities
-  scraper/    @pulsar/scraper   — Data collection process
-  pipeline/   @pulsar/pipeline  — AI analysis & report generation
-  voice/      @pulsar/voice     — Voice profile + sample loader
-  context/    @pulsar/context   — Operator context loader
-  web/        @pulsar/web       — Next.js app (UI + API routes)
+  shared/                  @pulsar/shared              Config, DB clients, types, utilities
+  scraper/                 @pulsar/scraper             Data collection process
+  pipeline/                @pulsar/pipeline            AI pipeline runner
+  voice/                   @pulsar/voice               Voice profile + sample loader
+  context/                 @pulsar/context             Operator context loader
+  web/                     @pulsar/web                 Next.js app (UI + API routes)
+  apps/
+    market-analysis/       @pulsar/app-market-analysis Trend report + content drafts app (pipelines, prompts, UI)
 ```
 
 ## Configuration loading

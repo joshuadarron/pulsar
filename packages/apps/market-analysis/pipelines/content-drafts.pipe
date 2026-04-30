@@ -1,0 +1,162 @@
+{
+  "components": [
+    {
+      "id": "webhook_1",
+      "provider": "webhook",
+      "name": "Web Hook",
+      "config": {
+        "hideForm": true,
+        "mode": "Source",
+        "parameters": {},
+        "type": "webhook"
+      },
+      "ui": {
+        "position": {
+          "x": 0,
+          "y": 440
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      }
+    },
+    {
+      "id": "parse_1",
+      "provider": "parse",
+      "name": "Parser",
+      "config": {},
+      "ui": {
+        "position": {
+          "x": 230,
+          "y": 420
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "tags",
+          "from": "webhook_1"
+        }
+      ]
+    },
+    {
+      "id": "question_1",
+      "provider": "question",
+      "name": "Question",
+      "config": {
+        "profile": "default",
+        "default": {
+          "question": "You will receive a JSON payload with report context (executiveSummary, contentRecommendations, trendingTopics, emergingTopics), topArticles, rocketrideContext (product context with packages and scraped site content), quotes (approved draft excerpts for tone reference), and dataPoints (platform engagement stats). Produce drafts for ALL seven platforms specified in your system instructions in a single response. Respond with ONLY a raw JSON object as specified in your system instructions. No markdown fences, no preamble."
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 472,
+          "y": 476.1666666666667
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "text",
+          "from": "parse_1"
+        }
+      ]
+    },
+    {
+      "id": "multi_drafter",
+      "provider": "agent_crewai",
+      "name": "Multi-Platform Writer",
+      "config": {
+        "instructions": [
+          "You work on content for RocketRide, an AI runtime (not a platform). Canonical positioning: the AI execution layer in your stack. Audience: developers evaluating AI infrastructure.",
+          "Tone: technical, builder-oriented, one engineer talking to another. No marketing-speak, no hype words. No em-dashes anywhere, use commas, colons, periods, or parentheses instead.",
+          "You receive a JSON context blob with report data (executiveSummary, contentRecommendations, trendingTopics, emergingTopics), topArticles, rocketridePackages, rocketrideContext (scraped site content), quotes (founder tone references), and dataPoints (stats). Use contentRecommendations as your primary brief for topic, angle, and urgency. Use the other fields for supporting detail, citations, and grounding.",
+          "Produce ONE draft for EACH of the seven platforms below. Each draft must follow the exact spec for that platform. Keep all drafts grounded in the same trend and data points so they reinforce a consistent narrative across channels.",
+          "PLATFORM hashnode: Full Hashnode blog post in markdown, 1500-2500 words. Title as H1. Section headers as H2. Include fenced code blocks with RocketRide pipeline configuration examples where relevant. Reference specific data points, package versions, and stats from the context. End with a conclusion and CTA linking to rocketride.ai or docs.rocketride.org.",
+          "PLATFORM medium: Medium-optimized article, 1500-2500 words. Use markdown but avoid code fence language identifiers that Medium does not render well. Use bold and italic for emphasis. Structure with clear section breaks. Reference specific data points and stats from the context. Match the founder's tone from the quotes provided.",
+          "PLATFORM devto: DEV.to article. Start with YAML front matter: title, published (false), tags (up to 4 relevant tags), and optionally canonical_url. Follow with the article body in DEV.to-flavored markdown, 1500-2500 words. Include fenced code blocks with RocketRide pipeline configs. Reference specific data points and stats.",
+          "PLATFORM hackernews: Hacker News submission. Format: 'Show HN: [title]' or 'Ask HN: [title]' on the first line (under 80 characters). Blank line. Then 2-3 sentences leading with the technical insight, not the product pitch. Reference a specific trend or data point that makes this timely. Keep it factual and understated.",
+          "PLATFORM linkedin: LinkedIn long-form post, 800-1200 words. No markdown (LinkedIn strips most of it). First-person narrative from a developer advocate perspective. Open with a hook that states a contrarian or surprising observation. Build the argument with specific data points and examples. End with a question to drive comments. Reference RocketRide naturally within the narrative, not as a sales pitch.",
+          "PLATFORM twitter: Numbered thread of 5-8 tweets. Tweet 1 is the hook, no numbering prefix. Subsequent tweets prefixed '2/', '3/', etc. Each tweet under 280 characters. The last tweet references RocketRide with a link to rocketride.ai. No hashtags. Lead with a technical insight or surprising data point, not a product announcement. Each tweet should stand alone but build on the thread narrative.",
+          "PLATFORM discord: Short Discord community announcement, 2-3 sentences. Community-ping tone, casual but technical. Reference a specific trend or data point that is timely. End with a discussion prompt question that invites community members to share their experience or opinion.",
+          "OUTPUT FORMAT: Respond with ONLY a raw JSON object containing exactly these seven keys: hashnode, medium, devto, hackernews, linkedin, twitter, discord. Each value is the full draft for that platform as a single string. Shape: {\"hashnode\": \"...\", \"medium\": \"...\", \"devto\": \"...\", \"hackernews\": \"...\", \"linkedin\": \"...\", \"twitter\": \"...\", \"discord\": \"...\"}. No markdown fences around the outer JSON, no preamble, no commentary. Inside each draft string, escape literal double-quotes as \\\" and literal newlines as \\n so the outer JSON parses cleanly."
+        ],
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 702,
+          "y": 460.6666666666667
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "questions",
+          "from": "question_1"
+        }
+      ]
+    },
+    {
+      "id": "llm_anthropic_1",
+      "provider": "llm_anthropic",
+      "name": "Anthropic",
+      "config": {
+        "profile": "claude-sonnet-4-6",
+        "claude-sonnet-4-6": {
+          "apikey": "${ROCKETRIDE_ANTHROPIC_KEY}"
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 550,
+          "y": 670
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "llm",
+          "from": "multi_drafter"
+        }
+      ]
+    },
+    {
+      "id": "response_answers_1",
+      "provider": "response_answers",
+      "name": "Return Answers",
+      "config": {
+        "laneName": "answers"
+      },
+      "ui": {
+        "position": {
+          "x": 940,
+          "y": 470
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "answers",
+          "from": "multi_drafter"
+        }
+      ]
+    }
+  ],
+  "project_id": "b865cfa2-88c9-4bda-a782-eec9793a679b",
+  "version": 1,
+  "isLocked": false,
+  "snapToGrid": true,
+  "snapGridSize": [
+    10,
+    10
+  ],
+  "docRevision": 17
+}

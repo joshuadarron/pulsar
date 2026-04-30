@@ -11,7 +11,7 @@
 			"**/node_modules/**",
 			"**/*.tsbuildinfo",
 			"pnpm-lock.yaml",
-			"packages/pipeline/pipelines/**",
+			"packages/apps/market-analysis/pipelines/**",
 			".claude/**",
 			".rocketride/**"
 		]
