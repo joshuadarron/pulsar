@@ -37,10 +37,38 @@ git clone https://github.com/JoshuaDarron/pulsar && cd pulsar
 docker-compose up -d
 ```
 
-3. Install dependencies
+3. Install dependencies (also runs interactive operator setup)
 ```bash
 pnpm install
 ```
+
+The `pnpm install` postinstall hook walks you through configuring `.voice/` (how you write) and `.context/` (your org's positioning, audience, hard rules, allowed GitHub logins). Both directories are gitignored. Skip rules:
+
+- Non-TTY environments (CI, Docker builds): the hook prints a skip message and exits 0.
+- Pulsar installed as a transitive dependency: the hook is silent.
+- Already configured (`.voice/` and `.context/` both exist): the hook prints a notice and exits 0.
+
+If you run `pnpm install --ignore-scripts`, postinstall is skipped entirely. Run setup manually with:
+
+```bash
+pnpm setup
+```
+
+For CI/CD or scripted setup, pass a YAML config file:
+
+```bash
+pnpm exec pulsar init --from-config packages/cli/sample-config.rocketride.yaml
+# or any operator-specific YAML
+pnpm exec pulsar init --from-config path/to/your-config.yaml
+```
+
+To wipe and redo setup, add `--reconfigure`:
+
+```bash
+pnpm setup --reconfigure
+```
+
+See `packages/cli/README.md` for the full YAML schema and the file shapes written under `.voice/` and `.context/`.
 
 4. Create your environment file
 ```bash
@@ -116,8 +144,30 @@ packages/
   shared/     @pulsar/shared    — Config, DB clients, types, utilities
   scraper/    @pulsar/scraper   — Data collection process
   pipeline/   @pulsar/pipeline  — AI analysis & report generation
+  voice/      @pulsar/voice     — Voice profile + sample loader
+  context/    @pulsar/context   — Operator context loader
   web/        @pulsar/web       — Next.js app (UI + API routes)
 ```
+
+## Configuration loading
+
+Pipelines do not hardcode operator-specific knowledge. Two pure-read loaders
+inject the operator's voice and context at runtime:
+
+- `loadOperatorContext()` from `@pulsar/context` returns positioning,
+  audience, hard rules, glossary, tracked entities, allowed GitHub logins, and
+  grounding URLs from `.context/`.
+- `loadVoiceContext(formats)` from `@pulsar/voice` returns tone rules and up
+  to three writing samples per requested format from `.voice/`.
+
+Both directories are operator-supplied and gitignored. The defaults live at
+`.context/` and `.voice/` under the repo root. Override the locations with
+the `PULSAR_CONTEXT_DIR` and `PULSAR_VOICE_DIR` environment variables.
+
+If `.context/profile.md` or `.voice/profile.md` is missing, the loaders throw
+`OperatorContextNotConfiguredError` or `VoiceContextNotConfiguredError`. The
+pipeline runner refuses to start without a configured operator context. Run
+`pnpm setup` to generate the required files.
 
 ## Adding a New Source
 

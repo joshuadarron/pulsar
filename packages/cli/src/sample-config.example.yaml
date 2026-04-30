@@ -1,0 +1,60 @@
+# Example Pulsar setup config.
+#
+# Used by:
+#   pulsar init --from-config <path>
+#
+# The CLI loads this YAML, normalizes it to a SetupConfig, and writes
+# .voice/ and .context/ files to the current working directory.
+
+operator:
+  name: Your Name
+  role: Your role (e.g. DevRel Lead, Founder)
+
+org:
+  name: Your Org
+  positioning: One sentence describing what your org does and how it is positioned.
+
+audience: One or two sentences describing who you serve.
+
+domain: market-analysis  # market-analysis | technical-roadmap | financial-analysis | onboarding | custom
+
+allowedGitHubLogins:
+  - your-github-login
+
+context:
+  hardRules:
+    - No em-dashes anywhere. Use commas, colons, periods, or parentheses instead.
+    - Tone is technical, builder oriented, one engineer talking to another.
+    - Every claim in text must trace to provided data or a research entry.
+
+  glossary:
+    - "Term: definition."
+
+  trackedEntities:
+    - Example Entity
+
+  keywords:
+    - example-keyword
+
+  technologies:
+    - example-tech
+
+  groundingUrls:
+    - https://example.com/
+
+voice:
+  toneRules:
+    - Plain, direct sentences. Active voice.
+    - One number per claim, not three.
+  sentencePatterns:
+    - Open with the dominant signal, then the supporting number.
+  neverWrite:
+    - Marketing superlatives (revolutionary, game-changing, exciting).
+    - Em-dashes.
+  samples:
+    long-form: []
+    linkedin: []
+    reddit: []
+    discord: []
+    twitter: []
+    other: []

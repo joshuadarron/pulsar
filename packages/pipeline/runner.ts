@@ -1,29 +1,34 @@
-import { getClient, disconnectClient, usePipeline, terminatePipeline } from './lib/rocketride.js';
-import { sendReportEmail } from './notify.js';
-import { extractJson } from './lib/parse-json.js';
-import { runValidators, VALIDATOR_SUITES } from './lib/evals/validators.js';
-import { persistValidation } from './lib/evals/persist.js';
-import { runEvaluations } from './lib/evals/runner.js';
-import { extractPredictions } from './lib/evals/extract.js';
-import { fetchRocketRideContext, type RocketRideContext } from './lib/fetch-rocketride-context.js';
-import { SECTION_PROMPTS } from './trend-report-prompts.js';
-import { query } from '@pulsar/shared/db/postgres';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+	type OperatorContext,
+	OperatorContextNotConfiguredError,
+	loadOperatorContext
+} from '@pulsar/context';
 import { getSession } from '@pulsar/shared/db/neo4j';
+import { query } from '@pulsar/shared/db/postgres';
 import { logRun } from '@pulsar/shared/run-logger';
 import type {
-	ReportData,
-	MarketLandscapeData,
-	TechnologyTrendsData,
 	DeveloperSignalsData,
-	ResearchCitation,
+	EmergingEntity,
 	ExtractedPrediction,
 	GraphSnapshot,
 	GraphSnapshotCluster,
 	GraphSnapshotEntity,
-	EmergingEntity
+	MarketLandscapeData,
+	ReportData,
+	ResearchCitation,
+	TechnologyTrendsData
 } from '@pulsar/shared/types';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { extractPredictions } from './lib/evals/extract.js';
+import { persistValidation } from './lib/evals/persist.js';
+import { runEvaluations } from './lib/evals/runner.js';
+import { VALIDATOR_SUITES, runValidators } from './lib/evals/validators.js';
+import { type RocketRideContext, fetchRocketRideContext } from './lib/fetch-rocketride-context.js';
+import { extractJson } from './lib/parse-json.js';
+import { disconnectClient, getClient, terminatePipeline, usePipeline } from './lib/rocketride.js';
+import { sendReportEmail } from './notify.js';
+import { buildSectionPrompts, buildSystemPrompt } from './trend-report-prompts.js';
 
 const PIPELINES_DIR = path.resolve(fileURLToPath(import.meta.url), '../pipelines');
 const TREND_REPORT_PIPE = path.join(PIPELINES_DIR, 'trend-report.pipe');
@@ -374,12 +379,15 @@ async function runSection(
 	client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
 	sectionKey: string,
+	sectionPrompts: Record<string, string>,
+	systemPrompt: string,
 	data: unknown
 ): Promise<SectionResponse> {
 	checkCancelled(runId);
 
 	const payload = {
-		prompt: SECTION_PROMPTS[sectionKey],
+		systemPrompt,
+		prompt: sectionPrompts[sectionKey],
 		data
 	};
 
@@ -660,9 +668,13 @@ async function gatherDeveloperSignalsData(): Promise<DeveloperSignalsData> {
 async function runTrendReport(
 	client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
-	rocketrideContext: RocketRideContext | null
+	rocketrideContext: RocketRideContext | null,
+	operatorContext: OperatorContext
 ): Promise<string | null> {
 	await logRun(runId, 'info', 'trend-report', 'Starting trend report pipeline...');
+
+	const systemPrompt = buildSystemPrompt(operatorContext);
+	const sectionPrompts = buildSectionPrompts(operatorContext);
 
 	// --- Gather data for all three pass-1 sections ---
 	await logRun(runId, 'info', 'trend-report', 'Querying databases for section data...');
@@ -699,7 +711,7 @@ async function runTrendReport(
 		`Data gathered: ${articleCount} articles, ${techData.topics.length} topics, ${marketData.entities.length} entities, ${sourcesCount} sources`
 	);
 
-	// --- Pass 1: sections 1, 2, 3 (sequential — RocketRide runs one pipeline at a time) ---
+	// --- Pass 1: sections 1, 2, 3 (sequential, RocketRide runs one pipeline at a time) ---
 	checkCancelled(runId);
 	await logRun(
 		runId,
@@ -708,21 +720,42 @@ async function runTrendReport(
 		'Pass 1: generating market_landscape, technology_trends, developer_signals...'
 	);
 
-	const marketResponse = await runSection(client, runId, 'marketLandscape', {
-		...marketData,
-		entityImportance: topEntities,
-		rocketrideContext
-	});
-	const techResponse = await runSection(client, runId, 'technologyTrends', {
-		...techData,
-		topicClusters: topClusters,
-		rocketrideContext
-	});
-	const signalsResponse = await runSection(client, runId, 'developerSignals', {
-		...signalsData,
-		emergingEntities,
-		rocketrideContext
-	});
+	const marketResponse = await runSection(
+		client,
+		runId,
+		'marketLandscape',
+		sectionPrompts,
+		systemPrompt,
+		{
+			...marketData,
+			entityImportance: topEntities,
+			rocketrideContext
+		}
+	);
+	const techResponse = await runSection(
+		client,
+		runId,
+		'technologyTrends',
+		sectionPrompts,
+		systemPrompt,
+		{
+			...techData,
+			topicClusters: topClusters,
+			rocketrideContext
+		}
+	);
+	const signalsResponse = await runSection(
+		client,
+		runId,
+		'developerSignals',
+		sectionPrompts,
+		systemPrompt,
+		{
+			...signalsData,
+			emergingEntities,
+			rocketrideContext
+		}
+	);
 
 	await logRun(runId, 'info', 'trend-report', 'Pass 1 complete.');
 
@@ -736,7 +769,14 @@ async function runTrendReport(
 		developerSignals: signalsResponse.text,
 		rocketrideContext
 	};
-	const contentResponse = await runSection(client, runId, 'contentRecommendations', pass2Input);
+	const contentResponse = await runSection(
+		client,
+		runId,
+		'contentRecommendations',
+		sectionPrompts,
+		systemPrompt,
+		pass2Input
+	);
 
 	await logRun(runId, 'info', 'trend-report', 'Pass 2 complete.');
 
@@ -750,7 +790,14 @@ async function runTrendReport(
 		developerSignals: signalsResponse.text,
 		contentRecommendations: contentResponse.text
 	};
-	const summaryResponse = await runSection(client, runId, 'executiveSummary', pass3Input);
+	const summaryResponse = await runSection(
+		client,
+		runId,
+		'executiveSummary',
+		sectionPrompts,
+		systemPrompt,
+		pass3Input
+	);
 
 	await logRun(runId, 'info', 'trend-report', 'Pass 3 complete.');
 
@@ -1057,7 +1104,7 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 			'code' in err &&
 			(err as { code: string }).code === '23505'
 		) {
-			console.log('[Pipeline] Skipped — another pipeline is already running.');
+			console.log('[Pipeline] Skipped: another pipeline is already running.');
 			return { runId: null, reportId: null };
 		}
 		throw err;
@@ -1066,6 +1113,20 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 	let client: Awaited<ReturnType<typeof getClient>> | null = null;
 	try {
 		await logRun(runId, 'info', 'init', `Pipeline run started (trigger: ${trigger})`);
+
+		// Load operator context once. Pipelines refuse to start without it.
+		let operatorContext: OperatorContext;
+		try {
+			operatorContext = loadOperatorContext();
+		} catch (err) {
+			if (err instanceof OperatorContextNotConfiguredError) {
+				const message =
+					'Pulsar pipeline requires .context/ configuration. Run pnpm setup to configure.';
+				await logRun(runId, 'error', 'init', message);
+			}
+			throw err;
+		}
+
 		client = await getClient();
 		await logRun(runId, 'info', 'init', 'Connected to RocketRide');
 
@@ -1091,7 +1152,7 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 		);
 
 		// Sequential pipeline execution: trend report, predictions extraction, content drafts
-		const reportId = await runTrendReport(client, runId, rocketrideContext);
+		const reportId = await runTrendReport(client, runId, rocketrideContext, operatorContext);
 		let draftCount = 0;
 
 		if (reportId) {

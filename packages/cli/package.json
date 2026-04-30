@@ -1,0 +1,23 @@
+{
+	"name": "@pulsar/cli",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"bin": {
+		"pulsar": "dist/cli.js"
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"start": "tsx src/cli.ts",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@inquirer/prompts": "^7.2.1",
+		"yaml": "^2.6.1"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.0",
+		"tsx": "^4.19.2",
+		"typescript": "^5.7.2"
+	}
+}

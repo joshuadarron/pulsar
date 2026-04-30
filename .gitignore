@@ -5,6 +5,8 @@ node_modules/
 .env.local
 dist/
 packages/pipeline/pipelines/
+/.voice/
+/.context/
 *.tsbuildinfo
 *.log
 .DS_Store

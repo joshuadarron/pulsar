@@ -23,7 +23,9 @@
 		"format:check": "biome format .",
 		"check": "biome check .",
 		"test": "node --import tsx --experimental-test-module-mocks --test 'packages/**/*.test.ts'",
-		"test:watch": "node --import tsx --experimental-test-module-mocks --test --watch 'packages/**/*.test.ts'"
+		"test:watch": "node --import tsx --experimental-test-module-mocks --test --watch 'packages/**/*.test.ts'",
+		"postinstall": "node --import tsx packages/cli/src/postinstall.ts",
+		"setup": "node --import tsx packages/cli/src/cli.ts setup"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",

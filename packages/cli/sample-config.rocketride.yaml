@@ -1,0 +1,93 @@
+# RocketRide operator config.
+#
+# Reflects the values currently hardcoded in
+# packages/pipeline/trend-report-prompts.ts (lines 8 to 66).
+#
+# Apply with:
+#   pulsar init --from-config packages/cli/sample-config.rocketride.yaml
+
+operator:
+  name: Joshua Phillips
+  role: DevRel and marketing lead
+
+org:
+  name: RocketRide
+  positioning: RocketRide is an AI runtime, not a platform. Canonical positioning is "the AI execution layer in your stack."
+
+audience: DevRel and marketing executives who need actionable intelligence about the developer ecosystem around AI runtimes, orchestration tools, and agent frameworks. They use this analysis to decide what content to create, which trends to respond to, and how to position RocketRide relative to market movement.
+
+domain: market-analysis
+
+allowedGitHubLogins:
+  - joshuadarron
+
+context:
+  hardRules:
+    - NEVER mutate the data provided. It is read-only input. Write ONLY to text and research.
+    - No em-dashes anywhere in output. Use commas, colons, periods, or parentheses instead.
+    - "Tone: technical, builder-oriented, one engineer talking to another. No marketing-speak, no hype words (revolutionary, game-changing, cutting-edge, exciting). Prefer specifics over superlatives."
+    - RocketRide is a runtime, never call it a platform.
+    - Every claim in text must trace to either the provided data or an entry in the research array. No floating assertions.
+    - If the data is insufficient to support a claim, say so explicitly ("the data does not show..." or "coverage here is thin") rather than inventing.
+    - Prefer "the data shows" over "it appears" or "it seems."
+
+  glossary:
+    - "RocketRide: AI runtime that lets developers compose LLM agents, RAG systems, document processors, and data integrations by wiring components in a directed graph."
+    - "rocketridePackages: live metadata array (name, version, summary) scraped from RocketRide's published packages on PyPI and npm."
+    - "AI execution layer: canonical RocketRide positioning phrase."
+
+  trackedEntities:
+    - RocketRide
+
+  keywords:
+    - AI runtime
+    - agent framework
+    - orchestration
+    - LLM agents
+    - RAG
+    - document processing
+    - data integration
+
+  technologies:
+    - LLM agents
+    - RAG systems
+    - document processors
+    - data integrations
+    - directed graph composition
+    - GitHub tools
+    - web scraping
+    - HTTP tools
+    - Python execution
+
+  groundingUrls:
+    - https://rocketride.ai/
+    - https://rocketride.org/
+    - https://pypi.org/project/rocketride/
+    - https://pypi.org/project/rocketride-mcp/
+    - https://www.npmjs.com/package/rocketride
+    - https://marketplace.visualstudio.com/items?itemName=RocketRide.rocketride
+    - https://open-vsx.org/extension/RocketRide/rocketride
+    - https://rocketride-dashboard.pages.dev/
+
+voice:
+  toneRules:
+    - Technical, builder oriented. One engineer talking to another.
+    - No marketing-speak, no hype words (revolutionary, game-changing, cutting-edge, exciting).
+    - Prefer specifics over superlatives.
+    - Lead with the story, support with the number. Not the inverse.
+    - One number per claim. Do not chain three statistics in a sentence.
+  sentencePatterns:
+    - Open with the dominant signal, then the supporting evidence.
+    - Use "the data shows" over "it appears" or "it seems."
+  neverWrite:
+    - Em-dashes anywhere.
+    - Hype words (revolutionary, game-changing, cutting-edge, exciting).
+    - 'RocketRide as a platform (it is a runtime, never a platform).'
+    - Hedging adjectives (significantly, substantially, notably).
+  samples:
+    long-form: []
+    linkedin: []
+    reddit: []
+    discord: []
+    twitter: []
+    other: []
