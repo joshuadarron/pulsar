@@ -95,7 +95,8 @@ Anything in the body is operator-facing notes and is ignored.
 
 `OperatorContextNotConfiguredError` is thrown when `profile.md` is missing.
 The pipeline runner refuses to start without this file. The error message
-points operators at `pnpm setup`.
+points operators at `pnpm setup`. See
+[`@pulsar/cli`](../cli/README.md) for the operator-onboarding walkthrough.
 
 ## Environment
 

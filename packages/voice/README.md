@@ -78,7 +78,8 @@ Section header matching is case-insensitive on the title text but requires the
 ## Errors
 
 `VoiceContextNotConfiguredError` is thrown when `profile.md` is missing. The
-message points operators at `pnpm setup`.
+message points operators at `pnpm setup`. See
+[`@pulsar/cli`](../cli/README.md) for the operator-onboarding walkthrough.
 
 ## Environment
 

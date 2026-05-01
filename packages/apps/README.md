@@ -66,6 +66,19 @@ app's pipelines and how to render its output.
    fields, expected voice formats, and integration points with the Pulsar
    core.
 
+## Operator config and voice loaders
+
+Apps consume operator-specific knowledge through two pure-read loader packages,
+not by reading `.context/` or `.voice/` directly:
+
+- [`@pulsar/context`](../context/README.md): positioning, audience, hard rules,
+  glossary, tracked entities, allowed GitHub logins, grounding URLs.
+- [`@pulsar/voice`](../voice/README.md): tone, sentence patterns, what never to
+  write, plus writing samples per format.
+
+The override env vars (`PULSAR_CONTEXT_DIR`, `PULSAR_VOICE_DIR`) and the file
+shapes are documented in those package READMEs.
+
 ## Existing apps
 
 - [`market-analysis/`](./market-analysis/README.md): tracks developer-market

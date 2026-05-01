@@ -1,6 +1,8 @@
 # @pulsar/cli
 
-Setup CLI for Pulsar. Walks an operator through configuring a fresh clone and writes the operator-agnostic `.voice/` and `.context/` trees that the loaders package reads at runtime.
+Setup CLI for Pulsar. Walks an operator through configuring a fresh clone and writes the operator-agnostic `.voice/` and `.context/` trees that the loader packages ([`@pulsar/voice`](../voice/README.md), [`@pulsar/context`](../context/README.md)) read at runtime.
+
+This README also doubles as the operator-onboarding walkthrough. The end-to-end verification steps are at the bottom.
 
 ## Entry points
 
@@ -114,3 +116,45 @@ The body of `.context/profile.md` uses `# Positioning` and `# Audience` as secti
 ## Tests
 
 Tests live under `__tests__/` and run via the root `pnpm test` script. They cover write-config output shape and the postinstall guard logic.
+
+## Operator onboarding walkthrough
+
+A new operator goes through these steps end-to-end:
+
+1. Clone the repo and start the databases:
+   ```bash
+   git clone https://github.com/JoshuaDarron/pulsar && cd pulsar
+   docker-compose up -d
+   ```
+2. Install dependencies. The postinstall hook prompts for setup interactively:
+   ```bash
+   pnpm install
+   ```
+   To run setup explicitly (or after `--ignore-scripts`):
+   ```bash
+   pnpm setup
+   ```
+   To run setup non-interactively from a YAML file:
+   ```bash
+   pnpm exec pulsar init --from-config path/to/your-config.yaml
+   ```
+3. Fill out the four `.context/` files. `profile.md` carries operator and org identity, positioning, audience, allowed GitHub logins, and grounding URLs. `hard-rules.md` carries org-specific rules. `glossary.md` carries internal jargon. `tracked-entities.md` carries entities, keywords, and technologies that matter for the domain.
+4. Fill out the `.voice/profile.md` (tone, sentence patterns, things never to write) and add at least one sample per format you plan to draft for under `.voice/samples/<format>/`.
+5. Copy the env file and run migrations:
+   ```bash
+   cp .env.example .env.local
+   pnpm run db:migrate
+   ```
+6. Trigger an initial scrape and start the dev server:
+   ```bash
+   pnpm run scrape
+   pnpm dev
+   ```
+
+Verify the result: `pnpm dev` boots without `OperatorContextNotConfiguredError` or `VoiceContextNotConfiguredError`. `pnpm run pipeline` produces a report that mentions your positioning and audience and respects your hard rules. Drafts at `/drafts` use your voice samples.
+
+A worked example config (RocketRide's setup) ships at `packages/cli/sample-config.rocketride.yaml`. Operators can rebuild that exact configuration with:
+
+```bash
+pnpm exec pulsar init --from-config packages/cli/sample-config.rocketride.yaml
+```
