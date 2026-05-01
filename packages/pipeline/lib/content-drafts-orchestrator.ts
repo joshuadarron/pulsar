@@ -285,24 +285,60 @@ export async function orchestrateContentDrafts(
 		`Pass 1 complete: ${angles.length} angle(s) selected.`
 	);
 
-	// --- Pass 2: per-platform drafts ---
-	const neededFormats = uniqueVoiceFormatsForAngles(angles);
-	const samplesForDrafter = scopedSamples(voice, neededFormats);
+	// --- Pass 2: per-platform drafts (fan out: one LLM call per angle) ---
+	//
+	// Why fan out: a single batched call must produce N angles x M platforms of
+	// content in one response. With four angles and several platforms each, the
+	// response can blow past the LLM's max_tokens cap and truncate mid-string,
+	// which makes JSON.parse fail and drops every draft. Calling the drafter
+	// once per angle keeps each response small enough to land cleanly, and
+	// isolates failures so one bad angle does not zero out the others.
+	//
+	// Sequential (not parallel): keeps the run console log readable
+	// ("Pass 2 [n/N]: <angle>"), avoids rate-limit pile-up, and lets each call
+	// reuse the prior call's terminated rocketride token.
+	await log(
+		runId,
+		'info',
+		'content-drafts',
+		`Pass 2: writing drafts for ${angles.length} angle(s)...`
+	);
 
-	const drafterSystem = buildDrafterSystemPrompt(operatorContext, voice, samplesForDrafter);
-	const drafterUser = buildDrafterUserPrompt({
-		angles,
-		reportContext: {
-			executiveSummary: reportData.sections.executiveSummary.text,
-			marketSnapshot: reportData.sections.marketSnapshot.text
+	const drafts: ParsedDraft[] = [];
+	for (let i = 0; i < angles.length; i += 1) {
+		const angle = angles[i];
+		const formatsForAngle = uniqueVoiceFormatsForAngles([angle]);
+		const samplesForAngle = scopedSamples(voice, formatsForAngle);
+
+		const drafterSystem = buildDrafterSystemPrompt(operatorContext, voice, samplesForAngle);
+		const drafterUser = buildDrafterUserPrompt({
+			angles: [angle],
+			reportContext: {
+				executiveSummary: reportData.sections.executiveSummary.text,
+				marketSnapshot: reportData.sections.marketSnapshot.text
+			}
+		});
+
+		const angleLabel = `${i + 1}/${angles.length}`;
+		const angleSummary = angle.angle.slice(0, 80);
+		await log(runId, 'info', 'content-drafts', `Pass 2 [${angleLabel}]: ${angleSummary}`);
+
+		const drafterResponse = await invokePipeline(runId, CONTENT_DRAFTER_PIPE, {
+			system: drafterSystem,
+			user: drafterUser
+		});
+		const angleDrafts = parseDrafts(drafterResponse);
+		if (angleDrafts.length === 0) {
+			await log(
+				runId,
+				'warn',
+				'content-drafts',
+				`Pass 2 [${angleLabel}]: drafter returned 0 drafts for this angle, skipping.`
+			);
+			continue;
 		}
-	});
-
-	const drafterResponse = await invokePipeline(runId, CONTENT_DRAFTER_PIPE, {
-		system: drafterSystem,
-		user: drafterUser
-	});
-	const drafts = parseDrafts(drafterResponse);
+		drafts.push(...angleDrafts);
+	}
 
 	// --- Persist ---
 	let totalVariants = 0;

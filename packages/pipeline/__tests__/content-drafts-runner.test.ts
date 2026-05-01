@@ -137,12 +137,32 @@ function makeHarness(opts: {
 	const inserted: ContentDraftRow[] = [];
 	const logs: LogCall[] = [];
 
+	// Pass 2 is fanned out one drafter call per angle. Split the static
+	// drafterResponse into per-angle groups so each call receives only the
+	// drafts whose `angle` field matches the angle being requested. Tests can
+	// continue to declare a single drafterResponse with all drafts.
+	const drafterDrafts =
+		(opts.drafterResponse as { drafts?: Array<{ angle?: string }> } | undefined)?.drafts ?? [];
+	const draftsByAngle = new Map<string, unknown[]>();
+	for (const draft of drafterDrafts) {
+		const angleKey = typeof draft?.angle === 'string' ? draft.angle : '';
+		const arr = draftsByAngle.get(angleKey) ?? [];
+		arr.push(draft);
+		draftsByAngle.set(angleKey, arr);
+	}
+	const orderedAngleKeys = [...draftsByAngle.keys()];
+	let drafterCallIndex = 0;
+
 	const invokePipeline: InvokePipelineFn = async (_runId, pipeName, payload) => {
 		pipelineCalls.push({ pipeName, system: payload.system, user: payload.user });
 		if (pipeName === 'angle-picker.pipe') {
 			return opts.angleResponse ?? { angles: [] };
 		}
-		return opts.drafterResponse ?? { drafts: [] };
+		// content-drafter.pipe: serve one angle's drafts per call.
+		const angleKey = orderedAngleKeys[drafterCallIndex];
+		drafterCallIndex += 1;
+		const drafts = angleKey ? (draftsByAngle.get(angleKey) ?? []) : [];
+		return { drafts };
 	};
 
 	const log: LogFn = async (_runId, level, stage, message) => {
