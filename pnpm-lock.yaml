@@ -98,6 +98,9 @@ importers:
       '@pulsar/shared':
         specifier: workspace:*
         version: link:../shared
+      '@pulsar/voice':
+        specifier: workspace:*
+        version: link:../voice
       '@pulsar/web':
         specifier: workspace:*
         version: link:../web

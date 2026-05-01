@@ -28,6 +28,11 @@ import type {
 	SignalInterpretation,
 	SupportingResource
 } from '@pulsar/shared/types';
+import { loadVoiceContext } from '@pulsar/voice';
+import {
+	type ContentDraftRow,
+	orchestrateContentDrafts
+} from './lib/content-drafts-orchestrator.js';
 import { extractPredictions } from './lib/evals/extract.js';
 import { persistValidation } from './lib/evals/persist.js';
 import { runEvaluations } from './lib/evals/runner.js';
@@ -1031,273 +1036,216 @@ async function runTrendReport(
 }
 
 // ---------------------------------------------------------------------------
-// Content drafts pipeline (unchanged structure, updated field paths)
+// Content drafts pipeline (Phase 5: two-pass, voice-aware)
+//
+// Pass 1 (`angle-picker.pipe`): selects 1 to N high-signal opportunities from
+// the report's signalInterpretation and decides which platforms each angle
+// targets. Voice profile only, no per-format samples.
+//
+// Pass 2 (`content-drafter.pipe`): writes the full content for every platform
+// the picker selected, scoped to the voice samples for those platforms.
+//
+// The orchestration logic lives in `./lib/content-drafts-orchestrator.ts` so
+// the two-pass flow can be tested without RocketRide or PostgreSQL. This
+// wrapper supplies real wiring (RocketRide invoke, PostgreSQL insert,
+// operator/voice loaders, run logger).
 // ---------------------------------------------------------------------------
 
-const DRAFT_PLATFORMS = [
-	'hashnode',
-	'medium',
-	'devto',
-	'hackernews',
-	'linkedin',
-	'twitter',
-	'discord'
-];
+async function invokeContentPipeline(
+	client: Awaited<ReturnType<typeof getClient>>,
+	runId: string,
+	pipeName: 'angle-picker.pipe' | 'content-drafter.pipe',
+	payload: { system: string; user: string }
+): Promise<unknown> {
+	checkCancelled(runId);
+	const pipePath = path.join(PIPELINES_DIR, pipeName);
+	const { token } = await usePipeline(client, runId, pipePath);
+	setActiveToken(runId, client, token);
+
+	// The .pipe agents read a single `prompt` field at runtime: their static
+	// instructions reference it by name. Concatenate the system directives
+	// and the per-call user prompt into one body.
+	const wirePayload = {
+		prompt: `${payload.system}\n\n---\n\n${payload.user}`,
+		data: {}
+	};
+
+	let response: unknown;
+	try {
+		response = await client.send(token, JSON.stringify(wirePayload), {}, 'application/json');
+	} finally {
+		await terminatePipeline(client, token);
+	}
+
+	const answers = (response as { answers?: unknown })?.answers ?? [];
+	const first = Array.isArray(answers) ? answers[0] : answers;
+
+	if (first && typeof first === 'object' && !Array.isArray(first)) {
+		return first;
+	}
+	const str = typeof first === 'string' ? first : JSON.stringify(first ?? '{}');
+	try {
+		return extractJson<Record<string, unknown>>(str);
+	} catch (parseErr) {
+		const head = str.slice(0, 1500);
+		const tail = str.length > 2100 ? str.slice(-600) : '';
+		const preview = tail
+			? `[${str.length} chars] ${head}\n...[middle elided]...\n${tail}`
+			: `[${str.length} chars] ${str}`;
+		const reason = parseErr instanceof Error ? parseErr.message : String(parseErr);
+		await logRun(
+			runId,
+			'warn',
+			'content-drafts',
+			`Could not parse ${pipeName} answer (${reason}). Raw: ${preview}`
+		);
+		return {};
+	}
+}
+
+async function persistContentDraftRow(row: ContentDraftRow): Promise<void> {
+	await query(
+		`INSERT INTO content_drafts
+		   (run_id, report_id, platform, content_type, body, angle, opportunity_signal, metadata)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		[
+			row.runId,
+			row.reportId,
+			row.platform,
+			row.contentType,
+			row.body,
+			row.angle,
+			row.opportunitySignal,
+			JSON.stringify(row.metadata)
+		]
+	);
+}
 
 async function runContentDrafts(
 	client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
 	reportId: string,
-	rocketrideContext: RocketRideContext | null
-) {
+	reportData: ReportData
+): Promise<number> {
 	await logRun(runId, 'info', 'content-drafts', 'Starting content drafts pipeline...');
 
-	// Get latest report
-	const reportResult = await query<{ report_data: ReportData }>(
-		'SELECT report_data FROM reports WHERE id = $1',
-		[reportId]
-	);
-	const reportData = reportResult.rows[0].report_data;
-	const sections = reportData.sections;
-
-	// Get top 10 articles from last 24h
-	const articlesResult = await query<{
-		title: string;
-		url: string;
-		summary: string;
-		source_name: string;
-	}>(
-		`SELECT title, url, summary, source_name FROM articles
-		 WHERE published_at > now() - interval '24 hours' AND enriched_at IS NOT NULL
-		 ORDER BY score DESC NULLS LAST LIMIT 10`
-	);
-
-	await logRun(
-		runId,
-		'info',
-		'content-drafts',
-		`Using ${articlesResult.rows.length} top articles for draft generation`
-	);
-
-	// Gather enrichment data for drafters
-	const [quotesResult, statsResult] = await Promise.all([
-		query<{ body: string }>(
-			`SELECT body FROM content_drafts
-			 WHERE status = 'approved'
-			 ORDER BY created_at DESC LIMIT 3`
-		).catch(() => ({ rows: [] as { body: string }[] })),
-		query<{
-			source_platform: string;
-			article_count: string;
-			avg_score: string;
-			total_comments: string;
-		}>(
-			`SELECT source_platform, count(*) AS article_count,
-			        avg(score)::numeric(10,2) AS avg_score,
-			        sum(comment_count) AS total_comments
-			 FROM articles
-			 WHERE published_at > now() - interval '7 days'
-			 GROUP BY source_platform ORDER BY article_count DESC`
-		).catch(() => ({
-			rows: [] as {
-				source_platform: string;
-				article_count: string;
-				avg_score: string;
-				total_comments: string;
-			}[]
-		}))
-	]);
-
-	const quotes = quotesResult.rows.map((r) => r.body);
-	const dataPoints = {
-		platformStats: statsResult.rows.map((r) => ({
-			platform: r.source_platform,
-			articleCount: Number.parseInt(r.article_count),
-			avgScore: Number.parseFloat(r.avg_score),
-			totalComments: Number.parseInt(r.total_comments)
-		}))
-	};
-
-	// ---------------------------------------------------------------------------
-	// Phase 4 transition: the report no longer carries technologyTrends.data
-	// or contentRecommendations. We populate the payload's expected keys from
-	// the new shape (signalInterpretation in place of contentRecommendations)
-	// and pull trending/emerging topics inline so the existing content-drafts
-	// .pipe continues to function until Phase 5 rewrites it.
-	// ---------------------------------------------------------------------------
-	const topicsSession = getSession();
-	let trendingTopics: Array<{ topic: string; trendScore: number }> = [];
-	let emergingTopicsList: string[] = [];
-	try {
-		const trendingResult = await topicsSession.run(
-			`MATCH (t:Topic)
-			 WHERE t.trendScore > 0
-			 RETURN t.name AS topic, t.trendScore AS trendScore
-			 ORDER BY t.trendScore DESC LIMIT 5`
-		);
-		trendingTopics = trendingResult.records.map((r) => ({
-			topic: r.get('topic') as string,
-			trendScore: neoToNum(r.get('trendScore'))
-		}));
-
-		const emergingResult = await topicsSession.run(
-			`MATCH (t:Topic)
-			 WHERE t.firstSeen > datetime() - duration('P14D') AND t.trendScore > 1
-			 RETURN t.name AS topic
-			 ORDER BY t.trendScore DESC LIMIT 10`
-		);
-		emergingTopicsList = emergingResult.records.map((r) => r.get('topic') as string);
-	} catch (err) {
-		await logRun(
-			runId,
-			'warn',
-			'content-drafts',
-			`Could not fetch topic context for drafters (soft fail): ${err}`
-		);
-	} finally {
-		await topicsSession.close();
-	}
-
-	const interpretationSection = sections.signalInterpretation;
-	const interpretationDigest = interpretationSection
-		? [
-				interpretationSection.text,
-				...(interpretationSection.interpretations ?? []).map(
-					(i) => `- ${i.signal} :: ${i.meaning} :: ${i.implication}`
-				)
-			].join('\n\n')
-		: '';
-
-	const payload = {
-		report: {
-			executiveSummary: sections.executiveSummary.text,
-			// Phase 5 will rename this key on the .pipe side. Until then, the
-			// .pipe still reads `contentRecommendations`; we populate it with
-			// the signal-interpretation digest so drafters see the same brief.
-			contentRecommendations: interpretationDigest,
-			signalInterpretation: interpretationSection,
-			supportingResources: sections.supportingResources?.resources ?? [],
-			trendingTopics,
-			emergingTopics: emergingTopicsList
+	const result = await orchestrateContentDrafts(
+		{
+			loadOperator: loadOperatorContext,
+			loadVoice: loadVoiceContext,
+			invokePipeline: (innerRunId, pipeName, payload) =>
+				invokeContentPipeline(client, innerRunId, pipeName, payload),
+			insertDraft: persistContentDraftRow,
+			log: (innerRunId, level, stage, message) => logRun(innerRunId, level, stage, message)
 		},
-		topArticles: articlesResult.rows,
-		rocketrideContext,
-		quotes,
-		dataPoints
-	};
-
-	// Send to RocketRide
-	checkCancelled(runId);
-	await logRun(runId, 'info', 'content-drafts', 'Sending data to AI for draft generation...');
-
-	const { token } = await usePipeline(
-		client,
-		runId,
-		path.join(PIPELINES_DIR, 'content-drafts.pipe')
-	);
-	setActiveToken(runId, client, token);
-
-	const response = await client.send(token, JSON.stringify(payload), {}, 'application/json');
-
-	await terminatePipeline(client, token);
-
-	// Parse JSON responses from fan-out: each drafter returns {"platform": "content"}
-	// response.answers is an array with one entry per drafter agent
-	const answers = response?.answers ?? [];
-	const drafts: Record<string, string> = {};
-
-	for (const answer of Array.isArray(answers) ? answers : [answers]) {
-		// If RocketRide already parsed the answer into an object, extract platform keys
-		if (answer && typeof answer === 'object' && !Array.isArray(answer)) {
-			const obj = answer as Record<string, unknown>;
-			for (const p of DRAFT_PLATFORMS) {
-				if (typeof obj[p] === 'string') drafts[p] = obj[p] as string;
-			}
-			continue;
-		}
-
-		// Otherwise extract JSON from string
-		const str = typeof answer === 'string' ? answer : JSON.stringify(answer ?? '{}');
-		try {
-			const parsed = extractJson<Record<string, string>>(str);
-			for (const p of DRAFT_PLATFORMS) {
-				if (typeof parsed[p] === 'string') drafts[p] = parsed[p];
-			}
-		} catch (parseErr) {
-			// Capture enough of the raw response to diagnose where the JSON
-			// breaks. First 1500 + length + last 600 covers both ends of a
-			// truncation or an unescaped quote partway through.
-			const head = str.slice(0, 1500);
-			const tail = str.length > 2100 ? str.slice(-600) : '';
-			const preview = tail
-				? `[${str.length} chars] ${head}\n…[middle elided]…\n${tail}`
-				: `[${str.length} chars] ${str}`;
-			const reason = parseErr instanceof Error ? parseErr.message : String(parseErr);
-			await logRun(
-				runId,
-				'warn',
-				'content-drafts',
-				`Could not parse drafter answer (${reason}). Raw: ${preview}`
-			);
-		}
-	}
-
-	await validateAndPersist(runId, 'content-drafts.pipe', drafts);
-
-	// Save each draft
-	const platformMapping: Record<string, { contentType: string }> = {
-		hashnode: { contentType: 'article' },
-		medium: { contentType: 'article' },
-		devto: { contentType: 'article' },
-		hackernews: { contentType: 'article' },
-		linkedin: { contentType: 'social' },
-		twitter: { contentType: 'social' },
-		discord: { contentType: 'social' }
-	};
-
-	let savedCount = 0;
-	for (const [platform, body] of Object.entries(drafts)) {
-		if (!platformMapping[platform]) continue;
-		const content = typeof body === 'string' ? body : JSON.stringify(body);
-		if (!content || content.length < 10) {
-			await logRun(runId, 'warn', 'content-drafts', `Skipped ${platform}: empty or too short`);
-			continue;
-		}
-
-		try {
-			await query(
-				`INSERT INTO content_drafts (run_id, report_id, platform, content_type, body)
-				 VALUES ($1, $2, $3, $4, $5)`,
-				[runId, reportId, platform, platformMapping[platform].contentType, content]
-			);
-			savedCount++;
-		} catch (err) {
-			await logRun(runId, 'error', 'content-drafts', `Failed to save ${platform} draft: ${err}`);
-		}
-	}
-
-	await logRun(
-		runId,
-		'success',
-		'content-drafts',
-		`Content drafts saved: ${savedCount} of ${Object.keys(drafts).length} platforms`
+		{ runId, reportId, reportData }
 	);
 
-	if (savedCount > 0) {
+	if (result.draftCount > 0) {
 		await query(
 			`INSERT INTO notifications (type, title, message, link, reference_id)
 			 VALUES ($1, $2, $3, $4, $5)`,
 			[
 				'drafts',
 				'Content Drafts Ready',
-				`${savedCount} platform drafts generated and ready for review.`,
+				`${result.draftCount} platform drafts generated across ${result.angleCount} angle(s).`,
 				'/drafts',
 				reportId
 			]
 		);
 	}
 
-	return savedCount;
+	return result.draftCount;
+}
+
+/**
+ * Run only the content-drafts pipeline against an existing report row.
+ *
+ * Use case: re-run drafts for a previously generated report without
+ * regenerating the report itself (e.g., after iterating on prompts or voice
+ * samples). Driven by `pnpm run pipeline -- --content-only --report-id=<id>`.
+ *
+ * @param reportId Existing `reports.id` UUID. Throws if the row is missing.
+ * @param trigger Run trigger label written to the `runs` row.
+ * @returns The new run id, the report id, and the count of drafts persisted.
+ */
+export async function runContentDraftsForReport(
+	reportId: string,
+	trigger: 'scheduled' | 'manual' = 'manual'
+): Promise<{ runId: string; reportId: string; draftCount: number }> {
+	const reportRow = await query<{ report_data: ReportData }>(
+		'SELECT report_data FROM reports WHERE id = $1',
+		[reportId]
+	);
+	if (reportRow.rows.length === 0) {
+		throw new Error(`Report not found: ${reportId}`);
+	}
+	const reportData = reportRow.rows[0].report_data;
+
+	let runId: string;
+	try {
+		const runResult = await query<{ id: string }>(
+			"INSERT INTO runs (trigger, run_type) VALUES ($1, 'pipeline') RETURNING id",
+			[trigger]
+		);
+		runId = runResult.rows[0].id;
+	} catch (err: unknown) {
+		if (
+			err &&
+			typeof err === 'object' &&
+			'code' in err &&
+			(err as { code: string }).code === '23505'
+		) {
+			throw new Error('Another pipeline is already running. Try again once it completes.');
+		}
+		throw err;
+	}
+
+	let client: Awaited<ReturnType<typeof getClient>> | null = null;
+	try {
+		await logRun(
+			runId,
+			'info',
+			'init',
+			`Content-only pipeline run started for report ${reportId} (trigger: ${trigger})`
+		);
+
+		// Operator context must be configured even for content-only runs.
+		try {
+			loadOperatorContext();
+		} catch (err) {
+			if (err instanceof OperatorContextNotConfiguredError) {
+				const message =
+					'Pulsar pipeline requires .context/ configuration. Run pnpm setup to configure.';
+				await logRun(runId, 'error', 'init', message);
+			}
+			throw err;
+		}
+
+		client = await getClient();
+		await logRun(runId, 'info', 'init', 'Connected to RocketRide');
+
+		const draftCount = await runContentDrafts(client, runId, reportId, reportData);
+
+		await query("UPDATE runs SET completed_at = now(), status = 'complete' WHERE id = $1", [runId]);
+		await logRun(runId, 'success', 'complete', 'Content-only pipeline complete');
+
+		activeRuns.delete(runId);
+		return { runId, reportId, draftCount };
+	} catch (err) {
+		const cancelled = activeRuns.get(runId)?.aborted;
+		activeRuns.delete(runId);
+		const status = cancelled ? 'cancelled' : 'failed';
+		const message = cancelled ? 'Run was cancelled by user' : String(err);
+		await logRun(runId, 'error', 'fatal', message);
+		await query('UPDATE runs SET completed_at = now(), status = $1, error_log = $2 WHERE id = $3', [
+			status,
+			message,
+			runId
+		]);
+		if (!cancelled) throw err;
+		return { runId, reportId, draftCount: 0 };
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -1380,10 +1328,10 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 				[reportId]
 			);
 			if (reportRow.rows.length > 0) {
-				await extractPredictions(runId, reportId, reportRow.rows[0].report_data);
+				const reportData = reportRow.rows[0].report_data;
+				await extractPredictions(runId, reportId, reportData);
+				draftCount = await runContentDrafts(client, runId, reportId, reportData);
 			}
-
-			draftCount = await runContentDrafts(client, runId, reportId, rocketrideContext);
 		}
 
 		// Phase D.1: LLM-graded evaluations (Haiku) over the report and each draft

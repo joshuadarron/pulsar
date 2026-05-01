@@ -277,8 +277,15 @@ export function isLegacyReportData(data: unknown): data is LegacyReportData {
 	return 'marketLandscape' in s || 'technologyTrends' in s || 'contentRecommendations' in s;
 }
 
-// --- Content drafts and runs (unchanged) ---
+// --- Content drafts and runs ---
 
+/**
+ * One platform variant of one angle. Phase 5 split content generation into a
+ * two-pass pipeline: pass 1 picks angles (`angle`, `opportunity_signal`),
+ * pass 2 produces the platform-specific body and `metadata`. Legacy single-
+ * pass rows persist with `angle`, `opportunity_signal`, and `metadata` left
+ * null. Phase 6 UI groups by `(report_id, angle)`.
+ */
 export interface ContentDraft {
 	id: string;
 	runId: string;
@@ -287,6 +294,9 @@ export interface ContentDraft {
 	contentType: string;
 	body: string;
 	status: 'draft' | 'approved' | 'exported';
+	angle: string | null;
+	opportunitySignal: string | null;
+	metadata: Record<string, unknown> | null;
 	createdAt: Date;
 	updatedAt: Date;
 }

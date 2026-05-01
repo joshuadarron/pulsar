@@ -1,0 +1,154 @@
+{
+  "_comment": "Phase 5 content-drafter pipeline. Pass 2 of the two-pass content workflow: takes the angles emitted by angle-picker.pipe (along with voice samples scoped to the chosen platforms) and writes the full draft body for each platform on each angle. Operator identity, hard rules, per-platform format specs, voice profile, voice samples, and the output JSON contract are injected via the question/user prompt at runtime by the runner. See packages/apps/market-analysis/prompts/content-drafts.ts for the full prompt builders. Why two .pipes (angle-picker.pipe + content-drafter.pipe) instead of one: RocketRide pipelines are fixed graphs and cannot easily run two LLM calls with different inputs per call. Splitting lets pass 2 inject voice samples only for the platforms the picker chose, keeping the per-call prompt tight.",
+  "components": [
+    {
+      "id": "webhook_1",
+      "provider": "webhook",
+      "name": "Web Hook",
+      "config": {
+        "hideForm": true,
+        "mode": "Source",
+        "parameters": {},
+        "type": "webhook"
+      },
+      "ui": {
+        "position": {
+          "x": 0,
+          "y": 440
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      }
+    },
+    {
+      "id": "parse_1",
+      "provider": "parse",
+      "name": "Parser",
+      "config": {},
+      "ui": {
+        "position": {
+          "x": 230,
+          "y": 420
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "tags",
+          "from": "webhook_1"
+        }
+      ]
+    },
+    {
+      "id": "question_1",
+      "provider": "question",
+      "name": "Question",
+      "config": {
+        "profile": "default",
+        "default": {
+          "question": "You will receive a JSON payload with two fields: \"prompt\" (your task instructions, including the operator system prompt with per-platform format specs and voice samples scoped to the chosen platforms, plus the user prompt with the selected angles) and \"data\" (the angles array and report context). Follow the prompt instructions exactly. Respond with ONLY a raw JSON object as specified in your system instructions. No markdown fences, no preamble."
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 472,
+          "y": 476.1666666666667
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "text",
+          "from": "parse_1"
+        }
+      ]
+    },
+    {
+      "id": "multi_drafter",
+      "provider": "agent_crewai",
+      "name": "Multi-Platform Drafter",
+      "config": {
+        "instructions": [
+          "You are the content drafter. Your full operator identity, positioning, audience, hard rules, voice profile, voice samples, per-platform format specs, output JSON contract, and drafting rules are supplied in the user prompt under the \"prompt\" field at runtime.",
+          "Read the angles array in the payload. For each angle, write the draft for every platform the angle selected, matching the format spec exactly. Echo opportunity_signal and angle verbatim into the output.",
+          "Respond with ONLY a raw JSON object: {\"drafts\": [{\"opportunity_signal\": \"...\", \"angle\": \"...\", \"platforms\": [{\"platform\": \"...\", \"content\": \"...\", \"metadata\": { ... }}]}]}. No markdown fences, no preamble, no commentary. Inside each content string, escape literal double-quotes as \\\" and literal newlines as \\n so the outer JSON parses cleanly."
+        ],
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 702,
+          "y": 460.6666666666667
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "questions",
+          "from": "question_1"
+        }
+      ]
+    },
+    {
+      "id": "llm_anthropic_1",
+      "provider": "llm_anthropic",
+      "name": "Anthropic",
+      "config": {
+        "profile": "claude-sonnet-4-6",
+        "claude-sonnet-4-6": {
+          "apikey": "${ROCKETRIDE_ANTHROPIC_KEY}"
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 550,
+          "y": 670
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "llm",
+          "from": "multi_drafter"
+        }
+      ]
+    },
+    {
+      "id": "response_answers_1",
+      "provider": "response_answers",
+      "name": "Return Answers",
+      "config": {
+        "laneName": "answers"
+      },
+      "ui": {
+        "position": {
+          "x": 940,
+          "y": 470
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "answers",
+          "from": "multi_drafter"
+        }
+      ]
+    }
+  ],
+  "project_id": "e75ab73f-7dfa-43c3-834d-c666b0f6dc42",
+  "version": 1,
+  "isLocked": false,
+  "snapToGrid": true,
+  "snapGridSize": [
+    10,
+    10
+  ],
+  "docRevision": 1
+}

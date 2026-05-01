@@ -7,6 +7,7 @@
 		"./app.config": "./app.config.ts",
 		"./prompts": "./prompts/index.ts",
 		"./prompts/trend-report": "./prompts/trend-report.ts",
+		"./prompts/content-drafts": "./prompts/content-drafts.ts",
 		"./pipelines": "./pipelines/index.ts",
 		"./ui/drafts": "./ui/drafts/index.tsx"
 	},

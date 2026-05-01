@@ -402,6 +402,29 @@ async function migratePostgres() {
     ON articles_raw (backfill_run_id) WHERE backfill_run_id IS NOT NULL
   `);
 
+	// ---------------------------------------------------------------------------
+	// Phase 5: Content drafts split (angle, opportunity_signal, metadata)
+	// New columns are nullable so legacy single-pass rows remain queryable.
+	// Phase 6 UI groups drafts by (report_id, angle).
+	// ---------------------------------------------------------------------------
+
+	await query(`
+    ALTER TABLE content_drafts ADD COLUMN IF NOT EXISTS angle TEXT
+  `);
+
+	await query(`
+    ALTER TABLE content_drafts ADD COLUMN IF NOT EXISTS opportunity_signal TEXT
+  `);
+
+	await query(`
+    ALTER TABLE content_drafts ADD COLUMN IF NOT EXISTS metadata JSONB
+  `);
+
+	await query(`
+    CREATE INDEX IF NOT EXISTS content_drafts_report_angle_idx
+    ON content_drafts (report_id, angle)
+  `);
+
 	// Seed defaults if table is empty
 	await query(`
     INSERT INTO schedules (type, hour, minute, days)

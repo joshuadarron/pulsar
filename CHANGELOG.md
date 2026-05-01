@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### [2026-05-01] Phase 5: Content pipeline split
+
+#### Added
+
+- Two-pass content drafts pipeline: `angle-picker.pipe` selects opportunities and platforms; `content-drafter.pipe` writes the drafts. Each pass is its own RocketRide pipeline so the drafter only loads voice samples for platforms the picker chose.
+- `packages/apps/market-analysis/prompts/content-drafts.ts` exports `buildAnglePickerSystemPrompt`, `buildAnglePickerUserPrompt`, `buildDrafterSystemPrompt`, `buildDrafterUserPrompt`, `voiceFormatForPlatform`, `PLATFORM_FORMAT_SPECS`, `ContentPlatform`, `AngleChoice`. All operator identity, voice profile/samples, and format specs are interpolated at runtime; the .pipe files carry no operator hardcoding.
+- `packages/pipeline/lib/content-drafts-orchestrator.ts` is a pure dependency-injected two-pass orchestrator. Tests run without RocketRide or Postgres.
+- `pnpm run pipeline -- --content-only --report-id=<uuid>` re-runs content drafts against an existing report. The CLI errors out clearly if the flags are mismatched.
+- `content_drafts.angle`, `content_drafts.opportunity_signal`, and `content_drafts.metadata` (JSONB) columns. Index `(report_id, angle)` for the Phase 6 grouped UI. All nullable so existing rows stay valid.
+
+#### Changed
+
+- `packages/pipeline/runner.ts:runContentDrafts` is now a thin wrapper around the orchestrator. The Phase 4 transition shim (which translated `signalInterpretation` into the legacy `contentRecommendations` payload key) is removed.
+- The drafter no longer produces drafts for ALL seven platforms by default. The picker chooses 1-N angles, and for each angle picks the platforms that fit. Empty interpretations or zero-angle results skip the drafter cleanly with a log line.
+- `ContentDraft` type adds `angle`, `opportunitySignal`, and `metadata` fields.
+
+#### Removed
+
+- `packages/apps/market-analysis/pipelines/content-drafts.pipe`. Replaced by `angle-picker.pipe` + `content-drafter.pipe`.
+
 ### [2026-05-01] Phase 4: Report restructure
 
 #### Added

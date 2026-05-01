@@ -1,0 +1,154 @@
+{
+  "_comment": "Phase 5 angle-picker pipeline. Pass 1 of the two-pass content workflow: takes the completed trend report and emits an angles array. Operator identity, hard rules, voice profile, and platform list are injected via the question/user prompt at runtime; the agent_crewai instructions here only describe the agent's role at the structural level. See packages/apps/market-analysis/prompts/content-drafts.ts for the full prompt builders. Why two .pipes (angle-picker.pipe + content-drafter.pipe) instead of one: RocketRide pipelines are fixed graphs and cannot easily run two LLM calls with different inputs per call. Splitting lets pass 1 use a lightweight prompt (no per-format samples) and pass 2 inject samples only for the platforms the picker chose.",
+  "components": [
+    {
+      "id": "webhook_1",
+      "provider": "webhook",
+      "name": "Web Hook",
+      "config": {
+        "hideForm": true,
+        "mode": "Source",
+        "parameters": {},
+        "type": "webhook"
+      },
+      "ui": {
+        "position": {
+          "x": 0,
+          "y": 440
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      }
+    },
+    {
+      "id": "parse_1",
+      "provider": "parse",
+      "name": "Parser",
+      "config": {},
+      "ui": {
+        "position": {
+          "x": 230,
+          "y": 420
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "tags",
+          "from": "webhook_1"
+        }
+      ]
+    },
+    {
+      "id": "question_1",
+      "provider": "question",
+      "name": "Question",
+      "config": {
+        "profile": "default",
+        "default": {
+          "question": "You will receive a JSON payload with two fields: \"prompt\" (your task instructions, including the operator system prompt and the report context user prompt) and \"data\" (the structured report sections you reason over). Follow the prompt instructions exactly. Respond with ONLY a raw JSON object as specified in your system instructions. No markdown fences, no preamble."
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 472,
+          "y": 476.1666666666667
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "text",
+          "from": "parse_1"
+        }
+      ]
+    },
+    {
+      "id": "angle_picker",
+      "provider": "agent_crewai",
+      "name": "Angle Picker",
+      "config": {
+        "instructions": [
+          "You are the content angle picker. Your full operator identity, positioning, audience, hard rules, voice profile, available platforms, output JSON contract, and selection rules are supplied in the user prompt under the \"prompt\" field at runtime.",
+          "Read the report sections in the payload (executive summary, market snapshot, developer signals, signal interpretations). Pick 1 to N high-signal opportunities. For each, name the angle and select the platforms.",
+          "Respond with ONLY a raw JSON object: {\"angles\": [{\"opportunity_signal\": \"...\", \"angle\": \"...\", \"platforms\": [\"...\"]}]}. If no interpretations qualify, emit {\"angles\": []}. No markdown fences, no preamble, no commentary."
+        ],
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 702,
+          "y": 460.6666666666667
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "questions",
+          "from": "question_1"
+        }
+      ]
+    },
+    {
+      "id": "llm_anthropic_1",
+      "provider": "llm_anthropic",
+      "name": "Anthropic",
+      "config": {
+        "profile": "claude-sonnet-4-6",
+        "claude-sonnet-4-6": {
+          "apikey": "${ROCKETRIDE_ANTHROPIC_KEY}"
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 550,
+          "y": 670
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "llm",
+          "from": "angle_picker"
+        }
+      ]
+    },
+    {
+      "id": "response_answers_1",
+      "provider": "response_answers",
+      "name": "Return Answers",
+      "config": {
+        "laneName": "answers"
+      },
+      "ui": {
+        "position": {
+          "x": 940,
+          "y": 470
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "answers",
+          "from": "angle_picker"
+        }
+      ]
+    }
+  ],
+  "project_id": "f990ff8b-adbb-4c6d-86c6-cc4b0066e9ad",
+  "version": 1,
+  "isLocked": false,
+  "snapToGrid": true,
+  "snapGridSize": [
+    10,
+    10
+  ],
+  "docRevision": 1
+}
