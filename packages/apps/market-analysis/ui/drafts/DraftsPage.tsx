@@ -1,183 +1,122 @@
-'use client';
+import { query } from '@pulsar/shared/db/postgres';
+import Link from 'next/link';
+import React from 'react';
 
-import { useEffect, useState } from 'react';
+/**
+ * Drafts list page (Phase 6). Server component. Fetches reports that have at
+ * least one draft, grouped by report, sorted by `generated_at` descending.
+ *
+ * Decision: this server component queries postgres directly via
+ * `@pulsar/shared/db/postgres` rather than calling the
+ * `/api/drafts/grouped` route over HTTP. Server components share the same
+ * process and pool, so an internal fetch would just add latency. The HTTP
+ * endpoint stays available for any future client consumer.
+ */
 
-interface Draft {
-	id: string;
+interface GroupRow {
 	report_id: string;
-	platform: string;
-	content_type: string;
-	body: string;
-	status: string;
-	created_at: string;
+	generated_at: Date;
+	top_meaning: string | null;
+	draft_count: string;
+	platform_count: string;
 }
 
-const PLATFORMS = [
-	'all',
-	'hashnode',
-	'medium',
-	'devto',
-	'hackernews',
-	'linkedin',
-	'twitter',
-	'discord'
-];
+interface DraftGroup {
+	reportId: string;
+	generatedAt: Date;
+	topOpportunity: string | null;
+	draftCount: number;
+	platformCount: number;
+}
 
-export default function DraftsPage() {
-	const [drafts, setDrafts] = useState<Draft[]>([]);
-	const [filter, setFilter] = useState('all');
-	const [selected, setSelected] = useState<Draft | null>(null);
-	const [unreadRefs, setUnreadRefs] = useState<Set<string>>(new Set());
+async function loadGroupedDrafts(): Promise<DraftGroup[]> {
+	const result = await query<GroupRow>(
+		`SELECT
+			r.id AS report_id,
+			r.generated_at,
+			r.report_data->'sections'->'signalInterpretation'->'interpretations'->0->>'meaning' AS top_meaning,
+			COUNT(d.id) AS draft_count,
+			COUNT(DISTINCT d.platform) AS platform_count
+		FROM reports r
+		JOIN content_drafts d ON d.report_id = r.id
+		GROUP BY r.id, r.generated_at, top_meaning
+		ORDER BY r.generated_at DESC
+		LIMIT 50`
+	);
 
-	useEffect(() => {
-		fetch('/api/notifications?refs=true')
-			.then((r) => r.json())
-			.then((data) => setUnreadRefs(new Set(data.referenceIds)));
-	}, []);
+	return result.rows.map((row) => ({
+		reportId: row.report_id,
+		generatedAt: row.generated_at instanceof Date ? row.generated_at : new Date(row.generated_at),
+		topOpportunity: row.top_meaning,
+		draftCount: Number(row.draft_count),
+		platformCount: Number(row.platform_count)
+	}));
+}
 
-	useEffect(() => {
-		const params = filter !== 'all' ? `?platform=${filter}` : '';
-		fetch(`/api/drafts${params}`)
-			.then((r) => r.json())
-			.then(setDrafts);
-	}, [filter]);
+function formatDate(date: Date): string {
+	return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
 
-	async function markAsRead(refId: string) {
-		await fetch(`/api/notifications/${refId}?by=ref`, { method: 'PATCH' });
-		setUnreadRefs((prev) => {
-			const next = new Set(prev);
-			next.delete(refId);
-			return next;
-		});
-		window.dispatchEvent(new Event('notification-read'));
-	}
-
-	async function updateStatus(id: string, status: string) {
-		await fetch(`/api/drafts/${id}`, {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ status })
-		});
-		setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, status } : d)));
-	}
-
-	function selectDraft(draft: Draft) {
-		setSelected(draft);
-		if (draft.report_id && unreadRefs.has(draft.report_id)) {
-			markAsRead(draft.report_id);
-		}
-	}
+export default async function DraftsPage() {
+	const groups = await loadGroupedDrafts();
 
 	return (
 		<div>
 			<h1 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">Content Drafts</h1>
 			<p className="mt-1 text-gray-500 dark:text-neutral-400">
-				AI-generated content ready for review
+				AI-generated content grouped by the report it came from
 			</p>
 
-			<div className="mt-4 flex gap-2">
-				{PLATFORMS.map((p) => (
-					<button
-						key={p}
-						onClick={() => setFilter(p)}
-						className={`rounded-full px-3 py-1 text-sm font-medium capitalize ${
-							filter === p
-								? 'bg-indigo-600 text-white'
-								: 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-400 hover:bg-gray-200 dark:hover:bg-neutral-700'
-						}`}
-					>
-						{p}
-					</button>
-				))}
-			</div>
-
-			<div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[37rem_minmax(0,1fr)]">
-				<div className="max-w-[37rem] space-y-3">
-					{drafts.length === 0 ? (
-						<p className="text-gray-400 dark:text-neutral-500">No drafts found.</p>
-					) : (
-						drafts.map((draft) => {
-							const isNew = draft.report_id && unreadRefs.has(draft.report_id);
-							return (
-								<button
-									key={draft.id}
-									onClick={() => selectDraft(draft)}
-									className={`w-full rounded-lg border p-4 text-left transition ${
-										selected?.id === draft.id
-											? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950'
-											: isNew
-												? 'border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 shadow-sm'
-												: 'border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:border-gray-300 dark:hover:border-neutral-600'
-									}`}
-								>
-									<div className="flex items-center justify-between">
-										<div className="flex items-center gap-2">
-											<span className="text-sm font-medium capitalize text-gray-900 dark:text-neutral-100">
-												{draft.platform}
-											</span>
-											{isNew && (
-												<span className="inline-flex items-center rounded-full bg-indigo-100 dark:bg-indigo-900 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:text-indigo-300">
-													New
-												</span>
-											)}
-										</div>
-										<span
-											className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-												draft.status === 'approved'
-													? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-													: draft.status === 'exported'
-														? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-														: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-											}`}
-										>
-											{draft.status}
-										</span>
-									</div>
-									<p className="mt-1 text-xs text-gray-500 dark:text-neutral-400">
-										{draft.content_type}, {new Date(draft.created_at).toLocaleDateString()}
-									</p>
-									<p className="mt-2 line-clamp-2 text-sm text-gray-600 dark:text-neutral-400">
-										{draft.body.slice(0, 120)}...
-									</p>
-								</button>
-							);
-						})
-					)}
-				</div>
-
-				{selected && (
-					<div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
-						<div className="flex items-center justify-between">
-							<h3 className="text-sm font-semibold capitalize text-gray-900 dark:text-neutral-100">
-								{selected.platform}, {selected.content_type}
-							</h3>
-							<div className="flex gap-2">
-								{selected.status === 'draft' && (
-									<button
-										onClick={() => updateStatus(selected.id, 'approved')}
-										className="rounded bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700"
-									>
-										Approve
-									</button>
-								)}
-								{selected.status === 'approved' && (
-									<button
-										onClick={() => updateStatus(selected.id, 'exported')}
-										className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700"
-									>
-										Mark Exported
-									</button>
-								)}
-							</div>
-						</div>
-						<div className="mt-4 max-h-[60vh] overflow-y-auto">
-							<pre className="whitespace-pre-wrap text-sm text-gray-700 dark:text-neutral-300 leading-relaxed">
-								{selected.body}
-							</pre>
-						</div>
+			<div className="mt-6 max-w-3xl space-y-4">
+				{groups.length === 0 ? (
+					<div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-6">
+						<p className="text-sm text-gray-700 dark:text-neutral-300">No drafts yet.</p>
+						<p className="mt-2 text-sm text-gray-500 dark:text-neutral-400">
+							Trigger a content run via{' '}
+							<code className="rounded bg-gray-100 dark:bg-neutral-800 px-1.5 py-0.5 text-xs font-mono">
+								pnpm run pipeline -- --content-only --report-id=&lt;uuid&gt;
+							</code>
+							.
+						</p>
 					</div>
+				) : (
+					groups.map((group) => (
+						<article
+							key={group.reportId}
+							className="relative rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5 transition hover:shadow-sm"
+						>
+							<div className="flex items-start justify-between gap-4">
+								<div className="min-w-0 flex-1">
+									<p className="text-sm font-medium text-gray-900 dark:text-neutral-100">
+										Top opportunity
+									</p>
+									<p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-neutral-400">
+										{group.topOpportunity ?? 'No interpretations available for this report.'}
+									</p>
+									<p className="mt-3 text-xs text-gray-500 dark:text-neutral-400">
+										{group.draftCount} {group.draftCount === 1 ? 'draft' : 'drafts'} across{' '}
+										{group.platformCount} {group.platformCount === 1 ? 'platform' : 'platforms'}
+									</p>
+								</div>
+								<div className="flex flex-col items-end gap-3">
+									<span className="text-xs text-gray-400 dark:text-neutral-500">
+										{formatDate(group.generatedAt)}
+									</span>
+									<Link
+										href={`/drafts/${group.reportId}`}
+										className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+									>
+										View drafts
+									</Link>
+								</div>
+							</div>
+						</article>
+					))
 				)}
 			</div>
 		</div>
 	);
 }
+
+export { loadGroupedDrafts };
+export type { DraftGroup };

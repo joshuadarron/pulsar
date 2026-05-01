@@ -29,6 +29,9 @@ importers:
       '@pulsar/voice':
         specifier: workspace:*
         version: link:../../voice
+      next:
+        specifier: ^15.1.0
+        version: 15.5.15(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
     devDependencies:
       '@types/node':
         specifier: ^22.10.0
@@ -36,9 +39,15 @@ importers:
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.14)
       react:
         specifier: ^19.0.0
         version: 19.2.5
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.5(react@19.2.5)
       tsx:
         specifier: ^4.19.2
         version: 4.21.0

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### [2026-05-01] Phase 6: Drafts UI
+
+#### Added
+
+- New report-grouped drafts list at `/drafts`. Each card shows the report date, the top opportunity (derived from the first interpretation's `meaning`), and the count of drafts/platforms.
+- New per-report viewer at `/drafts/<reportId>`. Drafts grouped by `angle`. Within each angle, platform tabs switch between four content tabs: Generated content, Steps to post, Voice transfer prompt, Topic refinement prompt. The viewer is server-rendered; only the tab switcher and copy-to-clipboard buttons are client-side.
+- `packages/apps/market-analysis/templates/`: 7 post-step templates (one per platform) and 2 scoping prompt templates (voice-transfer, topic-refinement). Mustache-style placeholders.
+- `@pulsar/app-market-analysis/templates` exports `fillPostSteps`, `fillVoiceTransferPrompt`, `fillTopicRefinementPrompt`, and `POST_STEP_PLATFORM_LIST`. The fill helpers are pure functions called from server components; they read templates once at module init via `readFileSync`.
+- `GET /api/drafts/grouped` endpoint returns reports with their draft counts and top opportunity. The list page queries postgres directly instead of going through the endpoint, but the endpoint stays available for future client consumers.
+- Web re-export shim at `packages/web/app/(dashboard)/drafts/[reportId]/page.tsx` matching the Phase 1 pattern.
+
+#### Changed
+
+- `packages/web/app/api/drafts/route.ts` GET now returns the new `angle`, `opportunityS ignal`, `metadata` columns and accepts an optional `reportId` filter.
+
 ### [2026-05-01] Phase 5: Content pipeline split
 
 #### Added

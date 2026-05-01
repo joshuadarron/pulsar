@@ -9,7 +9,9 @@
 		"./prompts/trend-report": "./prompts/trend-report.ts",
 		"./prompts/content-drafts": "./prompts/content-drafts.ts",
 		"./pipelines": "./pipelines/index.ts",
-		"./ui/drafts": "./ui/drafts/index.tsx"
+		"./templates": "./templates/index.ts",
+		"./ui/drafts": "./ui/drafts/index.tsx",
+		"./ui/drafts/[reportId]": "./ui/drafts/[reportId]/index.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit"
@@ -17,12 +19,15 @@
 	"dependencies": {
 		"@pulsar/context": "workspace:*",
 		"@pulsar/shared": "workspace:*",
-		"@pulsar/voice": "workspace:*"
+		"@pulsar/voice": "workspace:*",
+		"next": "^15.1.0"
 	},
 	"devDependencies": {
 		"@types/node": "^22.10.0",
 		"@types/react": "^19.0.0",
+		"@types/react-dom": "^19.0.0",
 		"react": "^19.0.0",
+		"react-dom": "^19.0.0",
 		"tsx": "^4.19.2",
 		"typescript": "^5.7.2"
 	}
