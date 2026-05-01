@@ -164,7 +164,7 @@
           "uri": "bolt://localhost:7687",
           "auth_method": "userpass",
           "user": "neo4j",
-          "password": "${POSTGRES_PASSWORD}",
+          "password": "${NEO4J_PASSWORD}",
           "database": "neo4j",
           "db_description": "Pulsar knowledge graph. Nodes: Article (id, url, title, publishedAt, sourcePlatform, score), Topic (name, category, trendScore, firstSeen, lastSeen), Entity (name, type: company|tool|model|language|concept), Author (handle, platform), Source (name, platform, type). Relationships: Article-[:TAGGED_WITH]->Topic, Article-[:MENTIONS]->Entity, Article-[:FROM_SOURCE]->Source, Article-[:AUTHORED_BY]->Author, Topic-[:RELATED_TO {weight}]-Topic. Use MATCH queries only, no writes.",
           "max_attempts": 3
@@ -231,7 +231,7 @@
       ]
     }
   ],
-  "project_id": "24666bde-571d-44e2-ad4d-6c278ed9fc84",
+  "project_id": "1f4abe72-e8f9-4f69-922d-46889731e2ee",
   "version": 1,
   "isLocked": false,
   "snapToGrid": true,

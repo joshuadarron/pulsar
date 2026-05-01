@@ -160,7 +160,7 @@
           "uri": "bolt://localhost:7687",
           "auth_method": "userpass",
           "user": "neo4j",
-          "password": "${POSTGRES_PASSWORD}",
+          "password": "${NEO4J_PASSWORD}",
           "database": "neo4j",
           "db_description": "Pulsar knowledge graph. Nodes: Article (id, publishedAt), Topic (name, trendScore), Entity (name, type), Author, Source. Relationships: Article-[:TAGGED_WITH]->Topic, Article-[:MENTIONS]->Entity, Topic-[:RELATED_TO {weight}]-Topic. Use MATCH queries only, no writes. Note: graph snapshots themselves live in Postgres (graph_snapshots table), not in Neo4j.",
           "max_attempts": 3
@@ -227,7 +227,7 @@
       ]
     }
   ],
-  "project_id": "e1b1f3d2-0558-482c-9953-f4a67ee006ab",
+  "project_id": "438312f8-06e6-49df-b867-08d17fe8166a",
   "version": 1,
   "isLocked": false,
   "snapToGrid": true,
