@@ -95,18 +95,21 @@ export interface Report {
 // ---------------------------------------------------------------------------
 // Report data contract, stored as JSONB in reports.report_data
 //
-// Five-section structure with three generation passes:
-//   Pass 1 (sequential): marketLandscape, technologyTrends, developerSignals
-//   Pass 2: contentRecommendations (reads pass 1 text only)
+// Five-section structure with four generation passes:
+//   Pass 1 (sequential): marketSnapshot, developerSignals
+//   Pass 2: signalInterpretation (reads pass 1 text)
 //   Pass 3: executiveSummary (reads all prior text)
+//   Pass 4: supportingResources (ranks the aggregated research[] pool)
 //
-// The agent NEVER mutates `data`. It writes only to `text` and `research`.
-// Sections without `data` omit the field entirely.
+// The agent writes only to `text`, `research`, `interpretations`, `predictions`,
+// and `resources` per section. Source-of-truth chart data is snapshotted into
+// `charts` at generation time so rendering is deterministic.
 // ---------------------------------------------------------------------------
 
 export interface ReportData {
 	reportMetadata: ReportMetadata;
 	sections: ReportSections;
+	charts: ReportCharts;
 }
 
 export interface ReportMetadata {
@@ -116,43 +119,68 @@ export interface ReportMetadata {
 	articleCount: number;
 }
 
+/**
+ * Sections render in the order they appear here:
+ *   1. executiveSummary (top-of-report synthesis, 100-150 words)
+ *   2. marketSnapshot (200-300 words)
+ *   3. developerSignals (200-300 words)
+ *   4. signalInterpretation (300-400 words: intro + 3-7 interpretations)
+ *   5. supportingResources (10 ranked links)
+ */
 export interface ReportSections {
-	marketLandscape: MarketLandscapeSection;
-	technologyTrends: TechnologyTrendsSection;
-	developerSignals: DeveloperSignalsSection;
-	contentRecommendations: ContentRecommendationsSection;
 	executiveSummary: ExecutiveSummarySection;
+	marketSnapshot: MarketSnapshotSection;
+	developerSignals: DeveloperSignalsSection;
+	signalInterpretation: SignalInterpretationSection;
+	supportingResources: SupportingResourcesSection;
 }
 
-// --- Sections with data + text + optional research ---
+// --- Section shapes ---
 
-export interface MarketLandscapeSection {
-	data: MarketLandscapeData;
-	text: string;
-	research?: ResearchCitation[];
-}
-
-export interface TechnologyTrendsSection {
-	data: TechnologyTrendsData;
+export interface MarketSnapshotSection {
+	/** 2-3 paragraphs of operator-facing analysis. */
 	text: string;
 	research?: ResearchCitation[];
 }
 
 export interface DeveloperSignalsSection {
-	data: DeveloperSignalsData;
+	/** 2-3 paragraphs. No top-author tables, no sentiment dump. */
 	text: string;
 	research?: ResearchCitation[];
 }
 
-// --- Sections with text only (no data, no visuals) ---
+export interface SignalInterpretation {
+	/** The exact data point being interpreted. */
+	signal: string;
+	/** What this signal tells us about the market. */
+	meaning: string;
+	/** What it means for the operator's positioning. */
+	implication: string;
+}
 
-export interface ContentRecommendationsSection {
+export interface SignalInterpretationSection {
+	/** Intro paragraph framing what this section is. */
 	text: string;
+	/** 3-7 items, picked by the LLM based on signal strength. */
+	interpretations: SignalInterpretation[];
 	research?: ResearchCitation[];
+}
+
+export interface SupportingResource {
+	url: string;
+	title: string;
+	/** One short technical sentence explaining what the reader gains. */
+	why: string;
+}
+
+export interface SupportingResourcesSection {
+	/** Up to 10 (fewer when the research pool is thin). */
+	resources: SupportingResource[];
 }
 
 /** Executive summary has no research; it synthesizes prior sections only. */
 export interface ExecutiveSummarySection {
+	/** 100-150 word, 3-5 sentence synthesis. */
 	text: string;
 	/** Time-bounded predictions emitted alongside the synthesis (Phase D.2). */
 	predictions?: ExtractedPrediction[];
@@ -166,91 +194,38 @@ export interface ExtractedPrediction {
 	prediction_type: PredictionType;
 }
 
-// --- Per-section data shapes (read-only input to the agent) ---
+// --- Chart snapshots persisted into report_data.charts at generation time ---
 
-export interface MarketLandscapeData {
-	entities: EntityProminence[];
-	technologies: TrendingTechnology[];
-	sourceDistribution: SourceDistribution[];
+export interface ReportCharts {
+	keywordDistribution: KeywordDistribution;
+	entityCentrality: EntityCentralitySeries;
 }
 
-export interface TechnologyTrendsData {
-	keywords: TrendingKeyword[];
-	topics: TrendingTopic[];
-	velocityOutliers: VelocityOutlier[];
-	topicCoOccurrence: TopicCoOccurrence[];
-	emergingTopics: string[];
+/**
+ * Snapshot of `/api/charts/keyword-distribution` at the time of report
+ * generation. The last bucket may carry the label `Other` when the long
+ * tail is non-empty.
+ */
+export interface KeywordDistribution {
+	windowStart: string;
+	windowEnd: string;
+	totalArticles: number;
+	buckets: Array<{ keyword: string; count: number; pct: number }>;
 }
 
-export interface DeveloperSignalsData {
-	sentimentBreakdown: SentimentBreakdown;
-	topAuthors: TopAuthor[];
-	topDiscussions: TopDiscussion[];
-}
-
-export interface SentimentBreakdown {
-	positive: number;
-	negative: number;
-	neutral: number;
-}
-
-export interface TopAuthor {
-	handle: string;
-	platform: string;
-	articleCount: number;
-}
-
-export interface TopDiscussion {
-	title: string;
-	url: string;
-	commentCount: number;
-	source: string;
-}
-
-// --- Shared data sub-types (used inside section data) ---
-
-export interface TrendingKeyword {
-	keyword: string;
-	count7d: number;
-	count30d: number;
-	delta: number;
-}
-
-export interface TrendingTopic {
-	topic: string;
-	trendScore: number;
-	sentiment: string;
-	articleCount: number;
-	sparkline: number[];
-}
-
-export interface TrendingTechnology {
-	name: string;
-	type: string;
-	mentionCount: number;
-}
-
-export interface EntityProminence {
-	name: string;
-	type: string;
-	mentionCount: number;
-}
-
-export interface TopicCoOccurrence {
-	topicA: string;
-	topicB: string;
-	count: number;
-}
-
-export interface VelocityOutlier {
-	topic: string;
-	spike: number;
-	baseline: number;
-}
-
-export interface SourceDistribution {
-	source: string;
-	articleCount: number;
+/**
+ * Snapshot of `/api/charts/entity-centrality` at the time of report
+ * generation. `sparse` is true when fewer periods are present than the
+ * runner requested (typical until backfill catches up).
+ */
+export interface EntityCentralitySeries {
+	currentPeriodEnd: string;
+	periodKind: 'month';
+	sparse: boolean;
+	series: Array<{
+		entityName: string;
+		points: Array<{ period: string; centrality: number; mentions: number }>;
+	}>;
 }
 
 // --- Research citation (optional per-section output from the agent) ---
@@ -266,6 +241,40 @@ export interface ResearchCitation {
 	excerpt: string;
 	/** ISO-8601 timestamp when the source was retrieved */
 	retrievedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Backwards compatibility: legacy report rows persisted before Phase 4 use
+// `marketLandscape`, `technologyTrends`, and `contentRecommendations`. They
+// remain queryable from JSONB but no longer satisfy `ReportSections`. The
+// rendering layer dispatches on this discriminator and renders the legacy
+// path when it matches.
+// ---------------------------------------------------------------------------
+
+export interface LegacyReportSectionsShape {
+	marketLandscape?: unknown;
+	technologyTrends?: unknown;
+	contentRecommendations?: unknown;
+}
+
+export interface LegacyReportData {
+	reportMetadata?: unknown;
+	sections: LegacyReportSectionsShape;
+	charts?: unknown;
+}
+
+/**
+ * True when `data` matches the pre-Phase-4 report shape. Detection is
+ * positive: at least one legacy section key (`marketLandscape`,
+ * `technologyTrends`, or `contentRecommendations`) is present under
+ * `sections`. This intentionally stays loose so old rows render.
+ */
+export function isLegacyReportData(data: unknown): data is LegacyReportData {
+	if (!data || typeof data !== 'object') return false;
+	const sections = (data as { sections?: unknown }).sections;
+	if (!sections || typeof sections !== 'object') return false;
+	const s = sections as Record<string, unknown>;
+	return 'marketLandscape' in s || 'technologyTrends' in s || 'contentRecommendations' in s;
 }
 
 // --- Content drafts and runs (unchanged) ---

@@ -1,4 +1,4 @@
-import type { ValidationCheck, ReportData } from '@pulsar/shared/types';
+import type { ReportData, ValidationCheck } from '@pulsar/shared/types';
 
 export type ValidatorResult = { passed: boolean; detail?: string };
 
@@ -129,7 +129,8 @@ export const ROCKETRIDE_CONTEXT_SUITE: ValidatorSuite = {
 
 // ---------------------------------------------------------------------------
 // Suite: trend-report.pipe
-// Output shape: ReportData (sections: {marketLandscape, technologyTrends, ...})
+// Output shape: ReportData (sections: {executiveSummary, marketSnapshot,
+// developerSignals, signalInterpretation, supportingResources})
 // ---------------------------------------------------------------------------
 
 export const TREND_REPORT_SUITE: ValidatorSuite = {
@@ -148,14 +149,13 @@ export const TREND_REPORT_SUITE: ValidatorSuite = {
 		},
 		{
 			name: 'all_pass_1_sections_present',
-			description: 'marketLandscape, technologyTrends, developerSignals all non-null with text',
+			description: 'marketSnapshot and developerSignals non-null with text',
 			check: (out) => {
 				const data = out as Partial<ReportData>;
 				const sections = data?.sections;
 				if (!sections) return { passed: false, detail: 'sections missing' };
 				const missing: string[] = [];
-				if (!nonEmptyString(sections.marketLandscape?.text)) missing.push('marketLandscape');
-				if (!nonEmptyString(sections.technologyTrends?.text)) missing.push('technologyTrends');
+				if (!nonEmptyString(sections.marketSnapshot?.text)) missing.push('marketSnapshot');
 				if (!nonEmptyString(sections.developerSignals?.text)) missing.push('developerSignals');
 				return missing.length === 0
 					? { passed: true }
@@ -163,22 +163,45 @@ export const TREND_REPORT_SUITE: ValidatorSuite = {
 			}
 		},
 		{
-			name: 'content_recommendations_non_empty',
-			description: 'sections.contentRecommendations.text non-empty',
+			name: 'signal_interpretation_present',
+			description:
+				'sections.signalInterpretation.text non-empty and has 3-7 interpretation entries',
 			check: (out) => {
 				const data = out as Partial<ReportData>;
-				const text = data?.sections?.contentRecommendations?.text;
-				return nonEmptyString(text)
-					? { passed: true }
-					: { passed: false, detail: 'contentRecommendations.text empty or missing' };
+				const section = data?.sections?.signalInterpretation;
+				if (!section) return { passed: false, detail: 'signalInterpretation section missing' };
+				if (!nonEmptyString(section.text))
+					return { passed: false, detail: 'signalInterpretation.text empty or missing' };
+				if (!Array.isArray(section.interpretations))
+					return { passed: false, detail: 'signalInterpretation.interpretations not an array' };
+				const count = section.interpretations.length;
+				if (count < 3 || count > 7)
+					return { passed: false, detail: `expected 3-7 interpretations, got ${count}` };
+				return { passed: true, detail: `${count} interpretations` };
+			}
+		},
+		{
+			name: 'supporting_resources_present',
+			description: 'sections.supportingResources.resources is an array (up to 10 entries)',
+			check: (out) => {
+				const data = out as Partial<ReportData>;
+				const resources = data?.sections?.supportingResources?.resources;
+				if (!Array.isArray(resources))
+					return { passed: false, detail: 'supportingResources.resources not an array' };
+				if (resources.length > 10)
+					return {
+						passed: false,
+						detail: `supportingResources capped at 10, got ${resources.length}`
+					};
+				return { passed: true, detail: `${resources.length} resources` };
 			}
 		},
 		{
 			name: 'report_data_jsonb_valid',
-			description: 'parses, has reportMetadata and sections top-level keys',
+			description: 'parses, has reportMetadata, sections, and charts top-level keys',
 			check: (out) => {
 				if (!isObject(out)) return { passed: false, detail: 'not an object' };
-				const missing = ['reportMetadata', 'sections'].filter((k) => !(k in out));
+				const missing = ['reportMetadata', 'sections', 'charts'].filter((k) => !(k in out));
 				return missing.length === 0
 					? { passed: true }
 					: { passed: false, detail: `missing top-level keys: ${missing.join(', ')}` };

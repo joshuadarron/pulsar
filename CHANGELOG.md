@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### [2026-05-01] Phase 4: Report restructure
+
+#### Added
+
+- New report section structure: Executive Summary, Market Snapshot (replaces Market Landscape), Developer Signals (trimmed), Signal Interpretation (replaces Content Recommendations), Supporting Resources. Target render: ~1000 words, 5-minute read.
+- `SignalInterpretationSection` carries 3-7 interpretations, each with `signal`, `meaning`, `implication` fields. The drafter (Phase 5) decides what to do with these.
+- `SupportingResourcesSection` is a new pass-4 prompt that aggregates `research[]` entries from all sections, ranks them, and selects up to 10 with one-sentence "why" justifications.
+- `ReportData.charts` snapshots `keywordDistribution` and `entityCentrality` data at generation time so rendering is stable across the UI, email, and PDF paths.
+- Server-side SVG chart helpers in `packages/web/lib/charts/`: `renderPieSvg(slices, options)` and `renderLineSvg(series, options)`. Pure functions, inline-safe for `renderToStaticMarkup`. No runtime React or chart-library dependency.
+- `LegacyReportTemplate` preserves pre-Phase-4 rendering verbatim. `ReportTemplate` dispatches via `isLegacyReportData(data)` so existing reports continue to render unchanged.
+
+#### Changed
+
+- `buildSystemPrompt(ctx)` now includes the tone directive: "Write like one engineer telling another what they just saw in the data..." plus rules against hedging adjectives, chained statistics, and unsupported claims.
+- `buildSectionPrompts(ctx)` returns the new section keys: `marketSnapshot`, `developerSignals`, `signalInterpretation`, `supportingResources`, `executiveSummary`. The legacy keys (`marketLandscape`, `technologyTrends`, `contentRecommendations`) are removed.
+- `packages/pipeline/runner.ts` now runs four passes: pass 1 (marketSnapshot, developerSignals), pass 2 (signalInterpretation), pass 3 (executiveSummary), pass 4 (supportingResources). Chart data is queried inline and persisted into `report_data.charts`.
+- The eval rubrics (`TREND_REPORT_SUITE`) gain `signal_interpretation_present` (count 3-7) and `supporting_resources_present` (<= 10) checks.
+
+#### Removed
+
+- `MarketLandscapeSection`, `TechnologyTrendsSection`, `ContentRecommendationsSection`, `MarketLandscapeData`, `TechnologyTrendsData`, `DeveloperSignalsData` and the sub-types they referenced (`TrendingKeyword`, `TrendingTopic`, `TrendingTechnology`, `EntityProminence`, etc.). Existing rows in the `reports` table use the legacy shape and continue to render via `LegacyReportTemplate`.
+- Orphaned report components: `KeywordsChart.tsx`, `TechTable.tsx`, `ReportMetrics.tsx`. They referenced removed types and had no consumers.
+
 ### [2026-05-01] Phase 3: Analysis layer upgrades
 
 #### Added

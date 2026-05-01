@@ -25,7 +25,8 @@ export const TREND_REPORT_RUBRIC: RubricDimension[] = [
 	{
 		dimension: 'actionability',
 		scale: '1-5',
-		description: 'contentRecommendations give specific, plausible ideas tied to specific trends.'
+		description:
+			'signalInterpretation maps each signal to a concrete meaning and an operator-relevant implication.'
 	},
 	{
 		dimension: 'internal_consistency',

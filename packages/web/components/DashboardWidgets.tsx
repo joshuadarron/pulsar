@@ -1,19 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import {
-	PieChart,
-	Pie,
-	Cell,
-	BarChart,
-	Bar,
-	XAxis,
-	YAxis,
-	Tooltip,
-	ResponsiveContainer
-} from 'recharts';
 import type { ReportData } from '@pulsar/shared/types';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import {
+	Bar,
+	BarChart,
+	Cell,
+	Pie,
+	PieChart,
+	ResponsiveContainer,
+	Tooltip,
+	XAxis,
+	YAxis
+} from 'recharts';
 
 interface DashboardWidgetsProps {
 	latestReport: { id: string; generated_at: string; report_data: ReportData } | null;
@@ -73,10 +73,27 @@ export default function DashboardWidgets({
 	recentRuns,
 	successRate
 }: DashboardWidgetsProps) {
-	const topKeywords =
-		latestReport?.report_data?.sections?.technologyTrends?.data?.keywords?.slice(0, 5) || [];
-	const topTopics =
-		latestReport?.report_data?.sections?.technologyTrends?.data?.topics?.slice(0, 5) || [];
+	// Phase 4: report_data carries chart snapshots and section text only.
+	// Top-keyword and top-topic widgets read from `charts.keywordDistribution`
+	// and (for now) source platform metadata; they no longer depend on the
+	// dropped technologyTrends section.
+	const keywordBuckets = latestReport?.report_data?.charts?.keywordDistribution?.buckets ?? [];
+	const topKeywords = keywordBuckets
+		.filter((b) => b.keyword !== 'Other')
+		.slice(0, 5)
+		.map((b) => ({ keyword: b.keyword, count7d: b.count }));
+	const topTopics: Array<{ topic: string; trendScore: number; sentiment: string }> = (
+		latestReport?.report_data?.charts?.entityCentrality?.series ?? []
+	)
+		.slice(0, 5)
+		.map((s) => {
+			const lastPoint = s.points.at(-1);
+			return {
+				topic: s.entityName,
+				trendScore: lastPoint?.centrality ?? 0,
+				sentiment: 'neutral'
+			};
+		});
 
 	return (
 		<>
@@ -231,17 +248,18 @@ export default function DashboardWidgets({
 							<p className="mt-2 text-sm leading-relaxed text-gray-700 dark:text-neutral-300 line-clamp-3">
 								{latestReport.report_data.sections?.executiveSummary?.text ?? ''}
 							</p>
-							{(latestReport.report_data.sections?.technologyTrends?.data?.emergingTopics?.length ??
+							{(latestReport.report_data.sections?.signalInterpretation?.interpretations?.length ??
 								0) > 0 && (
-								<div className="mt-3 flex flex-wrap gap-1.5">
-									{latestReport.report_data.sections.technologyTrends.data.emergingTopics
-										.slice(0, 5)
-										.map((t: string) => (
+								<div className="mt-3 flex flex-col gap-1.5">
+									{latestReport.report_data.sections.signalInterpretation.interpretations
+										.slice(0, 3)
+										.map((interp) => (
 											<span
-												key={t}
-												className="rounded-full bg-amber-100 dark:bg-amber-900 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300"
+												key={interp.signal}
+												className="rounded bg-amber-100 dark:bg-amber-900 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300 line-clamp-2"
+												title={interp.signal}
 											>
-												{t}
+												{interp.signal}
 											</span>
 										))}
 								</div>

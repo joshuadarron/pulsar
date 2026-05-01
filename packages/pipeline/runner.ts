@@ -14,17 +14,19 @@ import { getSession } from '@pulsar/shared/db/neo4j';
 import { query } from '@pulsar/shared/db/postgres';
 import { logRun } from '@pulsar/shared/run-logger';
 import type {
-	DeveloperSignalsData,
 	EmergingEntity,
+	EntityCentralitySeries,
 	EntityWithHistory,
 	ExtractedPrediction,
 	GraphSnapshot,
 	GraphSnapshotCluster,
 	GraphSnapshotEntity,
-	MarketLandscapeData,
+	KeywordDistribution,
+	ReportCharts,
 	ReportData,
 	ResearchCitation,
-	TechnologyTrendsData
+	SignalInterpretation,
+	SupportingResource
 } from '@pulsar/shared/types';
 import { extractPredictions } from './lib/evals/extract.js';
 import { persistValidation } from './lib/evals/persist.js';
@@ -377,6 +379,10 @@ interface SectionResponse {
 	research?: ResearchCitation[];
 	/** Only emitted by the executiveSummary pass. */
 	predictions?: ExtractedPrediction[];
+	/** Only emitted by the signalInterpretation pass. */
+	interpretations?: SignalInterpretation[];
+	/** Only emitted by the supportingResources pass. */
+	resources?: SupportingResource[];
 }
 
 async function runSection(
@@ -410,12 +416,26 @@ async function runSection(
 
 	if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
 		const obj = raw as Record<string, unknown>;
-		if (typeof obj.text === 'string') {
+		// supportingResources returns { resources: [...] } with no text field;
+		// pretty-print resources count into a placeholder so downstream checks
+		// for parsed.text still pass. Persistence reads resources directly.
+		if (typeof obj.text !== 'string' && Array.isArray(obj.resources) && obj.resources.length >= 0) {
+			parsed = {
+				text: `Selected ${obj.resources.length} supporting resources.`,
+				resources: obj.resources as SupportingResource[]
+			};
+		} else if (typeof obj.text === 'string') {
 			parsed = {
 				text: obj.text,
 				...(Array.isArray(obj.research) ? { research: obj.research as ResearchCitation[] } : {}),
 				...(Array.isArray(obj.predictions)
 					? { predictions: obj.predictions as ExtractedPrediction[] }
+					: {}),
+				...(Array.isArray(obj.interpretations)
+					? { interpretations: obj.interpretations as SignalInterpretation[] }
+					: {}),
+				...(Array.isArray(obj.resources)
+					? { resources: obj.resources as SupportingResource[] }
 					: {})
 			};
 		} else {
@@ -461,188 +481,69 @@ async function runSection(
 
 // ---------------------------------------------------------------------------
 // Data gathering: Neo4j + PostgreSQL queries
+//
+// Phase 4 trimmed the section payload shapes:
+//   marketSnapshot: { sourceDistribution }
+//   developerSignals: { sentimentBreakdown, topDiscussions }
+// Top-author tables, raw entity/technology lists, and the legacy keyword/
+// topic dump no longer feed any prompt. Charts pull their data via the
+// dedicated `gatherChartData` helpers below.
 // ---------------------------------------------------------------------------
 
-async function gatherMarketLandscapeData(): Promise<MarketLandscapeData> {
+interface SourceDistributionRow {
+	source: string;
+	articleCount: number;
+}
+
+interface SentimentBreakdown {
+	positive: number;
+	negative: number;
+	neutral: number;
+}
+
+interface TopDiscussion {
+	title: string;
+	url: string;
+	commentCount: number;
+	source: string;
+}
+
+async function gatherSourceDistribution(): Promise<SourceDistributionRow[]> {
 	const session = getSession();
 	try {
-		// Entity mentions (7d)
-		const entitiesResult = await session.run(
-			`MATCH (e:Entity)<-[:MENTIONS]-(a:Article)
-			 WHERE a.publishedAt > datetime() - duration('P7D')
-			 RETURN e.name AS name, e.type AS type, count(a) AS mentionCount
-			 ORDER BY mentionCount DESC LIMIT 20`
-		);
-		const entities = entitiesResult.records.map((r) => ({
-			name: r.get('name'),
-			type: r.get('type'),
-			mentionCount:
-				typeof r.get('mentionCount') === 'object'
-					? r.get('mentionCount').toNumber()
-					: r.get('mentionCount')
-		}));
-
-		// Technologies: entities filtered to tool/model/language
-		const technologies = entities
-			.filter((e) => ['tool', 'model', 'language'].includes(e.type))
-			.slice(0, 10);
-
-		// Source distribution (7d)
-		const sourceResult = await session.run(
+		const result = await session.run(
 			`MATCH (a:Article)-[:FROM_SOURCE]->(s:Source)
 			 WHERE a.publishedAt > datetime() - duration('P7D')
 			 RETURN s.name AS source, count(a) AS articleCount
 			 ORDER BY articleCount DESC`
 		);
-		const sourceDistribution = sourceResult.records.map((r) => ({
+		return result.records.map((r) => ({
 			source: r.get('source'),
-			articleCount:
-				typeof r.get('articleCount') === 'object'
-					? r.get('articleCount').toNumber()
-					: r.get('articleCount')
+			articleCount: neoToNum(r.get('articleCount'))
 		}));
-
-		return { entities, technologies, sourceDistribution };
 	} finally {
 		await session.close();
 	}
 }
 
-async function gatherTechnologyTrendsData(): Promise<TechnologyTrendsData> {
-	const session = getSession();
-	try {
-		// Trending topics (7d)
-		const topicsResult = await session.run(
-			`MATCH (t:Topic)
-			 WHERE t.trendScore > 0
-			 RETURN t.name AS topic, t.trendScore AS trendScore, t.category AS category
-			 ORDER BY t.trendScore DESC LIMIT 20`
-		);
-		const topics = topicsResult.records.map((r) => ({
-			topic: r.get('topic'),
-			trendScore: r.get('trendScore'),
-			sentiment: 'neutral',
-			articleCount: 0,
-			sparkline: [] as number[]
-		}));
-
-		// Topic co-occurrence
-		const coOccurrenceResult = await session.run(
-			`MATCH (t1:Topic)-[r:RELATED_TO]-(t2:Topic)
-			 WHERE r.weight > 2
-			 RETURN t1.name AS topicA, t2.name AS topicB, r.weight AS count
-			 ORDER BY count DESC LIMIT 15`
-		);
-		const topicCoOccurrence = coOccurrenceResult.records.map((r) => ({
-			topicA: r.get('topicA'),
-			topicB: r.get('topicB'),
-			count: typeof r.get('count') === 'object' ? r.get('count').toNumber() : r.get('count')
-		}));
-
-		await session.close();
-
-		// Keyword frequency from PostgreSQL (7d)
-		const keywordResult = await query<{ keyword: string; count: string }>(
-			`SELECT unnest(topic_tags) AS keyword, count(*) AS count
-			 FROM articles
-			 WHERE published_at > now() - interval '7 days'
-			 GROUP BY keyword ORDER BY count DESC LIMIT 20`
-		);
-		const trendingKeywords7d = keywordResult.rows.map((r) => ({
-			keyword: r.keyword,
-			count7d: Number.parseInt(r.count)
-		}));
-
-		// 30d keyword counts
-		const keyword30dResult = await query<{ keyword: string; count: string }>(
-			`SELECT unnest(topic_tags) AS keyword, count(*) AS count
-			 FROM articles
-			 WHERE published_at > now() - interval '30 days'
-			 GROUP BY keyword ORDER BY count DESC LIMIT 30`
-		);
-		const keyword30dMap = new Map(
-			keyword30dResult.rows.map((r) => [r.keyword, Number.parseInt(r.count)])
-		);
-
-		const keywords = trendingKeywords7d.map((k) => ({
-			...k,
-			count30d: keyword30dMap.get(k.keyword) || k.count7d,
-			delta:
-				k.count7d /
-					Math.max(1, ((keyword30dMap.get(k.keyword) || k.count7d) - k.count7d) / 3 || 1) -
-				1
-		}));
-
-		// Velocity outliers: keywords with delta > 0.5
-		const velocityOutliers = keywords
-			.filter((k) => k.delta > 0.5)
-			.slice(0, 10)
-			.map((k) => ({
-				topic: k.keyword,
-				spike: k.count7d,
-				baseline: k.count30d / 4
-			}));
-
-		// Emerging topics from Neo4j (recently appeared)
-		const emergingSession = getSession();
-		let emergingTopics: string[] = [];
-		try {
-			const emergingResult = await emergingSession.run(
-				`MATCH (t:Topic)
-				 WHERE t.firstSeen > datetime() - duration('P14D') AND t.trendScore > 1
-				 RETURN t.name AS topic
-				 ORDER BY t.trendScore DESC LIMIT 10`
-			);
-			emergingTopics = emergingResult.records.map((r) => r.get('topic'));
-		} finally {
-			await emergingSession.close();
-		}
-
-		return { keywords, topics, velocityOutliers, topicCoOccurrence, emergingTopics };
-	} finally {
-		// session already closed above before PG queries
-	}
-}
-
-async function gatherDeveloperSignalsData(): Promise<DeveloperSignalsData> {
-	// Sentiment breakdown from PostgreSQL
+async function gatherDeveloperSignalsInputs(): Promise<{
+	sentimentBreakdown: SentimentBreakdown;
+	topDiscussions: TopDiscussion[];
+}> {
 	const sentimentResult = await query<{ sentiment: string; count: string }>(
 		`SELECT COALESCE(sentiment, 'neutral') AS sentiment, count(*) AS count
 		 FROM articles
 		 WHERE published_at > now() - interval '7 days'
 		 GROUP BY sentiment`
 	);
-	const sentimentBreakdown = { positive: 0, negative: 0, neutral: 0 };
+	const sentimentBreakdown: SentimentBreakdown = { positive: 0, negative: 0, neutral: 0 };
 	for (const row of sentimentResult.rows) {
-		const key = row.sentiment as keyof typeof sentimentBreakdown;
+		const key = row.sentiment as keyof SentimentBreakdown;
 		if (key in sentimentBreakdown) {
 			sentimentBreakdown[key] = Number.parseInt(row.count);
 		}
 	}
 
-	// Top authors from Neo4j
-	const session = getSession();
-	let topAuthors: DeveloperSignalsData['topAuthors'] = [];
-	try {
-		const authorsResult = await session.run(
-			`MATCH (au:Author)<-[:AUTHORED_BY]-(a:Article)
-			 WHERE a.publishedAt > datetime() - duration('P7D')
-			 RETURN au.handle AS handle, au.platform AS platform, count(a) AS articleCount
-			 ORDER BY articleCount DESC LIMIT 10`
-		);
-		topAuthors = authorsResult.records.map((r) => ({
-			handle: r.get('handle'),
-			platform: r.get('platform') || 'unknown',
-			articleCount:
-				typeof r.get('articleCount') === 'object'
-					? r.get('articleCount').toNumber()
-					: r.get('articleCount')
-		}));
-	} finally {
-		await session.close();
-	}
-
-	// Top discussions (highest engagement articles)
 	const discussionsResult = await query<{
 		title: string;
 		url: string;
@@ -662,12 +563,223 @@ async function gatherDeveloperSignalsData(): Promise<DeveloperSignalsData> {
 		source: r.source_name
 	}));
 
-	return { sentimentBreakdown, topAuthors, topDiscussions };
+	return { sentimentBreakdown, topDiscussions };
 }
 
 // ---------------------------------------------------------------------------
-// Three-pass trend report generation
+// Chart data snapshots (persisted into report_data.charts).
+//
+// Shapes match the Phase 3 endpoints exactly so the rendering layer can use
+// the same helpers across both surfaces:
+//   GET /api/charts/keyword-distribution
+//   GET /api/charts/entity-centrality
 // ---------------------------------------------------------------------------
+
+const KEYWORD_DISTRIBUTION_TOP = 10;
+const KEYWORD_DISTRIBUTION_WINDOW_DAYS = 30;
+const ENTITY_CENTRALITY_PERIODS = 12;
+const ENTITY_CENTRALITY_TOP = 5;
+
+async function gatherKeywordDistribution(): Promise<KeywordDistribution> {
+	const windowEnd = new Date();
+	const windowStart = new Date(
+		windowEnd.getTime() - KEYWORD_DISTRIBUTION_WINDOW_DAYS * 24 * 60 * 60 * 1000
+	);
+
+	const articlesResult = await query<{ total_articles: string }>(
+		`SELECT COUNT(*)::text AS total_articles
+		 FROM articles
+		 WHERE published_at >= $1 AND published_at <= $2`,
+		[windowStart.toISOString(), windowEnd.toISOString()]
+	);
+	const totalArticles = Number.parseInt(articlesResult.rows[0]?.total_articles ?? '0', 10);
+
+	if (totalArticles === 0) {
+		return {
+			windowStart: windowStart.toISOString(),
+			windowEnd: windowEnd.toISOString(),
+			totalArticles: 0,
+			buckets: []
+		};
+	}
+
+	const totalsResult = await query<{ total: string }>(
+		`SELECT COUNT(*)::text AS total
+		 FROM articles, unnest(topic_tags) AS keyword
+		 WHERE published_at >= $1 AND published_at <= $2
+		   AND topic_tags IS NOT NULL`,
+		[windowStart.toISOString(), windowEnd.toISOString()]
+	);
+	const totalMentions = Number.parseInt(totalsResult.rows[0]?.total ?? '0', 10);
+
+	if (totalMentions === 0) {
+		return {
+			windowStart: windowStart.toISOString(),
+			windowEnd: windowEnd.toISOString(),
+			totalArticles,
+			buckets: []
+		};
+	}
+
+	const topResult = await query<{ keyword: string; count: string }>(
+		`SELECT keyword, COUNT(*)::text AS count
+		 FROM articles, unnest(topic_tags) AS keyword
+		 WHERE published_at >= $1 AND published_at <= $2
+		   AND topic_tags IS NOT NULL
+		 GROUP BY keyword
+		 ORDER BY COUNT(*) DESC, keyword ASC
+		 LIMIT $3`,
+		[windowStart.toISOString(), windowEnd.toISOString(), KEYWORD_DISTRIBUTION_TOP]
+	);
+
+	const topEntries = topResult.rows.map((row) => {
+		const count = Number.parseInt(row.count, 10);
+		return {
+			keyword: row.keyword,
+			count,
+			pct: (count / totalMentions) * 100
+		};
+	});
+
+	const topSum = topEntries.reduce((acc, e) => acc + e.count, 0);
+	const otherCount = totalMentions - topSum;
+	const buckets = [...topEntries];
+	if (otherCount > 0) {
+		buckets.push({
+			keyword: 'Other',
+			count: otherCount,
+			pct: (otherCount / totalMentions) * 100
+		});
+	}
+
+	return {
+		windowStart: windowStart.toISOString(),
+		windowEnd: windowEnd.toISOString(),
+		totalArticles,
+		buckets
+	};
+}
+
+interface SnapshotByPeriodRow {
+	period: string;
+	entity_importance: Array<{
+		name: string;
+		pagerank_score?: number;
+		mention_count?: number;
+	}>;
+}
+
+async function gatherEntityCentrality(): Promise<EntityCentralitySeries> {
+	const currentPeriodEnd = new Date();
+	const cutoff = new Date(
+		Date.UTC(
+			currentPeriodEnd.getUTCFullYear(),
+			currentPeriodEnd.getUTCMonth() - (ENTITY_CENTRALITY_PERIODS - 1),
+			1,
+			0,
+			0,
+			0
+		)
+	);
+
+	const snapshotsResult = await query<SnapshotByPeriodRow>(
+		`SELECT DISTINCT ON (to_char(computed_at AT TIME ZONE 'UTC', 'YYYY-MM'))
+			to_char(computed_at AT TIME ZONE 'UTC', 'YYYY-MM') AS period,
+			entity_importance
+		 FROM graph_snapshots
+		 WHERE computed_at >= $1
+		 ORDER BY to_char(computed_at AT TIME ZONE 'UTC', 'YYYY-MM') DESC, computed_at DESC`,
+		[cutoff.toISOString()]
+	);
+
+	const snapshots = snapshotsResult.rows;
+
+	if (snapshots.length === 0) {
+		return {
+			currentPeriodEnd: currentPeriodEnd.toISOString(),
+			periodKind: 'month',
+			sparse: true,
+			series: []
+		};
+	}
+
+	const currentSnapshot = snapshots[0];
+	const currentEntities = Array.isArray(currentSnapshot.entity_importance)
+		? currentSnapshot.entity_importance
+		: [];
+
+	const topEntityNames = [...currentEntities]
+		.sort((a, b) => (b.pagerank_score ?? 0) - (a.pagerank_score ?? 0))
+		.slice(0, ENTITY_CENTRALITY_TOP)
+		.map((e) => e.name);
+
+	const sparse = snapshots.length < ENTITY_CENTRALITY_PERIODS;
+
+	if (topEntityNames.length === 0) {
+		return {
+			currentPeriodEnd: currentPeriodEnd.toISOString(),
+			periodKind: 'month',
+			sparse,
+			series: []
+		};
+	}
+
+	const byPeriod = new Map<string, SnapshotByPeriodRow['entity_importance']>();
+	for (const row of snapshots) {
+		byPeriod.set(row.period, Array.isArray(row.entity_importance) ? row.entity_importance : []);
+	}
+	const orderedPeriods = [...byPeriod.keys()].sort();
+
+	const series = topEntityNames.map((entityName) => {
+		const points: Array<{ period: string; centrality: number; mentions: number }> = [];
+		for (const period of orderedPeriods) {
+			const entities = byPeriod.get(period) ?? [];
+			const found = entities.find((e) => e.name === entityName);
+			if (!found) continue;
+			points.push({
+				period,
+				centrality: typeof found.pagerank_score === 'number' ? found.pagerank_score : 0,
+				mentions: typeof found.mention_count === 'number' ? found.mention_count : 0
+			});
+		}
+		return { entityName, points };
+	});
+
+	return {
+		currentPeriodEnd: currentPeriodEnd.toISOString(),
+		periodKind: 'month',
+		sparse,
+		series
+	};
+}
+
+// ---------------------------------------------------------------------------
+// Four-pass trend report generation (Phase 4 contract)
+//
+// Pass 1 (sequential): marketSnapshot, developerSignals
+// Pass 2: signalInterpretation (reads pass-1 text)
+// Pass 3: executiveSummary + predictions (reads pass-1 + pass-2 text)
+// Pass 4: supportingResources (ranks the aggregated research[] pool)
+//
+// Chart data is snapshotted into report_data.charts at persist time so
+// rendering is deterministic across UI, email, and PDF surfaces.
+// ---------------------------------------------------------------------------
+
+function aggregateResearchPool(
+	...sections: Array<{ research?: ResearchCitation[] } | undefined>
+): ResearchCitation[] {
+	const seen = new Set<string>();
+	const pool: ResearchCitation[] = [];
+	for (const section of sections) {
+		if (!section?.research) continue;
+		for (const entry of section.research) {
+			if (!entry?.url || seen.has(entry.url)) continue;
+			seen.add(entry.url);
+			pool.push(entry);
+		}
+	}
+	return pool;
+}
 
 async function runTrendReport(
 	client: Awaited<ReturnType<typeof getClient>>,
@@ -680,15 +792,17 @@ async function runTrendReport(
 	const systemPrompt = buildSystemPrompt(operatorContext);
 	const sectionPrompts = buildSectionPrompts(operatorContext);
 
-	// --- Gather data for all three pass-1 sections ---
+	// --- Gather inputs for pass 1 sections + chart snapshots ---
 	await logRun(runId, 'info', 'trend-report', 'Querying databases for section data...');
 
-	const [marketData, techData, signalsData, snapshots] = await Promise.all([
-		gatherMarketLandscapeData(),
-		gatherTechnologyTrendsData(),
-		gatherDeveloperSignalsData(),
-		loadGraphSnapshots()
-	]);
+	const [sourceDistribution, signalsInputs, snapshots, keywordDistribution, entityCentrality] =
+		await Promise.all([
+			gatherSourceDistribution(),
+			gatherDeveloperSignalsInputs(),
+			loadGraphSnapshots(),
+			gatherKeywordDistribution(),
+			gatherEntityCentrality()
+		]);
 
 	const topClusters = (snapshots.current?.topic_clusters ?? []).slice(0, 10);
 	const topEntities = (snapshots.current?.entity_importance ?? []).slice(0, 20);
@@ -720,44 +834,33 @@ async function runTrendReport(
 		"SELECT count(*) AS count FROM articles WHERE published_at > now() - interval '7 days'"
 	);
 	const articleCount = Number.parseInt(countResult.rows[0].count);
-	const sourcesCount = marketData.sourceDistribution.length;
+	const sourcesCount = sourceDistribution.length;
 
 	await logRun(
 		runId,
 		'info',
 		'trend-report',
-		`Data gathered: ${articleCount} articles, ${techData.topics.length} topics, ${marketData.entities.length} entities, ${sourcesCount} sources`
+		`Data gathered: ${articleCount} articles, ${enrichedEntities.length} entities, ${sourcesCount} sources, ${keywordDistribution.buckets.length} keyword buckets, ${entityCentrality.series.length} centrality series`
 	);
 
-	// --- Pass 1: sections 1, 2, 3 (sequential, RocketRide runs one pipeline at a time) ---
+	// --- Pass 1: marketSnapshot, developerSignals ---
 	checkCancelled(runId);
 	await logRun(
 		runId,
 		'info',
 		'trend-report',
-		'Pass 1: generating market_landscape, technology_trends, developer_signals...'
+		'Pass 1: generating market_snapshot and developer_signals...'
 	);
 
 	const marketResponse = await runSection(
 		client,
 		runId,
-		'marketLandscape',
+		'marketSnapshot',
 		sectionPrompts,
 		systemPrompt,
 		{
-			...marketData,
 			entityImportance: enrichedEntities,
-			rocketrideContext
-		}
-	);
-	const techResponse = await runSection(
-		client,
-		runId,
-		'technologyTrends',
-		sectionPrompts,
-		systemPrompt,
-		{
-			...techData,
+			sourceDistribution,
 			topicClusters: topClusters,
 			rocketrideContext
 		}
@@ -769,7 +872,7 @@ async function runTrendReport(
 		sectionPrompts,
 		systemPrompt,
 		{
-			...signalsData,
+			...signalsInputs,
 			emergingEntities,
 			rocketrideContext
 		}
@@ -777,51 +880,94 @@ async function runTrendReport(
 
 	await logRun(runId, 'info', 'trend-report', 'Pass 1 complete.');
 
-	// --- Pass 2: content_recommendations (reads pass 1 text only) ---
+	// --- Pass 2: signal_interpretation (reads pass 1 text only) ---
 	checkCancelled(runId);
-	await logRun(runId, 'info', 'trend-report', 'Pass 2: generating content_recommendations...');
+	await logRun(runId, 'info', 'trend-report', 'Pass 2: generating signal_interpretation...');
 
-	const pass2Input = {
-		marketLandscape: marketResponse.text,
-		technologyTrends: techResponse.text,
-		developerSignals: signalsResponse.text,
-		rocketrideContext
-	};
-	const contentResponse = await runSection(
+	const interpretationResponse = await runSection(
 		client,
 		runId,
-		'contentRecommendations',
+		'signalInterpretation',
 		sectionPrompts,
 		systemPrompt,
-		pass2Input
+		{
+			marketSnapshot: marketResponse.text,
+			developerSignals: signalsResponse.text,
+			rocketrideContext
+		}
 	);
 
 	await logRun(runId, 'info', 'trend-report', 'Pass 2 complete.');
 
-	// --- Pass 3: executive_summary (reads all four text outputs) ---
+	// --- Pass 3: executive_summary + predictions (reads pass 1 + pass 2 text) ---
 	checkCancelled(runId);
 	await logRun(runId, 'info', 'trend-report', 'Pass 3: generating executive_summary...');
 
-	const pass3Input = {
-		marketLandscape: marketResponse.text,
-		technologyTrends: techResponse.text,
-		developerSignals: signalsResponse.text,
-		contentRecommendations: contentResponse.text
-	};
 	const summaryResponse = await runSection(
 		client,
 		runId,
 		'executiveSummary',
 		sectionPrompts,
 		systemPrompt,
-		pass3Input
+		{
+			marketSnapshot: marketResponse.text,
+			developerSignals: signalsResponse.text,
+			signalInterpretation: interpretationResponse.text
+		}
 	);
 
 	await logRun(runId, 'info', 'trend-report', 'Pass 3 complete.');
 
-	// --- Assemble report_data ---
+	// --- Pass 4: supporting_resources (ranks aggregated research pool) ---
+	checkCancelled(runId);
+	await logRun(runId, 'info', 'trend-report', 'Pass 4: ranking supporting_resources...');
+
+	const researchPool = aggregateResearchPool(
+		marketResponse,
+		signalsResponse,
+		interpretationResponse
+	);
+
+	let supportingResources: SupportingResource[] = [];
+	if (researchPool.length === 0) {
+		await logRun(
+			runId,
+			'info',
+			'trend-report',
+			'Skipping supporting_resources pass: research pool is empty.'
+		);
+	} else {
+		const resourcesResponse = await runSection(
+			client,
+			runId,
+			'supportingResources',
+			sectionPrompts,
+			systemPrompt,
+			{
+				researchPool,
+				rocketrideContext
+			}
+		);
+		if (resourcesResponse.resources?.length) {
+			supportingResources = resourcesResponse.resources.slice(0, 10);
+		}
+	}
+
+	await logRun(
+		runId,
+		'info',
+		'trend-report',
+		`Pass 4 complete: ${supportingResources.length} supporting resources selected.`
+	);
+
+	// --- Assemble report_data with new shape ---
 	const now = new Date();
 	const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+	const charts: ReportCharts = {
+		keywordDistribution,
+		entityCentrality
+	};
 
 	const reportData: ReportData = {
 		reportMetadata: {
@@ -831,30 +977,30 @@ async function runTrendReport(
 			articleCount
 		},
 		sections: {
-			marketLandscape: {
-				data: marketData,
-				text: marketResponse.text,
-				...(marketResponse.research?.length ? { research: marketResponse.research } : {})
-			},
-			technologyTrends: {
-				data: techData,
-				text: techResponse.text,
-				...(techResponse.research?.length ? { research: techResponse.research } : {})
-			},
-			developerSignals: {
-				data: signalsData,
-				text: signalsResponse.text,
-				...(signalsResponse.research?.length ? { research: signalsResponse.research } : {})
-			},
-			contentRecommendations: {
-				text: contentResponse.text,
-				...(contentResponse.research?.length ? { research: contentResponse.research } : {})
-			},
 			executiveSummary: {
 				text: summaryResponse.text,
 				...(summaryResponse.predictions?.length ? { predictions: summaryResponse.predictions } : {})
+			},
+			marketSnapshot: {
+				text: marketResponse.text,
+				...(marketResponse.research?.length ? { research: marketResponse.research } : {})
+			},
+			developerSignals: {
+				text: signalsResponse.text,
+				...(signalsResponse.research?.length ? { research: signalsResponse.research } : {})
+			},
+			signalInterpretation: {
+				text: interpretationResponse.text,
+				interpretations: interpretationResponse.interpretations ?? [],
+				...(interpretationResponse.research?.length
+					? { research: interpretationResponse.research }
+					: {})
+			},
+			supportingResources: {
+				resources: supportingResources
 			}
-		}
+		},
+		charts
 	};
 
 	await validateAndPersist(runId, 'trend-report.pipe', reportData);
@@ -972,13 +1118,67 @@ async function runContentDrafts(
 		}))
 	};
 
-	// Content-drafts receives the content_recommendations text and supporting context
+	// ---------------------------------------------------------------------------
+	// Phase 4 transition: the report no longer carries technologyTrends.data
+	// or contentRecommendations. We populate the payload's expected keys from
+	// the new shape (signalInterpretation in place of contentRecommendations)
+	// and pull trending/emerging topics inline so the existing content-drafts
+	// .pipe continues to function until Phase 5 rewrites it.
+	// ---------------------------------------------------------------------------
+	const topicsSession = getSession();
+	let trendingTopics: Array<{ topic: string; trendScore: number }> = [];
+	let emergingTopicsList: string[] = [];
+	try {
+		const trendingResult = await topicsSession.run(
+			`MATCH (t:Topic)
+			 WHERE t.trendScore > 0
+			 RETURN t.name AS topic, t.trendScore AS trendScore
+			 ORDER BY t.trendScore DESC LIMIT 5`
+		);
+		trendingTopics = trendingResult.records.map((r) => ({
+			topic: r.get('topic') as string,
+			trendScore: neoToNum(r.get('trendScore'))
+		}));
+
+		const emergingResult = await topicsSession.run(
+			`MATCH (t:Topic)
+			 WHERE t.firstSeen > datetime() - duration('P14D') AND t.trendScore > 1
+			 RETURN t.name AS topic
+			 ORDER BY t.trendScore DESC LIMIT 10`
+		);
+		emergingTopicsList = emergingResult.records.map((r) => r.get('topic') as string);
+	} catch (err) {
+		await logRun(
+			runId,
+			'warn',
+			'content-drafts',
+			`Could not fetch topic context for drafters (soft fail): ${err}`
+		);
+	} finally {
+		await topicsSession.close();
+	}
+
+	const interpretationSection = sections.signalInterpretation;
+	const interpretationDigest = interpretationSection
+		? [
+				interpretationSection.text,
+				...(interpretationSection.interpretations ?? []).map(
+					(i) => `- ${i.signal} :: ${i.meaning} :: ${i.implication}`
+				)
+			].join('\n\n')
+		: '';
+
 	const payload = {
 		report: {
 			executiveSummary: sections.executiveSummary.text,
-			contentRecommendations: sections.contentRecommendations.text,
-			trendingTopics: sections.technologyTrends.data.topics.slice(0, 5),
-			emergingTopics: sections.technologyTrends.data.emergingTopics
+			// Phase 5 will rename this key on the .pipe side. Until then, the
+			// .pipe still reads `contentRecommendations`; we populate it with
+			// the signal-interpretation digest so drafters see the same brief.
+			contentRecommendations: interpretationDigest,
+			signalInterpretation: interpretationSection,
+			supportingResources: sections.supportingResources?.resources ?? [],
+			trendingTopics,
+			emergingTopics: emergingTopicsList
 		},
 		topArticles: articlesResult.rows,
 		rocketrideContext,

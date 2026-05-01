@@ -5,7 +5,7 @@ import { logRun } from '@pulsar/shared/run-logger';
 import type { DraftEvalSummary, EvaluationSummary } from '@pulsar/shared/types';
 import { extractJson } from '../parse-json.js';
 import { type getClient, terminatePipeline, usePipeline } from '../rocketride.js';
-import { CONTENT_DRAFT_RUBRIC, TREND_REPORT_RUBRIC, type RubricDimension } from './rubrics.js';
+import { CONTENT_DRAFT_RUBRIC, type RubricDimension, TREND_REPORT_RUBRIC } from './rubrics.js';
 import { runSubChecks } from './sub-checks.js';
 
 export const JUDGE_MODEL = 'claude-haiku-4-5-20251001';

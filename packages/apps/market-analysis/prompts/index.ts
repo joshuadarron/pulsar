@@ -1,1 +1,5 @@
-export { buildSectionPrompts, buildSystemPrompt } from './trend-report.js';
+export {
+	buildSectionPrompts,
+	buildSupportingResourcesPrompt,
+	buildSystemPrompt
+} from './trend-report.js';

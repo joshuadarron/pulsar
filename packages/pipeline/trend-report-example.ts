@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Example payloads for a full trend-report cycle.
+// Example payloads for a full Phase 4 trend-report cycle.
 //
 // All values are illustrative. Numbers are round and clearly synthetic.
 // Use this as a reference for expected input/output shapes, not as test data.
@@ -20,108 +20,64 @@ export const EXAMPLE_INPUT = {
 		sourcesCount: 8
 	},
 
-	// Pass 1, Section 1: market_landscape receives this data
-	marketLandscape: {
-		entities: [
-			{ name: 'LangChain', type: 'tool', mentionCount: 85 },
-			{ name: 'OpenAI', type: 'company', mentionCount: 120 },
-			{ name: 'Anthropic', type: 'company', mentionCount: 75 },
-			{ name: 'LlamaIndex', type: 'tool', mentionCount: 40 },
-			{ name: 'CrewAI', type: 'tool', mentionCount: 35 },
-			{ name: 'AutoGen', type: 'tool', mentionCount: 30 },
-			{ name: 'Claude', type: 'model', mentionCount: 60 },
-			{ name: 'GPT-4o', type: 'model', mentionCount: 55 }
-		],
-		technologies: [
-			{ name: 'LangChain', type: 'tool', mentionCount: 85 },
-			{ name: 'Claude', type: 'model', mentionCount: 60 },
-			{ name: 'GPT-4o', type: 'model', mentionCount: 55 },
-			{ name: 'Python', type: 'language', mentionCount: 110 },
-			{ name: 'TypeScript', type: 'language', mentionCount: 45 },
-			{ name: 'CrewAI', type: 'tool', mentionCount: 35 }
+	// Pass 1, Section: market_snapshot receives this data
+	marketSnapshot: {
+		entityImportance: [
+			{
+				name: 'LangChain',
+				type: 'tool',
+				pagerank_score: 0.18,
+				pagerank_rank: 1,
+				mention_count: 85,
+				history: {
+					twelveMonthDelta: -0.12,
+					yoyDelta: -0.08,
+					trajectory: [
+						{ period: '2026-02', mentions: 95, centrality: 0.21 },
+						{ period: '2026-03', mentions: 90, centrality: 0.2 },
+						{ period: '2026-04', mentions: 85, centrality: 0.18 }
+					]
+				}
+			},
+			{
+				name: 'CrewAI',
+				type: 'tool',
+				pagerank_score: 0.09,
+				pagerank_rank: 4,
+				mention_count: 35,
+				history: {
+					twelveMonthDelta: 1.4,
+					yoyDelta: 0.9,
+					trajectory: [
+						{ period: '2026-02', mentions: 18, centrality: 0.05 },
+						{ period: '2026-03', mentions: 28, centrality: 0.07 },
+						{ period: '2026-04', mentions: 35, centrality: 0.09 }
+					]
+				}
+			}
 		],
 		sourceDistribution: [
 			{ source: 'Reddit', articleCount: 95 },
 			{ source: 'Hacker News', articleCount: 70 },
 			{ source: 'GitHub', articleCount: 55 },
-			{ source: 'ArXiv', articleCount: 40 },
-			{ source: 'Dev.to', articleCount: 30 },
-			{ source: 'Medium', articleCount: 25 },
-			{ source: 'Hashnode', articleCount: 15 },
-			{ source: 'RSS/Substack', articleCount: 10 }
+			{ source: 'ArXiv', articleCount: 40 }
+		],
+		topicClusters: [
+			{
+				cluster_id: 1,
+				topic_count: 12,
+				topics: [
+					{ name: 'Agent Frameworks', trend_score: 8.5 },
+					{ name: 'Model Context Protocol', trend_score: 7.8 },
+					{ name: 'Tool Use', trend_score: 6.4 }
+				]
+			}
 		]
 	},
 
-	// Pass 1, Section 2: technology_trends receives this data
-	technologyTrends: {
-		keywords: [
-			{ keyword: 'mcp', count7d: 48, count30d: 60, delta: 2.2 },
-			{ keyword: 'agent', count7d: 95, count30d: 280, delta: 0.4 },
-			{ keyword: 'rag', count7d: 70, count30d: 250, delta: 0.1 },
-			{ keyword: 'tool-use', count7d: 35, count30d: 50, delta: 1.8 },
-			{ keyword: 'fine-tuning', count7d: 25, count30d: 100, delta: 0.0 },
-			{ keyword: 'embeddings', count7d: 30, count30d: 95, delta: 0.3 },
-			{ keyword: 'vector-db', count7d: 20, count30d: 80, delta: -0.2 },
-			{ keyword: 'prompt-engineering', count7d: 15, count30d: 70, delta: -0.4 }
-		],
-		topics: [
-			{
-				topic: 'Agent Frameworks',
-				trendScore: 8.5,
-				sentiment: 'positive',
-				articleCount: 45,
-				sparkline: [5, 7, 6, 8, 9, 5, 5]
-			},
-			{
-				topic: 'Model Context Protocol',
-				trendScore: 7.8,
-				sentiment: 'positive',
-				articleCount: 30,
-				sparkline: [2, 3, 4, 5, 6, 4, 6]
-			},
-			{
-				topic: 'RAG Pipelines',
-				trendScore: 6.2,
-				sentiment: 'neutral',
-				articleCount: 38,
-				sparkline: [6, 5, 5, 6, 5, 6, 5]
-			},
-			{
-				topic: 'LLM Deployment',
-				trendScore: 5.5,
-				sentiment: 'neutral',
-				articleCount: 25,
-				sparkline: [4, 3, 4, 4, 3, 4, 3]
-			},
-			{
-				topic: 'Open-source Models',
-				trendScore: 5.0,
-				sentiment: 'positive',
-				articleCount: 20,
-				sparkline: [3, 3, 2, 3, 3, 3, 3]
-			}
-		],
-		velocityOutliers: [
-			{ topic: 'mcp', spike: 48, baseline: 15 },
-			{ topic: 'tool-use', spike: 35, baseline: 12 }
-		],
-		topicCoOccurrence: [
-			{ topicA: 'Agent Frameworks', topicB: 'Model Context Protocol', count: 18 },
-			{ topicA: 'Agent Frameworks', topicB: 'Tool Use', count: 15 },
-			{ topicA: 'RAG Pipelines', topicB: 'Vector Databases', count: 12 },
-			{ topicA: 'Model Context Protocol', topicB: 'Tool Use', count: 10 }
-		],
-		emergingTopics: ['MCP servers', 'agent-to-agent protocols', 'structured outputs']
-	},
-
-	// Pass 1, Section 3: developer_signals receives this data
+	// Pass 1, Section: developer_signals receives this data
 	developerSignals: {
 		sentimentBreakdown: { positive: 105, negative: 50, neutral: 185 },
-		topAuthors: [
-			{ handle: 'swyx', platform: 'Twitter', articleCount: 8 },
-			{ handle: 'simonw', platform: 'Blog', articleCount: 5 },
-			{ handle: 'karpathy', platform: 'Twitter', articleCount: 4 }
-		],
 		topDiscussions: [
 			{
 				title: 'Comparing agent framework deployment patterns',
@@ -134,12 +90,17 @@ export const EXAMPLE_INPUT = {
 				url: 'https://news.ycombinator.com/item?id=example2',
 				commentCount: 95,
 				source: 'Hacker News'
-			},
+			}
+		],
+		emergingEntities: [
 			{
-				title: 'Why I switched from LangChain to building my own',
-				url: 'https://dev.to/example3',
-				commentCount: 60,
-				source: 'Dev.to'
+				name: 'Semantic Kernel',
+				type: 'tool',
+				current_rank: 7,
+				prior_rank: 28,
+				current_mentions: 32,
+				prior_mentions: 12,
+				mention_growth_multiplier: 2.67
 			}
 		]
 	}
@@ -149,27 +110,22 @@ export const EXAMPLE_INPUT = {
  * Example output from each pass (what the agent returns via RocketRide).
  */
 export const EXAMPLE_PASS_OUTPUTS = {
-	// Pass 1 returns (one per section, run in parallel)
-	marketLandscape: {
-		text: "The orchestration layer is fragmenting. LangChain still leads entity mentions at 85 this period, but its share is shrinking as CrewAI (35) and AutoGen (30) gain ground. Collectively, the three challenger frameworks now account for 76% of LangChain's volume, up from roughly 50% last month. This is not a LangChain decline story; absolute mentions held steady. It is a market-expanding story: more developers are entering the agent space and choosing different tools.\n\nOpenAI (120 mentions) and Anthropic (75) dominate the model provider conversation. The gap between them narrowed by 15 points compared to the prior period, driven largely by Claude's tool-use capabilities becoming a reference point in agent framework discussions. GPT-4o mentions (55) are increasingly tied to deployment cost threads rather than capability comparisons.\n\nSource distribution is stable, with Reddit (95) and Hacker News (70) as primary channels. GitHub (55) overtook ArXiv (40) for the third slot, reflecting a shift from research to implementation. For RocketRide, the runtime positioning has a clear window: developers choosing between orchestration options need the layer beneath them to be stable and framework-agnostic.",
+	// Pass 1 returns
+	marketSnapshot: {
+		text: "Orchestration is fragmenting. LangChain held PageRank rank 1, but CrewAI grew mention volume 1.4x year-over-year, climbing into the top five. The challenger frameworks (CrewAI, AutoGen, Semantic Kernel) collectively matched 76 percent of LangChain's volume this period, up from roughly half last quarter.\n\nFor RocketRide-class runtimes, the read is simple: when the framework layer becomes interchangeable, runtime positioning lands harder. Reddit (95) and Hacker News (70) drive the conversation; GitHub (55) overtook ArXiv (40), reflecting a shift from research to implementation.",
 		research: [
 			{
 				url: 'https://github.com/langchain-ai/langchain/releases',
 				sourceType: 'repository' as const,
-				claimSupported: 'LangChain absolute mentions held steady',
-				excerpt:
-					'v0.3.x release series continues with weekly patch releases, maintaining development velocity.',
+				claimSupported: 'LangChain release cadence has held steady this period',
+				excerpt: 'v0.3.x release series continues with weekly patch releases.',
 				retrievedAt: '2026-04-21T10:00:00.000Z'
 			}
 		]
 	},
 
-	technologyTrends: {
-		text: 'MCP (Model Context Protocol) is the period\'s clearest acceleration signal: 48 mentions in 7 days against a 30-day baseline of 15, a 3.2x spike. The keyword co-occurs heavily with "agent" and "tool-use," confirming that developers are evaluating MCP as plumbing for agent tool integration. Sentiment on MCP-related topics runs 71% positive, with the negative fraction (12%) focused on spec stability concerns.\n\nThe "agent" keyword remains the highest-volume term at 95 seven-day mentions, but its delta of 0.4 suggests steady-state growth rather than a spike. "RAG" (70 mentions, delta 0.1) is plateauing, while "prompt-engineering" (15 mentions, delta -0.4) continues its decline. This pattern is consistent: the conversation is shifting from prompting individual models to orchestrating multi-step workflows.\n\nVelocity outliers confirm the theme: "mcp" (3.2x) and "tool-use" (2.9x) are the only two keywords with spike-to-baseline ratios above 2x. Topic co-occurrence data shows "Agent Frameworks" clustering tightly with both "Model Context Protocol" (18 co-occurrences) and "Tool Use" (15), forming a coherent thematic block.\n\nEmerging topics to track: "MCP servers" (developers building tool servers for MCP), "agent-to-agent protocols" (early discussion around agent interop), and "structured outputs" (LLM responses as typed schemas).'
-	},
-
 	developerSignals: {
-		text: 'Developer sentiment this period breaks down to 54% neutral, 31% positive, and 15% negative. The large neutral share reflects an evaluation mindset: comparison posts, "how do I choose" threads, and architecture decision records outnumber endorsements or complaints.\n\nThe highest-engagement discussion (150 comments on r/LocalLLaMA) compared agent framework deployment patterns. The dominant thread was configuration complexity: developers want to compose agents from reusable components without managing per-framework configuration drift. The second-highest thread (95 comments on Hacker News) framed MCP as "the USB-C of AI tooling," debating whether standardization at the tool-integration layer would reduce framework lock-in.\n\nInfluential voices this period: swyx (8 articles) has been building the case for "AI engineering" as a discipline distinct from ML engineering, with a focus on runtime concerns. simonw (5 articles) published detailed MCP implementation walkthroughs. karpathy (4 posts) commented on the gap between research model capabilities and production deployment tooling.\n\nThe clearest actionable signal: developers are frustrated by the gap between choosing an agent framework and deploying it reliably. Configuration complexity, tool integration, and provider switching are the top three complaints. These map directly to RocketRide\'s pipeline composition model.',
+		text: 'The dominant question on r/LocalLLaMA this period was how to deploy multi-step agents without per-framework configuration drift. The top thread (150 comments) compared three orchestration patterns and converged on a complaint: tool integration is solved at the model layer but unsolved at the runtime layer.\n\nSemantic Kernel emerged into the top 10 of PageRank importance from rank 28 last week, with mention volume up 2.67x. The driver appears to be its plugin model fitting cleanly into existing .NET shops, not a fresh marketing push.',
 		research: [
 			{
 				url: 'https://reddit.com/r/LocalLLaMA/example1',
@@ -183,14 +139,64 @@ export const EXAMPLE_PASS_OUTPUTS = {
 		]
 	},
 
-	// Pass 2 returns (receives only the three text outputs above)
-	contentRecommendations: {
-		text: '1. "Why your agent framework choice matters less than your runtime" (blog post, publish this week). The marketLandscape analysis shows orchestration fragmentation with three frameworks matching 76% of LangChain\'s volume. Target: developers evaluating agent frameworks. Angle: RocketRide sits beneath the framework layer, making the choice swappable. This is time-sensitive while the fragmentation narrative is active.\n\n2. "Building an MCP server with RocketRide in 15 minutes" (tutorial + video). technologyTrends identified MCP as a 3.2x velocity outlier, and developerSignals shows simonw publishing MCP implementation walkthroughs. Target: developers already exploring MCP. Angle: practical, working example using RocketRide\'s pipeline builder. Publish within two weeks to ride the MCP wave.\n\n3. "The configuration complexity tax: a measured comparison" (blog post). developerSignals identified configuration complexity as the top developer complaint (150-comment thread). Target: developers frustrated with framework setup. Angle: show a side-by-side of configuring the same agent workflow in three frameworks vs. RocketRide pipelines. Include actual code.\n\n4. "Agent-to-agent: what the early protocol discussions mean for your stack" (thought leadership post). technologyTrends flagged "agent-to-agent protocols" as an emerging topic. Target: technical leads planning agent architectures. Angle: position RocketRide\'s directed graph model as naturally suited to multi-agent composition.\n\n5. "RAG is not dead, it is becoming infrastructure" (social thread + blog post). technologyTrends shows RAG at plateau (delta 0.1) while agent mentions grow. Target: developers who built RAG systems and wonder what is next. Angle: RAG becomes a component in larger agent pipelines, exactly the model RocketRide supports.\n\nPrioritization: items 1 and 2 are most time-sensitive (responding to active trends). Item 3 has the highest potential resonance given the 150-comment thread. Items 4 and 5 are lower urgency but build long-term positioning.'
+	// Pass 2 returns (reads pass-1 text)
+	signalInterpretation: {
+		text: 'These are the data points worth interpreting this period. Each links a concrete signal to what it implies for the operator.',
+		interpretations: [
+			{
+				signal:
+					'Challenger frameworks (CrewAI, AutoGen, Semantic Kernel) collectively matched 76 percent of LangChain mention volume.',
+				meaning:
+					'Developers are not consolidating around one framework. The framework layer is becoming interchangeable.',
+				implication:
+					'Runtime positioning lands harder when the layer above is swappable. The "framework choice matters less than runtime" argument has the most leverage right now.'
+			},
+			{
+				signal:
+					'Semantic Kernel jumped from PageRank rank 28 to rank 7, with 2.67x mention growth.',
+				meaning:
+					'A second-tier framework can break into the top tier in one period when the underlying ecosystem (here, .NET) is ready.',
+				implication:
+					'Watch for similar emergences in adjacent ecosystems. Cross-runtime portability stories matter when developers are migrating frameworks weekly.'
+			},
+			{
+				signal:
+					'150-comment r/LocalLLaMA thread on agent deployment converged on configuration complexity as the unsolved problem.',
+				meaning: 'The bottleneck has moved from model selection to integration plumbing.',
+				implication:
+					'Demonstrations should show end-to-end deployment, not isolated capability. Show the wiring, not the model call.'
+			}
+		]
 	},
 
-	// Pass 3 returns (receives all four text outputs above)
+	// Pass 3 returns (reads pass 1 + pass 2 text)
 	executiveSummary: {
-		text: "Agent framework fragmentation reached a tipping point this period, with CrewAI, AutoGen, and Semantic Kernel collectively matching 76% of LangChain's mention volume. MCP is accelerating at 3.2x the 30-day baseline as developers standardize tool integration plumbing. Developer sentiment is evaluative (54% neutral), with configuration complexity surfacing as the dominant complaint across 150+ comment threads. RocketRide should publish a framework-agnostic runtime positioning piece this week and follow it with an MCP tutorial to capture developers in active evaluation mode."
+		text: "Orchestration fragmented this period: three challenger frameworks collectively matched 76 percent of LangChain's mention volume, and the dominant developer thread (150 comments) named tool integration as the unsolved runtime problem. Semantic Kernel emerged from rank 28 to rank 7 in one week. The window for runtime positioning is open while developers are still picking. The argument that framework choice matters less than runtime has the most leverage right now.",
+		predictions: [
+			{
+				prediction_text:
+					'MCP-compatible tool wrappers will appear for the top three agent frameworks within four weeks.',
+				predicted_entities: ['LangChain', 'MCP'],
+				predicted_topics: ['agent frameworks', 'tool integration'],
+				prediction_type: 'emergence' as const
+			}
+		]
+	},
+
+	// Pass 4 returns (ranks the aggregated research pool)
+	supportingResources: {
+		resources: [
+			{
+				url: 'https://github.com/langchain-ai/langchain/releases',
+				title: 'LangChain release notes',
+				why: 'Canonical record of LangChain release cadence; useful for verifying claims about ecosystem velocity.'
+			},
+			{
+				url: 'https://reddit.com/r/LocalLLaMA/example1',
+				title: 'Comparing agent framework deployment patterns',
+				why: '150-comment thread anchoring the runtime-layer complaint cited in the report.'
+			}
+		]
 	}
 };
 
@@ -206,25 +212,62 @@ export const EXAMPLE_REPORT_DATA: ReportData = {
 		articleCount: EXAMPLE_INPUT.metadata.articleCount
 	},
 	sections: {
-		marketLandscape: {
-			data: EXAMPLE_INPUT.marketLandscape,
-			text: EXAMPLE_PASS_OUTPUTS.marketLandscape.text,
-			research: EXAMPLE_PASS_OUTPUTS.marketLandscape.research
+		executiveSummary: {
+			text: EXAMPLE_PASS_OUTPUTS.executiveSummary.text,
+			predictions: EXAMPLE_PASS_OUTPUTS.executiveSummary.predictions
 		},
-		technologyTrends: {
-			data: EXAMPLE_INPUT.technologyTrends,
-			text: EXAMPLE_PASS_OUTPUTS.technologyTrends.text
+		marketSnapshot: {
+			text: EXAMPLE_PASS_OUTPUTS.marketSnapshot.text,
+			research: EXAMPLE_PASS_OUTPUTS.marketSnapshot.research
 		},
 		developerSignals: {
-			data: EXAMPLE_INPUT.developerSignals,
 			text: EXAMPLE_PASS_OUTPUTS.developerSignals.text,
 			research: EXAMPLE_PASS_OUTPUTS.developerSignals.research
 		},
-		contentRecommendations: {
-			text: EXAMPLE_PASS_OUTPUTS.contentRecommendations.text
+		signalInterpretation: {
+			text: EXAMPLE_PASS_OUTPUTS.signalInterpretation.text,
+			interpretations: EXAMPLE_PASS_OUTPUTS.signalInterpretation.interpretations
 		},
-		executiveSummary: {
-			text: EXAMPLE_PASS_OUTPUTS.executiveSummary.text
+		supportingResources: {
+			resources: EXAMPLE_PASS_OUTPUTS.supportingResources.resources
+		}
+	},
+	charts: {
+		keywordDistribution: {
+			windowStart: '2026-03-22T00:00:00.000Z',
+			windowEnd: '2026-04-21T00:00:00.000Z',
+			totalArticles: 1280,
+			buckets: [
+				{ keyword: 'agent', count: 320, pct: 25 },
+				{ keyword: 'rag', count: 220, pct: 17.18 },
+				{ keyword: 'mcp', count: 165, pct: 12.89 },
+				{ keyword: 'tool-use', count: 110, pct: 8.59 },
+				{ keyword: 'embeddings', count: 95, pct: 7.42 },
+				{ keyword: 'Other', count: 370, pct: 28.91 }
+			]
+		},
+		entityCentrality: {
+			currentPeriodEnd: '2026-04-21T00:00:00.000Z',
+			periodKind: 'month',
+			sparse: false,
+			series: [
+				{
+					entityName: 'LangChain',
+					points: [
+						{ period: '2026-02', centrality: 0.21, mentions: 95 },
+						{ period: '2026-03', centrality: 0.2, mentions: 90 },
+						{ period: '2026-04', centrality: 0.18, mentions: 85 }
+					]
+				},
+				{
+					entityName: 'CrewAI',
+					points: [
+						{ period: '2026-02', centrality: 0.05, mentions: 18 },
+						{ period: '2026-03', centrality: 0.07, mentions: 28 },
+						{ period: '2026-04', centrality: 0.09, mentions: 35 }
+					]
+				}
+			]
 		}
 	}
 };
