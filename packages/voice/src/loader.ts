@@ -21,9 +21,27 @@ type ParsedMarkdown = {
 	body: string;
 };
 
+function findVoiceDirUpwards(startDir: string): string | null {
+	let dir = startDir;
+	while (true) {
+		const candidate = path.join(dir, '.voice');
+		if (existsSync(path.join(candidate, 'profile.md'))) {
+			return candidate;
+		}
+		const parent = path.dirname(dir);
+		if (parent === dir) return null;
+		dir = parent;
+	}
+}
+
 function resolveVoiceDir(): string {
-	const configured = process.env.PULSAR_VOICE_DIR ?? '.voice';
-	return path.isAbsolute(configured) ? configured : path.join(process.cwd(), configured);
+	const configured = process.env.PULSAR_VOICE_DIR;
+	if (configured && configured.length > 0) {
+		return path.isAbsolute(configured) ? configured : path.join(process.cwd(), configured);
+	}
+	const found = findVoiceDirUpwards(process.cwd());
+	if (found) return found;
+	return path.join(process.cwd(), '.voice');
 }
 
 function parseFrontmatter(raw: string): ParsedMarkdown {

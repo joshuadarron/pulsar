@@ -18,9 +18,27 @@ type ParsedMarkdown = {
 	body: string;
 };
 
+function findContextDirUpwards(startDir: string): string | null {
+	let dir = startDir;
+	while (true) {
+		const candidate = path.join(dir, '.context');
+		if (existsSync(path.join(candidate, 'profile.md'))) {
+			return candidate;
+		}
+		const parent = path.dirname(dir);
+		if (parent === dir) return null;
+		dir = parent;
+	}
+}
+
 function resolveContextDir(): string {
-	const configured = process.env.PULSAR_CONTEXT_DIR ?? '.context';
-	return path.isAbsolute(configured) ? configured : path.join(process.cwd(), configured);
+	const configured = process.env.PULSAR_CONTEXT_DIR;
+	if (configured && configured.length > 0) {
+		return path.isAbsolute(configured) ? configured : path.join(process.cwd(), configured);
+	}
+	const found = findContextDirUpwards(process.cwd());
+	if (found) return found;
+	return path.join(process.cwd(), '.context');
 }
 
 function parseFrontmatter(raw: string): ParsedMarkdown {
