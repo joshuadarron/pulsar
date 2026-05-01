@@ -224,82 +224,15 @@ export const TREND_REPORT_SUITE: ValidatorSuite = {
 };
 
 // ---------------------------------------------------------------------------
-// Suite: content-drafts.pipe
-// Output shape: Record<platform, body> assembled in runContentDrafts
-// ---------------------------------------------------------------------------
-
-const DRAFT_PLATFORMS = [
-	'hashnode',
-	'medium',
-	'devto',
-	'hackernews',
-	'linkedin',
-	'twitter',
-	'discord'
-];
-const EM_DASH_RE = /—/;
-const JSON_FENCE_RE = /```json/i;
-
-export const CONTENT_DRAFTS_SUITE: ValidatorSuite = {
-	pipelineName: 'content-drafts.pipe',
-	validators: [
-		{
-			name: 'at_least_5_of_7_drafts',
-			description: 'tolerance per Phase A',
-			check: (out) => {
-				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
-				const present = DRAFT_PLATFORMS.filter((p) => nonEmptyString(out[p]));
-				return present.length >= 5
-					? { passed: true, detail: `${present.length}/7 drafts present` }
-					: { passed: false, detail: `only ${present.length}/7 drafts present` };
-			}
-		},
-		{
-			name: 'each_draft_non_empty',
-			description: 'every draft body has non-zero length',
-			check: (out) => {
-				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
-				const empties = DRAFT_PLATFORMS.filter((p) => p in out && !nonEmptyString(out[p]));
-				return empties.length === 0
-					? { passed: true }
-					: { passed: false, detail: `empty drafts: ${empties.join(', ')}` };
-			}
-		},
-		{
-			name: 'no_em_dashes',
-			description: 'project hard rule: no em-dashes in drafts',
-			check: (out) => {
-				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
-				const offenders = DRAFT_PLATFORMS.filter(
-					(p) => typeof out[p] === 'string' && EM_DASH_RE.test(out[p] as string)
-				);
-				return offenders.length === 0
-					? { passed: true }
-					: { passed: false, detail: `em-dashes found in: ${offenders.join(', ')}` };
-			}
-		},
-		{
-			name: 'no_json_fence_leakage',
-			description: 'no ```json fences in drafts (collector failure mode)',
-			check: (out) => {
-				if (!isObject(out)) return { passed: false, detail: 'output not an object' };
-				const offenders = DRAFT_PLATFORMS.filter(
-					(p) => typeof out[p] === 'string' && JSON_FENCE_RE.test(out[p] as string)
-				);
-				return offenders.length === 0
-					? { passed: true }
-					: { passed: false, detail: `json fence leakage in: ${offenders.join(', ')}` };
-			}
-		}
-	]
-};
-
-// ---------------------------------------------------------------------------
 // Registry
+//
+// Phase 5 split content-drafts.pipe into angle-picker.pipe + content-drafter.pipe
+// and orchestrates them outside the validateAndPersist code path. Per-pipe
+// validation for the new flow lives in content-drafts-orchestrator.ts and the
+// runner-level tests, not here.
 // ---------------------------------------------------------------------------
 
 export const VALIDATOR_SUITES: Record<string, ValidatorSuite> = {
 	'rocketride-context.pipe': ROCKETRIDE_CONTEXT_SUITE,
-	'trend-report.pipe': TREND_REPORT_SUITE,
-	'content-drafts.pipe': CONTENT_DRAFTS_SUITE
+	'trend-report.pipe': TREND_REPORT_SUITE
 };
