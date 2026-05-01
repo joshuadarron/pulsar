@@ -6,6 +6,8 @@
 	"scripts": {
 		"scrape": "tsx run-once.ts",
 		"scrape-scheduler": "tsx scheduler.ts",
+		"backfill": "tsx backfill/cli.ts",
+		"backfill-worker": "tsx backfill/worker.ts",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {

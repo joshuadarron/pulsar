@@ -1,3 +1,36 @@
+export type SourceOrigin = 'live' | 'wayback' | 'common_crawl' | 'direct_archive';
+export type BackfillStatus = 'queued' | 'running' | 'complete' | 'failed';
+export type BackfillJobStatus = 'queued' | 'claimed' | 'running' | 'complete' | 'failed';
+
+export type BackfillRun = {
+	id: string;
+	sourceName: string;
+	windowStart: Date;
+	windowEnd: Date;
+	status: BackfillStatus;
+	articlesIngested: number;
+	errors: unknown | null;
+	startedAt: Date | null;
+	completedAt: Date | null;
+	createdAt: Date;
+};
+
+export type BackfillJob = {
+	id: string;
+	backfillRunId: string | null;
+	sourceName: string;
+	windowStart: Date;
+	windowEnd: Date;
+	strategy: string;
+	status: BackfillJobStatus;
+	attempts: number;
+	claimedBy: string | null;
+	claimedAt: Date | null;
+	completedAt: Date | null;
+	errorMessage: string | null;
+	createdAt: Date;
+};
+
 export interface ScrapedItem {
 	url: string;
 	title: string;
@@ -9,6 +42,8 @@ export interface ScrapedItem {
 	sourceName: string;
 	sourcePlatform: string;
 	sourceCategory?: string;
+	sourceOrigin?: SourceOrigin;
+	backfillRunId?: string;
 }
 
 export type SourceAdapter = () => Promise<ScrapedItem[]>;
@@ -58,7 +93,7 @@ export interface Report {
 }
 
 // ---------------------------------------------------------------------------
-// Report data contract — stored as JSONB in reports.report_data
+// Report data contract, stored as JSONB in reports.report_data
 //
 // Five-section structure with three generation passes:
 //   Pass 1 (sequential): marketLandscape, technologyTrends, developerSignals
@@ -116,7 +151,7 @@ export interface ContentRecommendationsSection {
 	research?: ResearchCitation[];
 }
 
-/** Executive summary has no research — it synthesizes prior sections only. */
+/** Executive summary has no research; it synthesizes prior sections only. */
 export interface ExecutiveSummarySection {
 	text: string;
 	/** Time-bounded predictions emitted alongside the synthesis (Phase D.2). */
@@ -260,7 +295,7 @@ export interface Run {
 }
 
 // ---------------------------------------------------------------------------
-// Graph snapshot — stored as JSONB in graph_snapshots, computed once per
+// Graph snapshot, stored as JSONB in graph_snapshots, computed once per
 // pipeline run via gds.louvain (Topics) and gds.pageRank (Entities).
 // Emergence is derived at trend-report time by diffing two snapshots.
 // ---------------------------------------------------------------------------

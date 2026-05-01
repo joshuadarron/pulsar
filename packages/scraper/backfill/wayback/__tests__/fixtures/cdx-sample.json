@@ -1,0 +1,21 @@
+[
+	["urlkey", "timestamp", "original", "mimetype", "statuscode", "digest", "length"],
+	[
+		"com,medium,towards-data-science)/p/abc",
+		"20230115120000",
+		"https://medium.com/towards-data-science/abc",
+		"text/html",
+		"200",
+		"AAAAAAAAAAAA",
+		"12345"
+	],
+	[
+		"com,medium,towards-data-science)/p/def",
+		"20230220080000",
+		"https://medium.com/towards-data-science/def",
+		"text/html",
+		"200",
+		"BBBBBBBBBBBB",
+		"23456"
+	]
+]

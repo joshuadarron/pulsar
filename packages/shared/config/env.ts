@@ -8,6 +8,12 @@ function optional(key: string, fallback: string): string {
 	return process.env[key] || fallback;
 }
 
+function optionalBool(key: string, fallback: boolean): boolean {
+	const raw = process.env[key];
+	if (raw === undefined || raw === '') return fallback;
+	return raw === 'true' || raw === '1';
+}
+
 export const env = {
 	postgres: {
 		host: optional('POSTGRES_HOST', 'localhost'),
@@ -51,6 +57,11 @@ export const env = {
 	scraper: {
 		cron: optional('SCRAPER_CRON', '30 5 * * *'),
 		maxItemsPerSource: Number.parseInt(optional('SCRAPER_MAX_ITEMS_PER_SOURCE', '100'))
+	},
+	backfill: {
+		enabled: optionalBool('ENABLE_BACKFILL', false),
+		enableCommonCrawl: optionalBool('ENABLE_COMMON_CRAWL', false),
+		workerConcurrency: Number.parseInt(optional('BACKFILL_WORKER_CONCURRENCY', '2'))
 	},
 	trendScoreLambda: Number.parseFloat(optional('TREND_SCORE_LAMBDA', '0.1'))
 } as const;

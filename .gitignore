@@ -6,6 +6,7 @@ node_modules/
 dist/
 /.voice/
 /.context/
+.cache/
 *.tsbuildinfo
 *.log
 .DS_Store

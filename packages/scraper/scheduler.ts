@@ -1,14 +1,16 @@
-import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 
 dotenv.config({ path: path.resolve(fileURLToPath(import.meta.url), '../../../.env') });
 
 import { spawn } from 'node:child_process';
-import cron from 'node-cron';
-import { scrape } from './index.js';
-import { query, getClient as getPgClient } from '@pulsar/shared/db/postgres';
 import { env } from '@pulsar/shared/config/env';
+import { getClient as getPgClient, query } from '@pulsar/shared/db/postgres';
+import cron from 'node-cron';
+import { FIRST_DEPLOY_FROM, maybeAutoEnqueue } from './backfill/auto-enqueue.js';
+import { enqueueBackfill } from './backfill/queue.js';
+import { scrape } from './index.js';
 
 // Fixed advisory lock ID for the scheduler singleton
 const SCHEDULER_LOCK_ID = 73952;
@@ -54,7 +56,7 @@ async function loadSchedules(): Promise<ScheduleRow[]> {
 		);
 		return result.rows;
 	} catch {
-		// Table may not exist yet — fall back to env
+		// Table may not exist yet, fall back to env
 		return [];
 	}
 }
@@ -66,7 +68,7 @@ function clearTasks() {
 
 function triggerPipeline() {
 	if (pipelineRunning) {
-		console.log('[Scheduler] Pipeline skipped — previous run still in progress.');
+		console.log('[Scheduler] Pipeline skipped: previous run still in progress.');
 		return;
 	}
 	pipelineRunning = true;
@@ -89,11 +91,90 @@ function triggerPipeline() {
 	});
 }
 
+// Adapter so the strongly-typed `pg` query (which constrains T to
+// QueryResultRow) satisfies the DbExecutor surface used by backfill helpers.
+const dbExecutor = {
+	query: async <T = unknown>(sql: string, params?: unknown[]) => {
+		const result = await query(sql, params);
+		return { rows: result.rows as unknown as T[], rowCount: result.rowCount };
+	}
+};
+
+// Per-source gap thresholds in days. A "gap" is no live ingest in the last
+// N days for that source. Backfill is enqueued for the gap window only.
+const GAP_THRESHOLDS_DAYS: Record<string, number> = {
+	arxiv: 2,
+	devto: 7,
+	github: 3,
+	hackernews: 1,
+	hashnode: 7,
+	medium: 14,
+	reddit: 7,
+	rss: 14
+};
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+async function getLastIngestForSource(source: string): Promise<Date | null> {
+	const result = await query<{ last_at: Date | null }>(
+		`SELECT MAX(scraped_at) AS last_at FROM articles_raw
+     WHERE source_name = $1 AND source_origin = 'live'`,
+		[source]
+	);
+	const row = result.rows[0];
+	return row?.last_at ?? null;
+}
+
+async function detectGaps(): Promise<{ enqueued: string[]; skipped: string[] }> {
+	if (!env.backfill.enabled) {
+		return { enqueued: [], skipped: ['feature flag off'] };
+	}
+	const enqueued: string[] = [];
+	const skipped: string[] = [];
+	const now = new Date();
+	for (const [source, days] of Object.entries(GAP_THRESHOLDS_DAYS)) {
+		const lastIngest = await getLastIngestForSource(source);
+		const gapDays = lastIngest
+			? (now.getTime() - lastIngest.getTime()) / MS_PER_DAY
+			: Number.POSITIVE_INFINITY;
+		if (gapDays <= days) {
+			skipped.push(source);
+			continue;
+		}
+		const windowStart = lastIngest ?? FIRST_DEPLOY_FROM;
+		try {
+			await enqueueBackfill(dbExecutor, source, windowStart, now, 'gap-fill');
+			enqueued.push(source);
+		} catch (err) {
+			console.error(`[Scheduler] Gap enqueue failed for ${source}:`, err);
+		}
+	}
+	return { enqueued, skipped };
+}
+
+async function runBackfillTick(): Promise<void> {
+	if (!env.backfill.enabled) return;
+	try {
+		const auto = await maybeAutoEnqueue(dbExecutor);
+		if (auto.enqueued.length > 0) {
+			console.log(
+				`[Scheduler] Auto-enqueued first-deploy backfill for: ${auto.enqueued.join(', ')}`
+			);
+		}
+		const gaps = await detectGaps();
+		if (gaps.enqueued.length > 0) {
+			console.log(`[Scheduler] Gap-fill backfill enqueued for: ${gaps.enqueued.join(', ')}`);
+		}
+	} catch (err) {
+		console.error('[Scheduler] Backfill tick failed:', err);
+	}
+}
+
 function registerScrape(cronExpr: string) {
 	console.log(`[Scheduler] Scrape registered: ${cronExpr}`);
 	const task = cron.schedule(cronExpr, async () => {
 		if (scrapeRunning) {
-			console.log('[Scheduler] Scrape skipped — previous run still in progress.');
+			console.log('[Scheduler] Scrape skipped, previous run still in progress.');
 			return;
 		}
 		scrapeRunning = true;
@@ -106,6 +187,7 @@ function registerScrape(cronExpr: string) {
 		} finally {
 			scrapeRunning = false;
 		}
+		await runBackfillTick();
 	});
 	activeTasks.push(task);
 }
@@ -239,7 +321,7 @@ async function acquireLock(): Promise<
 }
 
 async function main() {
-	// Acquire advisory lock — ensures only one scheduler process runs at a time.
+	// Acquire advisory lock to ensure only one scheduler process runs at a time.
 	// If the lock is held by a stale idle connection (dead process), reclaim it.
 	const lockClient = await acquireLock();
 	console.log('[Scheduler] Advisory lock acquired.');

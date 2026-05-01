@@ -13,6 +13,8 @@
 		"start": "pnpm --filter @pulsar/web start",
 		"scrape": "pnpm --filter @pulsar/scraper scrape",
 		"scrape-scheduler": "pnpm --filter @pulsar/scraper scrape-scheduler",
+		"backfill": "pnpm --filter @pulsar/scraper backfill",
+		"backfill-worker": "pnpm --filter @pulsar/scraper backfill-worker",
 		"pipeline": "pnpm --filter @pulsar/pipeline pipeline",
 		"pipeline-scheduler": "pnpm --filter @pulsar/pipeline pipeline-scheduler",
 		"db:migrate": "pnpm --filter @pulsar/shared db:migrate",

@@ -1,11 +1,11 @@
-import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 
 dotenv.config({ path: path.resolve(fileURLToPath(import.meta.url), '../../../.env') });
 
+import { closeDriver, getSession } from './neo4j';
 import { query } from './postgres';
-import { getSession, closeDriver } from './neo4j';
 import pool from './postgres';
 
 async function migratePostgres() {
@@ -323,6 +323,83 @@ async function migratePostgres() {
 	await query(`
     CREATE INDEX IF NOT EXISTS idx_run_logs_run_source
     ON run_logs (run_id, source, logged_at)
+  `);
+
+	// ---------------------------------------------------------------------------
+	// Phase 2: Backfill infrastructure (source_origin, composite_hash, queues)
+	// ---------------------------------------------------------------------------
+
+	await query(`
+    ALTER TABLE articles_raw ADD COLUMN IF NOT EXISTS source_origin TEXT NOT NULL DEFAULT 'live'
+      CHECK (source_origin IN ('live', 'wayback', 'common_crawl', 'direct_archive'))
+  `);
+
+	await query(`
+    ALTER TABLE articles_raw ADD COLUMN IF NOT EXISTS composite_hash CHAR(64)
+  `);
+
+	await query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS articles_raw_composite_hash_idx
+    ON articles_raw (composite_hash) WHERE composite_hash IS NOT NULL
+  `);
+
+	await query(`
+    CREATE TABLE IF NOT EXISTS backfill_runs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      source_name TEXT NOT NULL,
+      window_start TIMESTAMPTZ NOT NULL,
+      window_end TIMESTAMPTZ NOT NULL,
+      status TEXT NOT NULL DEFAULT 'queued'
+        CHECK (status IN ('queued', 'running', 'complete', 'failed')),
+      articles_ingested INTEGER NOT NULL DEFAULT 0,
+      errors JSONB,
+      started_at TIMESTAMPTZ,
+      completed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
+	await query(`
+    CREATE INDEX IF NOT EXISTS backfill_runs_status_idx ON backfill_runs (status)
+  `);
+
+	await query(`
+    CREATE INDEX IF NOT EXISTS backfill_runs_source_window_idx
+    ON backfill_runs (source_name, window_start, window_end)
+  `);
+
+	await query(`
+    CREATE TABLE IF NOT EXISTS backfill_jobs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      backfill_run_id UUID REFERENCES backfill_runs(id) ON DELETE CASCADE,
+      source_name TEXT NOT NULL,
+      window_start TIMESTAMPTZ NOT NULL,
+      window_end TIMESTAMPTZ NOT NULL,
+      strategy TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'queued'
+        CHECK (status IN ('queued', 'claimed', 'running', 'complete', 'failed')),
+      attempts INTEGER NOT NULL DEFAULT 0,
+      claimed_by TEXT,
+      claimed_at TIMESTAMPTZ,
+      completed_at TIMESTAMPTZ,
+      error_message TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+
+	await query(`
+    CREATE INDEX IF NOT EXISTS backfill_jobs_status_created_idx
+    ON backfill_jobs (status, created_at)
+  `);
+
+	await query(`
+    ALTER TABLE articles_raw ADD COLUMN IF NOT EXISTS backfill_run_id UUID
+      REFERENCES backfill_runs(id) ON DELETE SET NULL
+  `);
+
+	await query(`
+    CREATE INDEX IF NOT EXISTS articles_raw_backfill_run_id_idx
+    ON articles_raw (backfill_run_id) WHERE backfill_run_id IS NOT NULL
   `);
 
 	// Seed defaults if table is empty
