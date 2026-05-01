@@ -120,7 +120,13 @@ function MarketSnapshotPie({ v, charts }: { v: V; charts?: ReportCharts }) {
 	const buckets = charts?.keywordDistribution?.buckets ?? [];
 	if (buckets.length === 0) return null;
 
-	const slices: PieSlice[] = buckets.map((b) => ({
+	// Drop the "Other" aggregate slice. The runner persists it for completeness
+	// in the JSONB, but in the rendered pie it dominates the visual when the
+	// long tail outweighs the named keywords. Show only the named top N.
+	const namedBuckets = buckets.filter((b) => b.keyword.toLowerCase() !== 'other');
+	if (namedBuckets.length === 0) return null;
+
+	const slices: PieSlice[] = namedBuckets.map((b) => ({
 		label: b.keyword,
 		value: b.count,
 		pct: b.pct
