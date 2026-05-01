@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
 import PipelineTraces from '@/components/PipelineTraces';
 import RunEvalsSection from '@/components/RunEvalsSection';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 
 interface Run {
 	id: string;
@@ -64,6 +64,7 @@ export default function RunDetailPage() {
 	const [loading, setLoading] = useState(true);
 	const [cancelling, setCancelling] = useState(false);
 	const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+	const [logsCopied, setLogsCopied] = useState(false);
 	const logPaneRef = useRef<HTMLDivElement>(null);
 
 	// Fetch run data and poll while running
@@ -138,6 +139,26 @@ export default function RunDetailPage() {
 	const filteredLogs =
 		sourceFilter === 'all' ? logs : logs.filter((l) => (l.source ?? 'pulsar') === sourceFilter);
 	const rrLogCount = logs.length - pulsarLogs.length;
+
+	function copyLogsToClipboard() {
+		if (typeof navigator === 'undefined' || !navigator.clipboard) return;
+		const text = filteredLogs
+			.map((log) => {
+				const ts = new Date(log.logged_at).toLocaleTimeString();
+				const level = log.level.toUpperCase().padEnd(7);
+				return `${ts}  ${level}  [${log.stage}]  ${log.message}`;
+			})
+			.join('\n');
+		navigator.clipboard.writeText(text).then(
+			() => {
+				setLogsCopied(true);
+				setTimeout(() => setLogsCopied(false), 1500);
+			},
+			() => {
+				setLogsCopied(false);
+			}
+		);
+	}
 
 	return (
 		<div>
@@ -251,12 +272,23 @@ export default function RunDetailPage() {
 							))}
 						</div>
 					</div>
-					{run.status === 'running' && (
-						<span className="flex items-center gap-1.5 text-xs text-yellow-600 dark:text-yellow-400">
-							<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-500" />
-							Live
-						</span>
-					)}
+					<div className="flex items-center gap-3">
+						{run.status === 'running' && (
+							<span className="flex items-center gap-1.5 text-xs text-yellow-600 dark:text-yellow-400">
+								<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-500" />
+								Live
+							</span>
+						)}
+						<button
+							type="button"
+							onClick={copyLogsToClipboard}
+							disabled={filteredLogs.length === 0}
+							className="rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
+							title="Copy visible log lines to clipboard"
+						>
+							{logsCopied ? 'Copied' : 'Copy'}
+						</button>
+					</div>
 				</div>
 				<div
 					ref={logPaneRef}
