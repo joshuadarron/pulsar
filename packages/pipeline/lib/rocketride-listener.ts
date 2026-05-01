@@ -1,4 +1,5 @@
 import { query } from '@pulsar/shared/db/postgres';
+import { redactJson, redactString } from './redact.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -187,11 +188,14 @@ async function writeLog(
 	message: string,
 	traceId?: string
 ): Promise<void> {
+	// Defense in depth: redact at the actual INSERT call so any path that
+	// reaches writeLog (current or future) cannot leak secrets to run_logs.
+	const safe = redactString(message);
 	if (traceId) {
 		await query(
 			`INSERT INTO run_logs (run_id, level, stage, message, source, trace_id)
 			 VALUES ($1, $2, $3, $4, $5, $6)`,
-			[corr.runId, level, stage, message, 'rocketride', traceId]
+			[corr.runId, level, stage, safe, 'rocketride', traceId]
 		);
 	} else {
 		// Reuse logRun for the common path so any future logging side-effects
@@ -200,7 +204,7 @@ async function writeLog(
 		await query(
 			`INSERT INTO run_logs (run_id, level, stage, message, source)
 			 VALUES ($1, $2, $3, $4, $5)`,
-			[corr.runId, level, stage, message, 'rocketride']
+			[corr.runId, level, stage, safe, 'rocketride']
 		);
 	}
 }
@@ -230,8 +234,8 @@ async function persistTrace(
 			pipeId,
 			op,
 			component,
-			JSON.stringify(trace),
-			result === null ? null : JSON.stringify(result),
+			JSON.stringify(redactJson(trace)),
+			result === null ? null : JSON.stringify(redactJson(result)),
 			seq
 		]
 	);
@@ -250,7 +254,7 @@ async function persistOrphan(event: RrEvent): Promise<void> {
 			token ?? null,
 			projectId ?? null,
 			source ?? null,
-			JSON.stringify(event.body ?? {})
+			JSON.stringify(redactJson(event.body ?? {}))
 		]
 	);
 }
@@ -310,22 +314,29 @@ async function handleStatusUpdate(
 	const exitMessage = typeof body.exitMessage === 'string' ? body.exitMessage : undefined;
 	const state = typeof body.state === 'number' ? body.state : undefined;
 
+	// Redact each entry by key-name BEFORE stringify so credential fields like
+	// "auth-key" / "token-key" become "***" verbatim, even when the value
+	// shape does not match any known-token regex. writeLog adds a regex sweep
+	// on top as defense in depth.
 	for (const e of errors) {
-		const msg = typeof e === 'string' ? e : JSON.stringify(e);
+		const safe = redactJson(e);
+		const msg = typeof safe === 'string' ? safe : JSON.stringify(safe);
 		if (!seen.errors.has(msg)) {
 			seen.errors.add(msg);
 			await writeLog(corr, 'error', stage, msg);
 		}
 	}
 	for (const w of warnings) {
-		const msg = typeof w === 'string' ? w : JSON.stringify(w);
+		const safe = redactJson(w);
+		const msg = typeof safe === 'string' ? safe : JSON.stringify(safe);
 		if (!seen.warnings.has(msg)) {
 			seen.warnings.add(msg);
 			await writeLog(corr, 'warn', stage, msg);
 		}
 	}
 	for (const n of notes) {
-		const msg = typeof n === 'string' ? n : JSON.stringify(n);
+		const safe = redactJson(n);
+		const msg = typeof safe === 'string' ? safe : JSON.stringify(safe);
 		if (!seen.notes.has(msg)) {
 			seen.notes.add(msg);
 			await writeLog(corr, 'info', stage, msg);
