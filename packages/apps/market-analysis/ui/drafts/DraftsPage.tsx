@@ -67,7 +67,7 @@ export default async function DraftsPage() {
 				AI-generated content grouped by the report it came from
 			</p>
 
-			<div className="mt-6 max-w-3xl space-y-4">
+			<div className="mt-6 max-w-[37rem] space-y-4">
 				{groups.length === 0 ? (
 					<div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-6">
 						<p className="text-sm text-gray-700 dark:text-neutral-300">No drafts yet.</p>
