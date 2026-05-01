@@ -333,9 +333,13 @@ async function handleStatusUpdate(
 	}
 	if (state !== undefined && state !== seen.state) {
 		seen.state = state;
-		// Only log transitions to terminal states (5=COMPLETED, 6=CANCELLED)
-		if (state === 5 || state === 6) {
-			await writeLog(corr, 'info', stage, `state=${state === 5 ? 'COMPLETED' : 'CANCELLED'}`);
+		// Log COMPLETED. Skip CANCELLED: rocketride emits state=6 whenever the
+		// runner calls terminatePipeline() at the end of every successful pass,
+		// so logging it produces a misleading "CANCELLED" message right after
+		// every "pipeline ended" SUCCESS. Real user-initiated cancellations are
+		// surfaced via the cancel-run flow elsewhere, not via this state log.
+		if (state === 5) {
+			await writeLog(corr, 'info', stage, 'state=COMPLETED');
 		}
 	}
 	if (exitCode !== undefined) seen.exitCode = exitCode;
