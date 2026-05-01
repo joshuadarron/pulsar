@@ -1,4 +1,5 @@
-import type { SVGProps } from 'react';
+// biome-ignore lint/style/useImportType: React is used at runtime for JSX classic runtime under tsx
+import React, { type SVGProps } from 'react';
 
 interface PulsarLogoProps extends Omit<SVGProps<SVGSVGElement>, 'fill' | 'stroke'> {
 	/** Size and color classes. Color via text-* picks up dark: variants automatically. */
