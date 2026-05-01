@@ -1,8 +1,9 @@
-import { promises as fs } from 'node:fs';
+import { promises as fs, mkdtempSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { RocketRideClient } from 'rocketride';
 import { env } from '@pulsar/shared/config/env';
 import { logRun } from '@pulsar/shared/run-logger';
+import { RocketRideClient } from 'rocketride';
 import {
 	MONITOR_SUBSCRIPTION_TYPES,
 	dispatchEvent,
@@ -86,6 +87,77 @@ export interface UsePipelineResult {
 	response: Awaited<ReturnType<RocketRideClient['use']>>;
 }
 
+// =============================================================================
+// TODO(rocketride-env): Remove this entire env-substitution block once the
+// rocketride runtime loads .env files itself and interpolates ${VAR}
+// references in pipe component config fields from its own process environment.
+//
+// Today, rocketride does not substitute ${VAR} in fields like db_postgres
+// password or db_neo4j password. Pulsar pre-substitutes against process.env
+// before handing the pipe to client.use(). When the runtime supports env
+// loading, drop substitutePipeEnvVars / prepareSubstitutedPipe and pass the
+// original `filepath` directly to client.use() in usePipeline.
+// =============================================================================
+
+let pipeTempDir: string | null = null;
+function ensurePipeTempDir(): string {
+	if (!pipeTempDir) {
+		pipeTempDir = mkdtempSync(path.join(os.tmpdir(), 'pulsar-pipes-'));
+	}
+	return pipeTempDir;
+}
+
+/**
+ * Substitute ${VAR} references in pipe content against process.env. Values are
+ * JSON-escaped (backslashes and double quotes) so the substituted output stays
+ * valid JSON. Unresolved vars are left as the literal `${VAR}` so the operator
+ * can debug, and so rocketride can still take a swing at them downstream.
+ */
+export function substitutePipeEnvVars(content: string): {
+	resolved: string;
+	missing: string[];
+} {
+	const missing = new Set<string>();
+	const resolved = content.replace(/\$\{([A-Z_][A-Z0-9_]*)\}/g, (match, key) => {
+		const value = process.env[key];
+		if (value === undefined || value === '') {
+			missing.add(key);
+			return match;
+		}
+		return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+	});
+	return { resolved, missing: Array.from(missing) };
+}
+
+/**
+ * Read the pipe at `filepath`, substitute env vars, and write the resolved
+ * content to a temp file. Returns the path rocketride should consume.
+ *
+ * If the pipe has no template placeholders, returns the original path so we do
+ * not leave unnecessary temp files behind.
+ */
+async function prepareSubstitutedPipe(filepath: string): Promise<string> {
+	const original = await fs.readFile(filepath, 'utf8');
+	const { resolved, missing } = substitutePipeEnvVars(original);
+	if (resolved === original) {
+		return filepath;
+	}
+	const dir = ensurePipeTempDir();
+	const basename = path.basename(filepath);
+	const tempPath = path.join(dir, basename);
+	writeFileSync(tempPath, resolved, 'utf8');
+	if (missing.length > 0) {
+		console.warn(
+			`[RocketRide] Pipe ${basename}: env vars not set, left as literal: ${missing.join(', ')}`
+		);
+	}
+	return tempPath;
+}
+
+// =============================================================================
+// End TODO(rocketride-env) block
+// =============================================================================
+
 const pipeProjectIdCache = new Map<string, string | undefined>();
 
 async function readProjectId(filepath: string): Promise<string | undefined> {
@@ -125,13 +197,16 @@ export async function usePipeline(
 	filepath: string
 ): Promise<UsePipelineResult> {
 	const basename = path.basename(filepath, '.pipe');
-	const projectIdFromFile = await readProjectId(filepath);
+	// TODO(rocketride-env): drop prepareSubstitutedPipe + read original filepath
+	// directly once the runtime substitutes ${VAR} from its own process env.
+	const resolvedPath = await prepareSubstitutedPipe(filepath);
+	const projectIdFromFile = await readProjectId(resolvedPath);
 
 	// Always resolve via getClient() so a dropped/reconnecting WS triggers a
 	// fresh connect rather than throwing "Server is not connected" on use().
 	const client = await getClient();
 
-	const response = await client.use({ filepath, pipelineTraceLevel: 'full' });
+	const response = await client.use({ filepath: resolvedPath, pipelineTraceLevel: 'full' });
 
 	const useResp = response as Record<string, unknown> & { token: string };
 	const projectIdFromResp =
