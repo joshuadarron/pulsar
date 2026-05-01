@@ -92,6 +92,9 @@ importers:
       '@pulsar/context':
         specifier: workspace:*
         version: link:../context
+      '@pulsar/scraper':
+        specifier: workspace:*
+        version: link:../scraper
       '@pulsar/shared':
         specifier: workspace:*
         version: link:../shared

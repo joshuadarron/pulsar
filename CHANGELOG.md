@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### [2026-05-01] Phase 3: Analysis layer upgrades
+
+#### Added
+
+- `@pulsar/scraper/analytics` module exports pure delta primitives (`compute12MonthDelta`, `computeYoYDelta`, `computeMultiYearTrajectory`), windowed history queries (`fetchEntityHistory`), and an entity enrichment helper (`enrichEntitiesWithHistory`) with soft-fail behavior so the pipeline never crashes on missing historical data.
+- `EntityWithHistory` and `Trajectory` shared types in `@pulsar/shared/types`. The pipeline now attaches `history` (twelve-month delta, year-over-year delta, multi-year trajectory) to the top 20 entities by current-period centrality before they enter the marketLandscape section input.
+- `GET /api/charts/entity-centrality?periods=12&top=5` returns time-series centrality for the top entities, sourced from `graph_snapshots` rows. Response carries `meta.sparse: true` when fewer than the requested periods exist.
+- `GET /api/charts/keyword-distribution?top=10&windowDays=30` returns top-N keyword counts with an `Other` aggregate, sourced from `articles.topic_tags`. Both endpoints are auth-protected via the existing middleware matcher.
+- Web package tests: first tests under `packages/web/__tests__/` cover both new chart endpoints (sparse data, query-param parsing, edge cases).
+
+#### Changed
+
+- `packages/pipeline/runner.ts` now loads operator context once, fetches entity history for the top 20 entities, and threads `EntityWithHistory[]` into section input. Failures in the history fetch are logged and the run continues with `history` undefined.
+
 ### [2026-05-01] Phase 2: Scraper backfill infrastructure
 
 #### Added

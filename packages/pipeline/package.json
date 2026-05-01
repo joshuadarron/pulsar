@@ -12,6 +12,7 @@
 	"dependencies": {
 		"@pulsar/app-market-analysis": "workspace:*",
 		"@pulsar/context": "workspace:*",
+		"@pulsar/scraper": "workspace:*",
 		"@pulsar/shared": "workspace:*",
 		"@pulsar/web": "workspace:*",
 		"dotenv": "^17.4.2",

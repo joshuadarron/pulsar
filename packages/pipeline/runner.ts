@@ -9,12 +9,14 @@ import {
 	OperatorContextNotConfiguredError,
 	loadOperatorContext
 } from '@pulsar/context';
+import { enrichEntitiesWithHistory, fetchEntityHistory } from '@pulsar/scraper/analytics';
 import { getSession } from '@pulsar/shared/db/neo4j';
 import { query } from '@pulsar/shared/db/postgres';
 import { logRun } from '@pulsar/shared/run-logger';
 import type {
 	DeveloperSignalsData,
 	EmergingEntity,
+	EntityWithHistory,
 	ExtractedPrediction,
 	GraphSnapshot,
 	GraphSnapshotCluster,
@@ -692,11 +694,25 @@ async function runTrendReport(
 	const topEntities = (snapshots.current?.entity_importance ?? []).slice(0, 20);
 	const emergingEntities = computeEmergingEntities(snapshots.current, snapshots.weekAgo);
 
+	// Phase 3: enrich the top 20 entities with historical context. Soft-fails
+	// to plain entities if the analytics fetcher throws, so the report can
+	// still ship without backfill data.
+	const enrichedEntities: EntityWithHistory[] = await enrichEntitiesWithHistory(
+		topEntities,
+		fetchEntityHistory,
+		{
+			currentPeriodEnd: new Date(),
+			periods: 12,
+			periodKind: 'month',
+			warn: (msg) => logRun(runId, 'warn', 'trend-report', msg)
+		}
+	);
+
 	await logRun(
 		runId,
 		'info',
 		'trend-report',
-		`Graph snapshot fields: ${topClusters.length} clusters, ${topEntities.length} entities, ${emergingEntities.length} emerging`
+		`Graph snapshot fields: ${topClusters.length} clusters, ${enrichedEntities.length} entities, ${emergingEntities.length} emerging`
 	);
 
 	// Article count + source count for metadata
@@ -730,7 +746,7 @@ async function runTrendReport(
 		systemPrompt,
 		{
 			...marketData,
-			entityImportance: topEntities,
+			entityImportance: enrichedEntities,
 			rocketrideContext
 		}
 	);

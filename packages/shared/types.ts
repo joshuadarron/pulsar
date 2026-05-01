@@ -319,6 +319,37 @@ export interface GraphSnapshotEntity {
 	mention_count: number;
 }
 
+// ---------------------------------------------------------------------------
+// Historical analytics (Phase 3): period-over-period deltas and trajectories
+// for entities. Computed by `@pulsar/scraper/analytics` and merged into the
+// section-input shape consumed by trend-report prompts.
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-period historical sample for one entity. `period` is a label such as
+ * "2024-01" (monthly) or "2024" (yearly). `mentions` is the article-mention
+ * count in that period. `centrality` is the persisted pagerank score from the
+ * `graph_snapshots` row closest to that period, or 0 when no snapshot exists.
+ */
+export type Trajectory = Array<{
+	period: string;
+	mentions: number;
+	centrality: number;
+}>;
+
+/**
+ * Top-N current-period entity, optionally enriched with historical context.
+ * `history` is omitted when the analytics layer has nothing to report for
+ * the entity (sparse data, missing snapshots, or fetch failure).
+ */
+export type EntityWithHistory = GraphSnapshotEntity & {
+	history?: {
+		twelveMonthDelta: number;
+		yoyDelta: number;
+		trajectory: Trajectory;
+	};
+};
+
 export interface GraphSnapshot {
 	id: string;
 	run_id: string | null;

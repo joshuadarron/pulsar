@@ -3,6 +3,10 @@
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
+	"exports": {
+		".": "./index.ts",
+		"./analytics": "./analytics/index.ts"
+	},
 	"scripts": {
 		"scrape": "tsx run-once.ts",
 		"scrape-scheduler": "tsx scheduler.ts",
