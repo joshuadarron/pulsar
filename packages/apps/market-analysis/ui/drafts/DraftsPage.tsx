@@ -13,6 +13,12 @@ import React from 'react';
  * endpoint stays available for any future client consumer.
  */
 
+// Force dynamic rendering. Without this, Next 15 statically renders the page
+// at build time and serves a stale snapshot, so drafts generated after the
+// build do not appear until the next deploy. The viewer at [reportId]/page.tsx
+// has the same directive for the same reason.
+export const dynamic = 'force-dynamic';
+
 interface GroupRow {
 	report_id: string;
 	generated_at: Date;

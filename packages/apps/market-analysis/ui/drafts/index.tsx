@@ -1,1 +1,1 @@
-export { default } from './DraftsPage';
+export { default, dynamic } from './DraftsPage';
