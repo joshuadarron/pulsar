@@ -109,7 +109,7 @@ export default function ViewerTabs({ platforms }: ViewerTabsProps) {
 				))}
 			</div>
 
-			<div className="mt-4 flex flex-wrap gap-2">
+			<div className="mt-4 flex flex-wrap items-center gap-2">
 				{TAB_ORDER.map((tab) => (
 					<button
 						key={tab.key}
@@ -124,6 +124,13 @@ export default function ViewerTabs({ platforms }: ViewerTabsProps) {
 						{tab.label}
 					</button>
 				))}
+				{(activeTab === 'voice' || activeTab === 'topic') && (
+					<div className="ml-auto">
+						<CopyButton
+							text={activeTab === 'voice' ? current.voicePromptText : current.topicPromptText}
+						/>
+					</div>
+				)}
 			</div>
 
 			<div className="mt-4">
@@ -144,25 +151,15 @@ export default function ViewerTabs({ platforms }: ViewerTabsProps) {
 				) : null}
 
 				{activeTab === 'voice' ? (
-					<div className="space-y-3">
-						<div className="flex justify-end">
-							<CopyButton text={current.voicePromptText} />
-						</div>
-						<pre className="whitespace-pre-wrap rounded-md border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 p-4 text-xs font-mono text-gray-800 dark:text-neutral-200">
-							{current.voicePromptText}
-						</pre>
-					</div>
+					<pre className="whitespace-pre-wrap rounded-md border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 p-4 text-xs font-mono text-gray-800 dark:text-neutral-200">
+						{current.voicePromptText}
+					</pre>
 				) : null}
 
 				{activeTab === 'topic' ? (
-					<div className="space-y-3">
-						<div className="flex justify-end">
-							<CopyButton text={current.topicPromptText} />
-						</div>
-						<pre className="whitespace-pre-wrap rounded-md border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 p-4 text-xs font-mono text-gray-800 dark:text-neutral-200">
-							{current.topicPromptText}
-						</pre>
-					</div>
+					<pre className="whitespace-pre-wrap rounded-md border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 p-4 text-xs font-mono text-gray-800 dark:text-neutral-200">
+						{current.topicPromptText}
+					</pre>
 				) : null}
 			</div>
 		</div>
