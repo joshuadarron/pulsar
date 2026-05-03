@@ -9,7 +9,7 @@ import {
 } from '@pulsar/app-market-analysis/templates';
 import { type OperatorContext, loadOperatorContext } from '@pulsar/context';
 import { query } from '@pulsar/shared/db/postgres';
-import type { ContentDraft, ReportData } from '@pulsar/shared/types';
+import type { ContentDraft, ContentFormat, ReportData } from '@pulsar/shared/types';
 import { type VoiceContext, type VoiceFormat, loadVoiceContext } from '@pulsar/voice';
 
 import ViewerTabs, { type PlatformTabContent } from './ViewerTabs';
@@ -48,6 +48,10 @@ interface DraftRow {
 	angle: string | null;
 	opportunity_signal: string | null;
 	metadata: Record<string, unknown> | null;
+	title: string | null;
+	format: string | null;
+	target: string | null;
+	why_now: string | null;
 	created_at: Date;
 	updated_at: Date;
 }
@@ -64,6 +68,10 @@ function rowToDraft(row: DraftRow): ContentDraft {
 		angle: row.angle,
 		opportunitySignal: row.opportunity_signal,
 		metadata: row.metadata,
+		title: row.title,
+		format: row.format as ContentDraft['format'],
+		target: row.target,
+		whyNow: row.why_now,
 		createdAt: row.created_at instanceof Date ? row.created_at : new Date(row.created_at),
 		updatedAt: row.updated_at instanceof Date ? row.updated_at : new Date(row.updated_at)
 	};
@@ -82,10 +90,12 @@ async function loadReport(reportId: string): Promise<ReportRow | null> {
 async function loadDrafts(reportId: string): Promise<ContentDraft[]> {
 	const result = await query<DraftRow>(
 		`SELECT id, run_id, report_id, platform, content_type, body, status,
-			angle, opportunity_signal, metadata, created_at, updated_at
+			angle, opportunity_signal, metadata,
+			title, format, target, why_now,
+			created_at, updated_at
 		FROM content_drafts
 		WHERE report_id = $1
-		ORDER BY angle NULLS LAST, platform`,
+		ORDER BY title NULLS LAST, angle NULLS LAST, platform`,
 		[reportId]
 	);
 	return result.rows.map(rowToDraft);
@@ -230,28 +240,133 @@ function renderMarkdown(input: string): string {
 	return out.join('\n');
 }
 
-interface AngleGroup {
-	angle: string;
-	opportunitySignal: string | null;
+interface DraftGroup {
+	key: string;
+	angle: string | null;
+	title: string | null;
+	format: ContentFormat | null;
+	signal: string | null;
+	target: string | null;
+	whyNow: string | null;
 	drafts: ContentDraft[];
 }
 
-function groupByAngle(drafts: ContentDraft[]): AngleGroup[] {
-	const groups = new Map<string, AngleGroup>();
+/**
+ * Group drafts so each recommendation renders as one section. V2 rows carry a
+ * `title` and key by `(angle, title)` so two recommendations sharing an angle
+ * still split. V1 rows have `title === null` and fall back to angle-only
+ * grouping, matching the legacy viewer.
+ */
+function groupByRecommendation(drafts: ContentDraft[]): DraftGroup[] {
+	const groups = new Map<string, DraftGroup>();
 	for (const draft of drafts) {
-		const key = draft.angle ?? '(no angle)';
+		const angleKey = draft.angle ?? '(no angle)';
+		const titleKey = draft.title ?? '(no title)';
+		const key = draft.title ? `t:${titleKey}|a:${angleKey}` : `a:${angleKey}`;
 		const existing = groups.get(key);
 		if (existing) {
 			existing.drafts.push(draft);
-		} else {
-			groups.set(key, {
-				angle: key,
-				opportunitySignal: draft.opportunitySignal,
-				drafts: [draft]
-			});
+			continue;
 		}
+		groups.set(key, {
+			key,
+			angle: draft.angle,
+			title: draft.title,
+			format: draft.format,
+			signal: draft.opportunitySignal,
+			target: draft.target,
+			whyNow: draft.whyNow,
+			drafts: [draft]
+		});
 	}
 	return Array.from(groups.values());
+}
+
+const FORMAT_BADGE_CLASSES: Record<ContentFormat, string> = {
+	'blog-post': 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+	tutorial: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200',
+	'social-thread': 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+	'medium-piece': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200',
+	'video-tutorial': 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200',
+	'short-post': 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200'
+};
+
+const FORMAT_LABELS: Record<ContentFormat, string> = {
+	'blog-post': 'Blog post',
+	tutorial: 'Tutorial',
+	'social-thread': 'Social thread',
+	'medium-piece': 'Medium piece',
+	'video-tutorial': 'Video tutorial',
+	'short-post': 'Short post'
+};
+
+interface RecommendationHeaderProps {
+	title: string;
+	format: ContentFormat | null;
+	signal: string | null;
+	angle: string | null;
+	target: string | null;
+	whyNow: string | null;
+}
+
+function RecommendationHeader({
+	title,
+	format,
+	signal,
+	angle,
+	target,
+	whyNow
+}: RecommendationHeaderProps) {
+	const fields: { key: string; label: string; body: string }[] = [];
+	if (signal) fields.push({ key: 'signal', label: 'Signal', body: signal });
+	if (angle) fields.push({ key: 'angle', label: 'Angle', body: angle });
+	if (target) fields.push({ key: 'target', label: 'Target', body: target });
+	if (whyNow) fields.push({ key: 'whyNow', label: 'Why now', body: whyNow });
+
+	const badgeClass = format ? FORMAT_BADGE_CLASSES[format] : null;
+	const formatLabel = format ? FORMAT_LABELS[format] : null;
+
+	return (
+		<header className="mb-4">
+			<div className="flex items-start justify-between gap-3">
+				<h2 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">{title}</h2>
+				{format && badgeClass && formatLabel ? (
+					<span
+						className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${badgeClass}`}
+						aria-label={`Format: ${formatLabel}`}
+					>
+						{format}
+					</span>
+				) : null}
+			</div>
+			{fields.length > 0 ? (
+				<dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2">
+					{fields.map((field) => (
+						<React.Fragment key={field.key}>
+							<dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
+								{field.label}
+							</dt>
+							<dd className="text-sm text-gray-800 dark:text-neutral-200">{field.body}</dd>
+						</React.Fragment>
+					))}
+				</dl>
+			) : null}
+		</header>
+	);
+}
+
+function AngleHeader({ angle }: { angle: string | null }) {
+	const text = angle ?? null;
+	return (
+		<header className="mb-4">
+			<p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
+				Angle
+			</p>
+			<h2 className="mt-1 text-lg font-semibold text-gray-900 dark:text-neutral-100">
+				{text ?? 'Ungrouped drafts'}
+			</h2>
+		</header>
+	);
 }
 
 function formatMetadataCaption(metadata: Record<string, unknown> | null): string | null {
@@ -368,7 +483,7 @@ export default async function DraftViewerPage({
 		);
 	}
 
-	const angleGroups = groupByAngle(drafts);
+	const groups = groupByRecommendation(drafts);
 
 	return (
 		<div>
@@ -383,25 +498,27 @@ export default async function DraftViewerPage({
 			</p>
 
 			<div className="mt-8 space-y-10">
-				{angleGroups.map((group) => {
+				{groups.map((group) => {
 					const platforms = group.drafts.map((draft) =>
 						buildPlatformTabContent(draft, operator, voice, report.report_data)
 					);
 					return (
 						<section
-							key={group.angle}
+							key={group.key}
 							className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 p-5"
 						>
-							<header className="mb-4">
-								<h2 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">
-									{group.angle === '(no angle)' ? 'Ungrouped drafts' : group.angle}
-								</h2>
-								{group.opportunitySignal ? (
-									<p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">
-										Signal: {group.opportunitySignal}
-									</p>
-								) : null}
-							</header>
+							{group.title ? (
+								<RecommendationHeader
+									title={group.title}
+									format={group.format}
+									signal={group.signal}
+									angle={group.angle}
+									target={group.target}
+									whyNow={group.whyNow}
+								/>
+							) : (
+								<AngleHeader angle={group.angle} />
+							)}
 							<ViewerTabs platforms={platforms} />
 						</section>
 					);

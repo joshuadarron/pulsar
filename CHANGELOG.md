@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 This release reshapes Pulsar from a single-operator market-intelligence tool into a configurable agent framework. Operators bring their own voice and context at install time, the trend report runs as a four-pass pipeline with a new section structure, content drafts run as a two-pass angle-picker plus drafter, and the dashboard groups drafts per report. Each phase below lists the user-facing changes that landed in that PR.
 
+### [2026-05-03] Context PR 3: recommendation generator V2
+
+#### Added
+
+- Content Recommendations V2: feature-flagged path that produces rich, legacy-report-shaped recommendations (`title`, `format`, `signal`, `angle`, `target`, `whyNow`, plus a closing `prioritizationNote`). Min 4 recommendations per report, no upper bound.
+- Pass 1 (recommendation generator) reads the full intelligence context (entities + history, trending keywords, topic clusters, top discussions, sentiment, top authors, emerging topics) plus the product context, plus the report's narrative sections for cross-reference. Voice profile only, no per-format samples in pass 1.
+- Pass 2 (drafter V2) fans out one LLM call per recommendation. The recommendation's `format` selects candidate platforms via the canonical `FORMAT_TO_PLATFORMS` mapping (`blog-post` -> hashnode/medium/devto/linkedin, `tutorial` -> medium/devto/hashnode, `medium-piece` -> medium, `social-thread` -> twitter, `video-tutorial` -> medium, `short-post` -> linkedin/twitter/discord). Voice samples are scoped to those platforms only.
+- New prompt module `packages/apps/market-analysis/prompts/content-recommendations.ts` exporting `buildRecommendationSystemPrompt`, `buildRecommendationUserPrompt`, `buildDrafterV2SystemPrompt`, `buildDrafterV2UserPrompt`, `FORMAT_TO_PLATFORMS`, `voiceFormatsForContentFormat`.
+- New orchestrator `packages/pipeline/lib/content-recommendations-orchestrator.ts` with the same dependency-injection pattern as V1. Skip paths for missing intelligence context, zero recommendations, malformed responses, or zero drafts produced. Parsing tolerance for the canonical `{platforms: []}` response and the legacy `{drafts: [{platforms}]}` drift shape.
+- `content_drafts` columns: `title`, `format`, `target`, `why_now` (all nullable). V1 rows stay valid.
+- Drafts viewer at `/drafts/<reportId>` groups by `(angle, title)`. V2 rows render a `RecommendationHeader` with the title, a color-coded format badge (blue for blog-post, purple for tutorial, indigo for medium-piece, green for social-thread, rose for video-tutorial, orange for short-post), and a labeled `<dl>` with Signal/Angle/Target/Why now rows. V1 rows fall back to the existing angle-only header.
+- `ContentFormat` type union, `ALL_CONTENT_FORMATS` const, `ContentRecommendation` and `ContentRecommendationsArtifact` types in `@pulsar/shared/types`. `ContentDraft` extended with `title`, `format`, `target`, `whyNow`.
+- `env.contentRecommendations.v2` (driven by `CONTENT_RECOMMENDATIONS_V2`, default `false`). Runner dispatches V1 or V2 based on the flag.
+
+#### Changed
+
+- `runContentDrafts` in `packages/pipeline/runner.ts` is now a flag-gated dispatcher: V2 path on, V1 path off. Both share the post-orchestration "Content Drafts Ready" notification, with the message wording adapted to "recommendation(s)" or "angle(s)" per path.
+
+#### Deferred
+
+- Persistence of the recommendation `prioritizationNote` into a report-level field. The orchestrator returns it but does not store it; could land as `report_data.contentRecommendationsArtifact` in a follow-up if the dashboard wants to surface it.
+
 ### [2026-05-03] Context PR 2: rename to umbrella
 
 #### Changed

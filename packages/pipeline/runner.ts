@@ -7,9 +7,11 @@ import {
 import {
 	type OperatorContext,
 	OperatorContextNotConfiguredError,
+	buildContext,
 	loadOperatorContext
 } from '@pulsar/context';
 import { enrichEntitiesWithHistory, fetchEntityHistory } from '@pulsar/scraper/analytics';
+import { env } from '@pulsar/shared/config/env';
 import { getSession } from '@pulsar/shared/db/neo4j';
 import { query } from '@pulsar/shared/db/postgres';
 import { logRun } from '@pulsar/shared/run-logger';
@@ -33,6 +35,10 @@ import {
 	type ContentDraftRow,
 	orchestrateContentDrafts
 } from './lib/content-drafts-orchestrator.js';
+import {
+	type Phase3DraftRow,
+	orchestrateContentRecommendations
+} from './lib/content-recommendations-orchestrator.js';
 import { extractPredictions } from './lib/evals/extract.js';
 import { persistValidation } from './lib/evals/persist.js';
 import { runEvaluations } from './lib/evals/runner.js';
@@ -1125,6 +1131,29 @@ async function persistContentDraftRow(row: ContentDraftRow): Promise<void> {
 	);
 }
 
+async function persistContentDraftRowV2(row: Phase3DraftRow): Promise<void> {
+	await query(
+		`INSERT INTO content_drafts
+		   (run_id, report_id, platform, content_type, body, angle, opportunity_signal, metadata,
+		    title, format, target, why_now)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		[
+			row.runId,
+			row.reportId,
+			row.platform,
+			row.contentType,
+			row.body,
+			row.angle,
+			row.opportunitySignal,
+			JSON.stringify(row.metadata),
+			row.title,
+			row.format,
+			row.target,
+			row.whyNow
+		]
+	);
+}
+
 async function runContentDrafts(
 	client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
@@ -1133,33 +1162,69 @@ async function runContentDrafts(
 ): Promise<number> {
 	await logRun(runId, 'info', 'content-drafts', 'Starting content drafts pipeline...');
 
-	const result = await orchestrateContentDrafts(
-		{
-			loadOperator: loadOperatorContext,
-			loadVoice: loadVoiceContext,
-			invokePipeline: (innerRunId, pipeName, payload) =>
-				invokeContentPipeline(client, innerRunId, pipeName, payload),
-			insertDraft: persistContentDraftRow,
-			log: (innerRunId, level, stage, message) => logRun(innerRunId, level, stage, message)
-		},
-		{ runId, reportId, reportData }
-	);
+	const invoke = (
+		innerRunId: string,
+		pipeName: 'angle-picker.pipe' | 'content-drafter.pipe',
+		payload: { system: string; user: string }
+	) => invokeContentPipeline(client, innerRunId, pipeName, payload);
+	const log = (
+		innerRunId: string,
+		level: 'info' | 'warn' | 'error' | 'success',
+		stage: string,
+		message: string
+	) => logRun(innerRunId, level, stage, message);
 
-	if (result.draftCount > 0) {
+	let draftCount: number;
+	let summaryUnit: 'angle' | 'recommendation';
+	let summaryUnitCount: number;
+
+	if (env.contentRecommendations.v2) {
+		const result = await orchestrateContentRecommendations(
+			{
+				loadOperator: loadOperatorContext,
+				loadVoice: loadVoiceContext,
+				buildContext,
+				invokePipeline: invoke,
+				insertDraft: persistContentDraftRowV2,
+				log
+			},
+			{ runId, reportId, reportData }
+		);
+		draftCount = result.draftCount;
+		summaryUnit = 'recommendation';
+		summaryUnitCount = result.recommendationCount;
+	} else {
+		const result = await orchestrateContentDrafts(
+			{
+				loadOperator: loadOperatorContext,
+				loadVoice: loadVoiceContext,
+				invokePipeline: invoke,
+				insertDraft: persistContentDraftRow,
+				log
+			},
+			{ runId, reportId, reportData }
+		);
+		draftCount = result.draftCount;
+		summaryUnit = 'angle';
+		summaryUnitCount = result.angleCount;
+	}
+
+	if (draftCount > 0) {
+		const unitLabel = summaryUnit === 'recommendation' ? 'recommendation(s)' : 'angle(s)';
 		await query(
 			`INSERT INTO notifications (type, title, message, link, reference_id)
 			 VALUES ($1, $2, $3, $4, $5)`,
 			[
 				'drafts',
 				'Content Drafts Ready',
-				`${result.draftCount} platform drafts generated across ${result.angleCount} angle(s).`,
+				`${draftCount} platform drafts generated across ${summaryUnitCount} ${unitLabel}.`,
 				'/drafts',
 				reportId
 			]
 		);
 	}
 
-	return result.draftCount;
+	return draftCount;
 }
 
 /**

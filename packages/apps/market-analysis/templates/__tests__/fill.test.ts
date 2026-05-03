@@ -109,6 +109,10 @@ function makeDraft(overrides: Partial<ContentDraft> = {}): ContentDraft {
 		angle: 'Runtime is the layer that does not care which framework wins.',
 		opportunitySignal: 'CrewAI mentions doubled.',
 		metadata: { tags: ['runtime', 'agents'], canonical_url: 'https://blog.example.com/x' },
+		title: null,
+		format: null,
+		target: null,
+		whyNow: null,
 		createdAt: new Date('2026-04-30T12:00:00Z'),
 		updatedAt: new Date('2026-04-30T12:00:00Z'),
 		...overrides

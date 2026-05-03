@@ -297,8 +297,55 @@ export interface ContentDraft {
 	angle: string | null;
 	opportunitySignal: string | null;
 	metadata: Record<string, unknown> | null;
+	/** Recommendation header fields (Phase: content recommendations V2). Nullable for V1 rows. */
+	title: string | null;
+	format: ContentFormat | null;
+	target: string | null;
+	whyNow: string | null;
 	createdAt: Date;
 	updatedAt: Date;
+}
+
+/**
+ * Canonical set of content formats a recommendation can target. The drafter
+ * maps each format to a candidate set of platforms (see FORMAT_TO_PLATFORMS
+ * in `@pulsar/app-market-analysis/prompts/content-recommendations`).
+ */
+export type ContentFormat =
+	| 'blog-post'
+	| 'tutorial'
+	| 'medium-piece'
+	| 'social-thread'
+	| 'video-tutorial'
+	| 'short-post';
+
+export const ALL_CONTENT_FORMATS: readonly ContentFormat[] = [
+	'blog-post',
+	'tutorial',
+	'medium-piece',
+	'social-thread',
+	'video-tutorial',
+	'short-post'
+] as const;
+
+/**
+ * Recommendation produced by the V2 generator. Mirrors the legacy report's
+ * "Content Recommendations" section: a working brief the operator could
+ * publish from, paired with the data point that justifies it.
+ */
+export interface ContentRecommendation {
+	title: string;
+	format: ContentFormat;
+	signal: string;
+	angle: string;
+	target: string;
+	whyNow: string;
+	priorityHint?: 'now' | 'this-week' | 'durable';
+}
+
+export interface ContentRecommendationsArtifact {
+	recommendations: ContentRecommendation[];
+	prioritizationNote: string;
 }
 
 export interface Run {

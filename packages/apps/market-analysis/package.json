@@ -8,6 +8,7 @@
 		"./prompts": "./prompts/index.ts",
 		"./prompts/trend-report": "./prompts/trend-report.ts",
 		"./prompts/content-drafts": "./prompts/content-drafts.ts",
+		"./prompts/content-recommendations": "./prompts/content-recommendations.ts",
 		"./pipelines": "./pipelines/index.ts",
 		"./templates": "./templates/index.ts",
 		"./ui/drafts": "./ui/drafts/index.tsx",

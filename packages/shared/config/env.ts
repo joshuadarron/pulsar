@@ -63,5 +63,12 @@ export const env = {
 		enableCommonCrawl: optionalBool('ENABLE_COMMON_CRAWL', false),
 		workerConcurrency: Number.parseInt(optional('BACKFILL_WORKER_CONCURRENCY', '2'))
 	},
+	contentRecommendations: {
+		// Phase: content recommendations V2. When true, the content pipeline
+		// uses the recommendation generator (rich {title, format, signal,
+		// angle, target, whyNow} shape) instead of the V1 angle picker.
+		// Defaults off until validated against a few report cycles.
+		v2: optionalBool('CONTENT_RECOMMENDATIONS_V2', false)
+	},
 	trendScoreLambda: Number.parseFloat(optional('TREND_SCORE_LAMBDA', '0.1'))
 } as const;

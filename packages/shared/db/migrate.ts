@@ -438,6 +438,23 @@ async function migratePostgres() {
     ON reports (graph_snapshot_id) WHERE graph_snapshot_id IS NOT NULL
   `);
 
+	// Phase: content recommendations V2. Each draft row carries the full
+	// recommendation header it came from (title/format/target/why_now) so the
+	// drafts UI can render the legacy report's Content Recommendations layout.
+	// All nullable; existing rows pre-V2 stay valid.
+	await query(`
+    ALTER TABLE content_drafts ADD COLUMN IF NOT EXISTS title TEXT
+  `);
+	await query(`
+    ALTER TABLE content_drafts ADD COLUMN IF NOT EXISTS format TEXT
+  `);
+	await query(`
+    ALTER TABLE content_drafts ADD COLUMN IF NOT EXISTS target TEXT
+  `);
+	await query(`
+    ALTER TABLE content_drafts ADD COLUMN IF NOT EXISTS why_now TEXT
+  `);
+
 	// Seed defaults if table is empty
 	await query(`
     INSERT INTO schedules (type, hour, minute, days)

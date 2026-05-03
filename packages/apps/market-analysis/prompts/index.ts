@@ -10,6 +10,14 @@ export {
 	voiceFormatForPlatform
 } from './content-drafts.js';
 export {
+	buildDrafterV2SystemPrompt,
+	buildDrafterV2UserPrompt,
+	buildRecommendationSystemPrompt,
+	buildRecommendationUserPrompt,
+	FORMAT_TO_PLATFORMS,
+	voiceFormatsForContentFormat
+} from './content-recommendations.js';
+export {
 	buildSectionPrompts,
 	buildSupportingResourcesPrompt,
 	buildSystemPrompt
