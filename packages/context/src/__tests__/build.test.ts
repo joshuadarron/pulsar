@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 
-import type { OperatorContext } from '@pulsar/context';
+import type { OperatorContext } from '@pulsar/operator-context';
 import type { VoiceContext, VoiceFormat } from '@pulsar/voice';
 
 // Module mocks must be installed before importing the SUT.
@@ -15,7 +15,7 @@ const mockBuildProduct = mock.fn<AnyAsync>();
 mock.module('@pulsar/shared/db/postgres', {
 	namedExports: { query: mockQuery }
 });
-mock.module('@pulsar/context', {
+mock.module('@pulsar/operator-context', {
 	namedExports: {
 		loadOperatorContext: mockLoadOperator
 	}

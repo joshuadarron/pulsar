@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 This release reshapes Pulsar from a single-operator market-intelligence tool into a configurable agent framework. Operators bring their own voice and context at install time, the trend report runs as a four-pass pipeline with a new section structure, content drafts run as a two-pass angle-picker plus drafter, and the dashboard groups drafts per report. Each phase below lists the user-facing changes that landed in that PR.
 
+### [2026-05-03] Context PR 2: rename to umbrella
+
+#### Changed
+
+- `@pulsar/context` (the operator-only loader) renamed to `@pulsar/operator-context`. The package directory moved from `packages/context/` to `packages/operator-context/` (git-tracked rename).
+- `@pulsar/context-builder` (the umbrella shipped in PR 1) renamed to `@pulsar/context`. The package directory moved from `packages/context-builder/` to `packages/context/`.
+- `@pulsar/context` (the umbrella) now re-exports the operator profile loader (`loadOperatorContext`, `OperatorContext`, etc.) and the voice profile loader (`loadVoiceContext`, `VoiceContext`, etc.). Apps use one import surface for everything context-related; consumers that already imported from `@pulsar/context` keep working without code changes.
+- `next.config.ts` `transpilePackages` lists `@pulsar/operator-context` so the new transitive dep gets bundled.
+
+No behavior change. Pure rename + symbol re-exports.
+
 ### [2026-05-03] Context-builder PR 1: package + extraction
 
 #### Added

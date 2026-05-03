@@ -1,4 +1,4 @@
-import type { OperatorContext } from '@pulsar/context';
+import type { OperatorContext } from '@pulsar/operator-context';
 import { env } from '@pulsar/shared/config/env';
 
 import type { ProductContext, ProductPackageMetadata } from '../types.js';

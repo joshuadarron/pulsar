@@ -1,4 +1,4 @@
-import { type OperatorContext, loadOperatorContext } from '@pulsar/context';
+import { type OperatorContext, loadOperatorContext } from '@pulsar/operator-context';
 import { query } from '@pulsar/shared/db/postgres';
 import { type VoiceContext, type VoiceFormat, loadVoiceContext } from '@pulsar/voice';
 

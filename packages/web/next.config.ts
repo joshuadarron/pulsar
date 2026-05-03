@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
 	transpilePackages: [
 		'@pulsar/shared',
 		'@pulsar/context',
+		'@pulsar/operator-context',
 		'@pulsar/voice',
 		'@pulsar/app-market-analysis'
 	],

@@ -76,28 +76,9 @@ importers:
 
   packages/context:
     dependencies:
-      js-yaml:
-        specifier: ^4.1.0
-        version: 4.1.1
-    devDependencies:
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
-      '@types/node':
-        specifier: ^22.10.0
-        version: 22.19.17
-      tsx:
-        specifier: ^4.19.2
-        version: 4.21.0
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
-
-  packages/context-builder:
-    dependencies:
-      '@pulsar/context':
+      '@pulsar/operator-context':
         specifier: workspace:*
-        version: link:../context
+        version: link:../operator-context
       '@pulsar/scraper':
         specifier: workspace:*
         version: link:../scraper
@@ -108,6 +89,25 @@ importers:
         specifier: workspace:*
         version: link:../voice
     devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.17
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/operator-context:
+    dependencies:
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.1.1
+    devDependencies:
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
       '@types/node':
         specifier: ^22.10.0
         version: 22.19.17

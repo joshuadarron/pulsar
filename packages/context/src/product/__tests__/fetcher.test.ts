@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 
-import type { OperatorContext } from '@pulsar/context';
+import type { OperatorContext } from '@pulsar/operator-context';
 
 const envState = {
 	firecrawl: { apiKey: '' }
