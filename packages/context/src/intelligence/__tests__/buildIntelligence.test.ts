@@ -16,11 +16,14 @@ const mockQuery = mock.fn(async (sql: string, params?: unknown[]) => {
 	return { rows, rowCount: rows.length };
 });
 
+// Do NOT include a `default` key inside namedExports here. Node 22's
+// mock.module generates `export let default = ...` for it (a syntax error,
+// since `default` is a reserved word in `let` bindings). The default pool
+// export is not used by the SUT under test, so we simply omit it.
 mock.module('@pulsar/shared/db/postgres', {
 	namedExports: {
 		query: mockQuery,
-		getClient: async () => ({ release: () => {} }),
-		default: {}
+		getClient: async () => ({ release: () => {} })
 	}
 });
 
