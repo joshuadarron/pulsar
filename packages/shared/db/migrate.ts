@@ -425,6 +425,19 @@ async function migratePostgres() {
     ON content_drafts (report_id, angle)
   `);
 
+	// Phase: context-builder. Track which graph snapshot a report saw so reconstruction
+	// (e.g., --content-only --report-id=<old>) reproduces the same intelligence view.
+	// Nullable for legacy rows generated before this column existed; the context
+	// builder will compute a fresh snapshot for those windows on demand.
+	await query(`
+    ALTER TABLE reports ADD COLUMN IF NOT EXISTS graph_snapshot_id UUID
+      REFERENCES graph_snapshots(id) ON DELETE SET NULL
+  `);
+	await query(`
+    CREATE INDEX IF NOT EXISTS reports_graph_snapshot_id_idx
+    ON reports (graph_snapshot_id) WHERE graph_snapshot_id IS NOT NULL
+  `);
+
 	// Seed defaults if table is empty
 	await query(`
     INSERT INTO schedules (type, hour, minute, days)

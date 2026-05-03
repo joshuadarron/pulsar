@@ -790,7 +790,8 @@ async function runTrendReport(
 	client: Awaited<ReturnType<typeof getClient>>,
 	runId: string,
 	rocketrideContext: RocketRideContext | null,
-	operatorContext: OperatorContext
+	operatorContext: OperatorContext,
+	graphSnapshotId: string | null
 ): Promise<string | null> {
 	await logRun(runId, 'info', 'trend-report', 'Starting trend report pipeline...');
 
@@ -1011,10 +1012,13 @@ async function runTrendReport(
 	await validateAndPersist(runId, 'trend-report.pipe', reportData);
 
 	// --- Save report ---
+	// graph_snapshot_id is persisted so reconstruction (e.g., --content-only
+	// --report-id=<uuid>) can resolve the same intelligence view via the
+	// context-builder without recomputing.
 	const reportResult = await query<{ id: string }>(
-		`INSERT INTO reports (run_id, period_start, period_end, report_data, article_count)
-		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		[runId, weekAgo, now, JSON.stringify(reportData), articleCount]
+		`INSERT INTO reports (run_id, period_start, period_end, report_data, article_count, graph_snapshot_id)
+		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		[runId, weekAgo, now, JSON.stringify(reportData), articleCount, graphSnapshotId]
 	);
 
 	const reportId = reportResult.rows[0].id;
@@ -1318,7 +1322,13 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 		);
 
 		// Sequential pipeline execution: trend report, predictions extraction, content drafts
-		const reportId = await runTrendReport(client, runId, rocketrideContext, operatorContext);
+		const reportId = await runTrendReport(
+			client,
+			runId,
+			rocketrideContext,
+			operatorContext,
+			snapshotId
+		);
 		let draftCount = 0;
 
 		if (reportId) {

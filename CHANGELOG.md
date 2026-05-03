@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 This release reshapes Pulsar from a single-operator market-intelligence tool into a configurable agent framework. Operators bring their own voice and context at install time, the trend report runs as a four-pass pipeline with a new section structure, content drafts run as a two-pass angle-picker plus drafter, and the dashboard groups drafts per report. Each phase below lists the user-facing changes that landed in that PR.
 
+### [2026-05-03] Context-builder PR 1: package + extraction
+
+#### Added
+
+- `@pulsar/context-builder` workspace package: single import surface for any app that needs to construct LLM context. Composes operator profile (`@pulsar/context`), voice profile (`@pulsar/voice`), intelligence (entities, keywords, clusters, discussions, authors, sentiment, emerging topics, computed on demand from `articles` + `graph_snapshots`), and product context (package metadata + scraped site content from `operator.groundingUrls`).
+- `buildContext({ slices })` and `buildReportContext(reportId)` API. The shorthand reads `period_start`, `period_end`, and `graph_snapshot_id` from the report row, then resolves all four slices.
+- `getOrComputeSnapshot` helper handles graph snapshot caching with staleness detection (no candidate, articles ingested since `computed_at`, or `forceRecompute`) and a Postgres advisory lock so parallel calls don't both run gds.pageRank/Louvain.
+- `buildProduct` is operator-agnostic: walks `operator.groundingUrls` and classifies each URL (npm, PyPI, VS Code marketplace, OpenVSX, generic web). Replaces the hardcoded RocketRide URL list in `fetchRocketRideContext`. Uses Firecrawl when configured, falls back to plain fetch + HTML strip otherwise.
+- New `reports.graph_snapshot_id` column (nullable FK to `graph_snapshots`). Persisted by the runner on every new report. Reconstruction (`--content-only --report-id=<old>`) reads this to reproduce the same intelligence view without recomputing.
+
+#### Changed
+
+- `runTrendReport` accepts `graphSnapshotId` and persists it in the `INSERT INTO reports` statement. No other behavior change in the trend report pipeline.
+
+#### Deferred
+
+- Replacing the runner's inline `gather*` functions and `fetchRocketRideContext` call with `buildIntelligence` / `buildProduct`. The runner keeps its battle-tested gather logic for now; `buildIntelligence` covers the same surface (and is consumed by future content recommendation work) but the parity check + cutover will land in a follow-up PR.
+- Plan: `.claude/plans/content-generator-context-refactor.md`
+
 ### [2026-05-01] Phase 6: Drafts UI
 
 #### Added
