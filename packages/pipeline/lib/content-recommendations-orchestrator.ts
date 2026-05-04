@@ -384,6 +384,14 @@ export async function orchestrateContentRecommendations(
 	// One drafter call per recommendation keeps each response small enough to
 	// land cleanly under max_tokens, isolates failures so one bad recommendation
 	// does not zero out the others, and keeps the run console log readable.
+	//
+	// TODO(v2-per-platform-fanout): V1 fans out per (angle, platform) because
+	// formats with multiple candidate platforms (e.g. blog-post: hashnode +
+	// medium + devto + linkedin) overflow the LLM's max output cap when
+	// produced in one response. V2 has the same risk but currently fans out
+	// only per recommendation. To match V1, extend buildDrafterV2UserPrompt
+	// with a targetPlatforms override and loop FORMAT_TO_PLATFORMS[rec.format]
+	// here, calling the drafter once per (recommendation, platform).
 	await log(
 		runId,
 		'info',

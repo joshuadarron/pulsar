@@ -194,27 +194,6 @@ function parseDrafts(raw: unknown): ParsedDraft[] {
 	return out;
 }
 
-function uniqueVoiceFormatsForAngles(angles: AngleChoice[]): VoiceFormat[] {
-	const seen = new Set<VoiceFormat>();
-	for (const angle of angles) {
-		for (const platform of angle.platforms) {
-			seen.add(voiceFormatForPlatform(platform));
-		}
-	}
-	return [...seen];
-}
-
-function scopedSamples(
-	voice: VoiceContext,
-	formats: VoiceFormat[]
-): Partial<Record<VoiceFormat, string[]>> {
-	const out: Partial<Record<VoiceFormat, string[]>> = {};
-	for (const format of formats) {
-		out[format] = voice.samples[format];
-	}
-	return out;
-}
-
 /**
  * Two-pass content drafts orchestration.
  *
@@ -285,85 +264,108 @@ export async function orchestrateContentDrafts(
 		`Pass 1 complete: ${angles.length} angle(s) selected.`
 	);
 
-	// --- Pass 2: per-platform drafts (fan out: one LLM call per angle) ---
+	// --- Pass 2: per-platform drafts (fan out: one LLM call per angle x platform) ---
 	//
-	// Why fan out: a single batched call must produce N angles x M platforms of
-	// content in one response. With four angles and several platforms each, the
-	// response can blow past the LLM's max_tokens cap and truncate mid-string,
-	// which makes JSON.parse fail and drops every draft. Calling the drafter
-	// once per angle keeps each response small enough to land cleanly, and
-	// isolates failures so one bad angle does not zero out the others.
+	// Why fan out at the platform level: even with one call per angle, the
+	// drafter has to produce 3-4 platform bodies (e.g., hashnode + medium +
+	// linkedin + twitter) in a single response. Each long-form body is 1500
+	// to 2500 words, which together blow past the LLM's max output cap and
+	// truncate mid-string, dropping every draft for that angle.
 	//
-	// Sequential (not parallel): keeps the run console log readable
-	// ("Pass 2 [n/N]: <angle>"), avoids rate-limit pile-up, and lets each call
-	// reuse the prior call's terminated rocketride token.
+	// One call per (angle, platform) keeps each response to a single body.
+	// Each platform succeeds or fails independently. Tradeoff: ~3-4x more
+	// LLM calls per pipeline run than a per-angle fan-out, plus the wall
+	// time. In practice this is acceptable for daily report runs.
+	//
+	// Sequential (not parallel): readable run log, no rate-limit pile-up.
+	const totalCalls = angles.reduce((acc, a) => acc + a.platforms.length, 0);
 	await log(
 		runId,
 		'info',
 		'content-drafts',
-		`Pass 2: writing drafts for ${angles.length} angle(s)...`
+		`Pass 2: writing ${totalCalls} draft(s) across ${angles.length} angle(s)...`
 	);
 
-	const drafts: ParsedDraft[] = [];
+	let totalVariants = 0;
+	let anglesWithAtLeastOneDraft = 0;
+	let callIndex = 0;
 	for (let i = 0; i < angles.length; i += 1) {
 		const angle = angles[i];
-		const formatsForAngle = uniqueVoiceFormatsForAngles([angle]);
-		const samplesForAngle = scopedSamples(voice, formatsForAngle);
+		const angleLabel = `angle ${i + 1}/${angles.length}`;
+		const angleSummary = angle.angle.slice(0, 60);
+		let angleDraftCount = 0;
 
-		const drafterSystem = buildDrafterSystemPrompt(operatorContext, voice, samplesForAngle);
-		const drafterUser = buildDrafterUserPrompt({
-			angles: [angle],
-			reportContext: {
-				executiveSummary: reportData.sections.executiveSummary.text,
-				marketSnapshot: reportData.sections.marketSnapshot.text
-			}
-		});
+		for (let j = 0; j < angle.platforms.length; j += 1) {
+			const platform = angle.platforms[j];
+			callIndex += 1;
+			const callLabel = `${callIndex}/${totalCalls}`;
+			const voiceFormat = voiceFormatForPlatform(platform);
+			const samplesForPlatform: Partial<Record<VoiceFormat, string[]>> = {
+				[voiceFormat]: voice.samples[voiceFormat] ?? []
+			};
 
-		const angleLabel = `${i + 1}/${angles.length}`;
-		const angleSummary = angle.angle.slice(0, 80);
-		await log(runId, 'info', 'content-drafts', `Pass 2 [${angleLabel}]: ${angleSummary}`);
+			const drafterSystem = buildDrafterSystemPrompt(operatorContext, voice, samplesForPlatform);
+			const drafterUser = buildDrafterUserPrompt({
+				angles: [{ ...angle, platforms: [platform] }],
+				reportContext: {
+					executiveSummary: reportData.sections.executiveSummary.text,
+					marketSnapshot: reportData.sections.marketSnapshot.text
+				}
+			});
 
-		const drafterResponse = await invokePipeline(runId, CONTENT_DRAFTER_PIPE, {
-			system: drafterSystem,
-			user: drafterUser
-		});
-		const angleDrafts = parseDrafts(drafterResponse);
-		if (angleDrafts.length === 0) {
 			await log(
 				runId,
-				'warn',
+				'info',
 				'content-drafts',
-				`Pass 2 [${angleLabel}]: drafter returned 0 drafts for this angle, skipping.`
+				`Pass 2 [${callLabel}]: ${platform} for ${angleLabel} (${angleSummary})`
 			);
-			continue;
-		}
-		drafts.push(...angleDrafts);
-	}
 
-	// --- Persist ---
-	let totalVariants = 0;
-	for (const draft of drafts) {
-		for (const variant of draft.platforms) {
+			const drafterResponse = await invokePipeline(runId, CONTENT_DRAFTER_PIPE, {
+				system: drafterSystem,
+				user: drafterUser
+			});
+			const drafterDrafts = parseDrafts(drafterResponse);
+			const variant = drafterDrafts[0]?.platforms.find((v) => v.platform === platform);
+			if (!variant) {
+				await log(
+					runId,
+					'warn',
+					'content-drafts',
+					`Pass 2 [${callLabel}]: drafter returned no draft for ${platform}, skipping.`
+				);
+				continue;
+			}
+
 			await insertDraft({
 				runId,
 				reportId,
 				platform: variant.platform,
 				contentType: platformContentType(variant.platform),
 				body: variant.content,
-				angle: draft.angle,
-				opportunitySignal: draft.opportunity_signal,
+				angle: angle.angle,
+				opportunitySignal: angle.opportunity_signal,
 				metadata: variant.metadata
 			});
 			totalVariants += 1;
+			angleDraftCount += 1;
 		}
+
+		if (angleDraftCount > 0) anglesWithAtLeastOneDraft += 1;
 	}
 
 	await log(
 		runId,
 		'success',
 		'content-drafts',
-		`Generated ${drafts.length} angle(s) across ${totalVariants} platform draft(s).`
+		`Generated ${anglesWithAtLeastOneDraft} angle(s) across ${totalVariants} platform draft(s).`
 	);
 
-	return { angleCount: angles.length, draftCount: totalVariants, skipped: null };
+	return {
+		// angleCount reports angles selected by pass 1, regardless of how many
+		// produced drafts. Use draftCount to read the number of platform variants
+		// actually persisted.
+		angleCount: angles.length,
+		draftCount: totalVariants,
+		skipped: null
+	};
 }

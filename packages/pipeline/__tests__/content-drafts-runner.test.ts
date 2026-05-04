@@ -137,20 +137,51 @@ function makeHarness(opts: {
 	const inserted: ContentDraftRow[] = [];
 	const logs: LogCall[] = [];
 
-	// Pass 2 is fanned out one drafter call per angle. Split the static
-	// drafterResponse into per-angle groups so each call receives only the
-	// drafts whose `angle` field matches the angle being requested. Tests can
-	// continue to declare a single drafterResponse with all drafts.
+	// Pass 2 is fanned out one drafter call per (angle, platform). Flatten the
+	// static drafterResponse into a sequence of (angle, platform) variants so
+	// each invokePipeline call serves the next variant in order. Tests can
+	// still declare a single drafterResponse with all drafts; the harness
+	// re-shapes it for the per-platform fan-out.
+	type FlatVariant = {
+		angle: string;
+		opportunitySignal: string;
+		platform: string;
+		content: string;
+		metadata: Record<string, unknown>;
+	};
 	const drafterDrafts =
-		(opts.drafterResponse as { drafts?: Array<{ angle?: string }> } | undefined)?.drafts ?? [];
-	const draftsByAngle = new Map<string, unknown[]>();
+		(
+			opts.drafterResponse as
+				| {
+						drafts?: Array<{
+							angle?: string;
+							opportunity_signal?: string;
+							platforms?: Array<{
+								platform?: string;
+								content?: string;
+								metadata?: Record<string, unknown>;
+							}>;
+						}>;
+				  }
+				| undefined
+		)?.drafts ?? [];
+	const flatVariants: FlatVariant[] = [];
 	for (const draft of drafterDrafts) {
 		const angleKey = typeof draft?.angle === 'string' ? draft.angle : '';
-		const arr = draftsByAngle.get(angleKey) ?? [];
-		arr.push(draft);
-		draftsByAngle.set(angleKey, arr);
+		const opportunitySignal =
+			typeof draft?.opportunity_signal === 'string' ? draft.opportunity_signal : '';
+		const platformsArr = Array.isArray(draft?.platforms) ? draft.platforms : [];
+		for (const variant of platformsArr) {
+			if (typeof variant?.platform !== 'string' || typeof variant?.content !== 'string') continue;
+			flatVariants.push({
+				angle: angleKey,
+				opportunitySignal,
+				platform: variant.platform,
+				content: variant.content,
+				metadata: variant.metadata && typeof variant.metadata === 'object' ? variant.metadata : {}
+			});
+		}
 	}
-	const orderedAngleKeys = [...draftsByAngle.keys()];
 	let drafterCallIndex = 0;
 
 	const invokePipeline: InvokePipelineFn = async (_runId, pipeName, payload) => {
@@ -158,11 +189,27 @@ function makeHarness(opts: {
 		if (pipeName === 'angle-picker.pipe') {
 			return opts.angleResponse ?? { angles: [] };
 		}
-		// content-drafter.pipe: serve one angle's drafts per call.
-		const angleKey = orderedAngleKeys[drafterCallIndex];
+		// content-drafter.pipe: serve one (angle, platform) per call.
+		const variant = flatVariants[drafterCallIndex];
 		drafterCallIndex += 1;
-		const drafts = angleKey ? (draftsByAngle.get(angleKey) ?? []) : [];
-		return { drafts };
+		if (!variant) {
+			return { drafts: [] };
+		}
+		return {
+			drafts: [
+				{
+					opportunity_signal: variant.opportunitySignal,
+					angle: variant.angle,
+					platforms: [
+						{
+							platform: variant.platform,
+							content: variant.content,
+							metadata: variant.metadata
+						}
+					]
+				}
+			]
+		};
 	};
 
 	const log: LogFn = async (_runId, level, stage, message) => {
@@ -415,19 +462,34 @@ describe('orchestrateContentDrafts', () => {
 				reportData
 			});
 
-			const drafterCall = h.pipelineCalls.find((c) => c.pipeName === 'content-drafter.pipe');
-			assert.ok(drafterCall, 'expected a drafter call');
-			// long-form and linkedin samples should appear in the system prompt.
-			assert.match(drafterCall.system, /LONG_FORM_SAMPLE_A/);
-			assert.match(drafterCall.system, /LINKEDIN_SAMPLE_A/);
-			// Twitter / discord / reddit / other samples should NOT appear.
+			// Pass 2 is fanned out per-platform: one drafter call per (angle,
+			// platform). Each call's system prompt must include only the
+			// samples for the platform it is writing for.
+			const drafterCalls = h.pipelineCalls.filter((c) => c.pipeName === 'content-drafter.pipe');
+			assert.equal(drafterCalls.length, 2, 'expected one drafter call per platform');
+
+			const mediumCall = drafterCalls[0];
+			assert.match(mediumCall.system, /LONG_FORM_SAMPLE_A/, 'medium call has long-form samples');
 			assert.doesNotMatch(
-				drafterCall.system,
-				/TWITTER_SAMPLE_A/,
-				'twitter samples must not leak when no twitter angle was chosen'
+				mediumCall.system,
+				/LINKEDIN_SAMPLE_A/,
+				'medium call must not leak linkedin samples'
 			);
-			assert.doesNotMatch(drafterCall.system, /DISCORD_SAMPLE_A/);
-			assert.doesNotMatch(drafterCall.system, /REDDIT_SAMPLE_A/);
+
+			const linkedinCall = drafterCalls[1];
+			assert.match(linkedinCall.system, /LINKEDIN_SAMPLE_A/, 'linkedin call has linkedin samples');
+			assert.doesNotMatch(
+				linkedinCall.system,
+				/LONG_FORM_SAMPLE_A/,
+				'linkedin call must not leak long-form samples'
+			);
+
+			// Twitter / discord / reddit samples should never appear in either call.
+			for (const call of drafterCalls) {
+				assert.doesNotMatch(call.system, /TWITTER_SAMPLE_A/);
+				assert.doesNotMatch(call.system, /DISCORD_SAMPLE_A/);
+				assert.doesNotMatch(call.system, /REDDIT_SAMPLE_A/);
+			}
 		});
 	});
 
