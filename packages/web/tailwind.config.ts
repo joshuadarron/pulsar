@@ -13,7 +13,11 @@ const config: Config = {
 		// App-package UI lives outside packages/web. Without this entry, Tailwind
 		// drops any classes that appear ONLY in app-package files, leading to
 		// silent style regressions on app-rendered pages.
-		'../apps/*/ui/**/*.{ts,tsx}'
+		//
+		// Explicit per-app paths (no `*` glob layer) avoid a known fast-glob
+		// blow-up when `*` traversal collides with bracket-named dynamic-route
+		// directories like `[reportId]`. Add a line per new app.
+		'../apps/market-analysis/ui/**/*.{ts,tsx}'
 	],
 	theme: {
 		extend: {
