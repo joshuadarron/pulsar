@@ -87,9 +87,10 @@ export default async function DraftsPage() {
 					</div>
 				) : (
 					groups.map((group) => (
-						<article
+						<Link
 							key={group.reportId}
-							className="relative rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5 transition hover:shadow-sm"
+							href={`/drafts/${group.reportId}`}
+							className="block rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5 transition hover:border-indigo-300 hover:shadow-sm"
 						>
 							<div className="flex items-start justify-between gap-4">
 								<div className="min-w-0 flex-1">
@@ -104,19 +105,11 @@ export default async function DraftsPage() {
 										{group.platformCount} {group.platformCount === 1 ? 'platform' : 'platforms'}
 									</p>
 								</div>
-								<div className="flex flex-col items-end gap-3">
-									<span className="text-xs text-gray-400 dark:text-neutral-500">
-										{formatDate(group.generatedAt)}
-									</span>
-									<Link
-										href={`/drafts/${group.reportId}`}
-										className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
-									>
-										View drafts
-									</Link>
-								</div>
+								<span className="flex-shrink-0 text-xs text-gray-400 dark:text-neutral-500">
+									{formatDate(group.generatedAt)}
+								</span>
 							</div>
-						</article>
+						</Link>
 					))
 				)}
 			</div>
