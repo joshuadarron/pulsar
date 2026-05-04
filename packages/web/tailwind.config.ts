@@ -7,7 +7,14 @@ import type { Config } from 'tailwindcss';
 // foreground contrast slightly, add subtle indigo-leaning warmth.
 const config: Config = {
 	darkMode: 'class',
-	content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
+	content: [
+		'./app/**/*.{ts,tsx}',
+		'./components/**/*.{ts,tsx}',
+		// App-package UI lives outside packages/web. Without this entry, Tailwind
+		// drops any classes that appear ONLY in app-package files, leading to
+		// silent style regressions on app-rendered pages.
+		'../apps/*/ui/**/*.{ts,tsx}'
+	],
 	theme: {
 		extend: {
 			colors: {
