@@ -11,6 +11,7 @@ import cron from 'node-cron';
 import { FIRST_DEPLOY_FROM, maybeAutoEnqueue } from './backfill/auto-enqueue.js';
 import { enqueueBackfill } from './backfill/queue.js';
 import { scrape } from './index.js';
+import { ScrapeTimeoutError, withScrapeTimeout } from './lib/scrape-timeout.js';
 
 // Fixed advisory lock ID for the scheduler singleton
 const SCHEDULER_LOCK_ID = 73952;
@@ -32,6 +33,12 @@ let pipelineRunning = false;
 let retrospectiveRunning = false;
 
 const RELOAD_INTERVAL_MS = 60_000;
+
+// Fail-safe ceiling on a single scrape run. A healthy full scrape finishes in
+// 2-3 minutes; 30 minutes is a comfortable upper bound. If a source adapter
+// ever wedges, this prevents `scrapeRunning` from getting stuck `true` and
+// silently killing every future scheduled tick.
+const SCRAPE_MAX_DURATION_MS = 30 * 60_000;
 
 interface ScheduleRow {
 	type: string;
@@ -180,10 +187,14 @@ function registerScrape(cronExpr: string) {
 		scrapeRunning = true;
 		console.log(`[Scheduler] Scrape triggered at ${new Date().toISOString()}`);
 		try {
-			await scrape(undefined, 'scheduled');
+			await withScrapeTimeout(() => scrape(undefined, 'scheduled'), SCRAPE_MAX_DURATION_MS);
 			console.log('[Scheduler] Scrape complete.');
 		} catch (err) {
-			console.error('[Scheduler] Scrape failed:', err);
+			if (err instanceof ScrapeTimeoutError) {
+				console.error(`[Scheduler] FATAL: ${err.message}. Self-healing for next tick.`);
+			} else {
+				console.error('[Scheduler] Scrape failed:', err);
+			}
 		} finally {
 			scrapeRunning = false;
 		}

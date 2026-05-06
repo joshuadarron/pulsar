@@ -1,6 +1,6 @@
-import type { SourceAdapter, ScrapedItem } from './types';
-import { redditSubreddits } from '@pulsar/shared/config/sources';
 import { env } from '@pulsar/shared/config/env';
+import { redditSubreddits } from '@pulsar/shared/config/sources';
+import type { ScrapedItem, SourceAdapter } from './types';
 
 interface RedditPost {
 	data: {
@@ -15,16 +15,28 @@ interface RedditPost {
 	};
 }
 
+// Reddit's edge has, on rare occasions, hung mid-response and never closed the
+// socket, which previously froze the entire scheduled scrape (Node fetch has
+// no default socket timeout). 15s is a comfortable upper bound; healthy
+// responses come back well under 1s.
+const REDDIT_FETCH_TIMEOUT_MS = 15_000;
+
+// If a single subreddit takes longer than this, log it so a future hang has a
+// visible trail. Quiet on the happy path.
+const REDDIT_SLOW_SUBREDDIT_MS = 5_000;
+
 export const reddit: SourceAdapter = async () => {
 	const max = env.scraper.maxItemsPerSource;
 	const perSub = Math.ceil(max / redditSubreddits.length);
 	const items: ScrapedItem[] = [];
 
 	for (const sub of redditSubreddits) {
+		const startedAt = Date.now();
 		try {
 			const url = `https://www.reddit.com/r/${sub}/hot.json?limit=${perSub}`;
 			const res = await fetch(url, {
-				headers: { 'User-Agent': 'pulsar-scraper/0.1' }
+				headers: { 'User-Agent': 'pulsar-scraper/0.1' },
+				signal: AbortSignal.timeout(REDDIT_FETCH_TIMEOUT_MS)
 			});
 			if (!res.ok) continue;
 
@@ -50,6 +62,11 @@ export const reddit: SourceAdapter = async () => {
 			}
 		} catch (err) {
 			console.warn(`Failed to fetch r/${sub}:`, err);
+		} finally {
+			const elapsedMs = Date.now() - startedAt;
+			if (elapsedMs > REDDIT_SLOW_SUBREDDIT_MS) {
+				console.warn(`Slow subreddit r/${sub}: ${elapsedMs}ms`);
+			}
 		}
 	}
 
