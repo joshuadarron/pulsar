@@ -4,29 +4,92 @@
 
 <div align="center">
 
-_Configurable agent framework for market intelligence, content drafting, and other domain workflows. Scrapes free public sources, runs AI analysis, and outputs structured reports plus content drafts for human review._
+_A market intelligence agent for developer ecosystems._
 
 </div>
 
 <p align="center">
-  <a href="https://github.com/JoshuaDarron/pulsar/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/JoshuaDarron/pulsar/ci.yml?branch=main&label=CI&logo=githubactions&logoColor=white" alt="CI"/></a>
-  <img src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript"/>
-  <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 16"/>
-  <img src="https://img.shields.io/badge/Neo4j-5.x-008CC1?logo=neo4j&logoColor=white" alt="Neo4j 5.x"/>
+  <a href="https://github.com/joshuadarron/pulsar/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/joshuadarron/pulsar/ci.yml?branch=main&label=CI&logo=githubactions&logoColor=white" alt="CI"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"/></a>
 </p>
 
-## What Pulsar is
+Pulsar is a market intelligence agent built on [RocketRide](https://github.com/rocketride-org/rocketride-server). It scrapes eight developer-focused sources on a daily schedule, runs the content through pipelines for trend analysis, and produces a daily trend report plus per-platform content drafts. It started as a weekend dogfood project for the content portion of my responsibilities. It is now used internally across three departments at RocketRide and is being prepped as a featured app on [RocketRide Cloud](https://rocketride.ai).
 
-Pulsar is a configurable agent framework. The core (scheduler, scraper, analysis, content drafter, web app) is shared. Domain-specific workflows live as self-contained apps under `packages/apps/`. Each app owns its pipelines, prompts, output schema, and UI.
+## What it does
 
-The first shipping app is [`market-analysis/`](packages/apps/market-analysis/README.md): a daily scrape of free developer sources (Hacker News, Reddit, GitHub, arXiv, Hashnode, Dev.to, Medium, RSS), a multi-pass trend report, and per-platform content drafts. See [`packages/apps/README.md`](packages/apps/README.md) for the full app contract and how to add another app.
+A scheduled run pulls from eight sources (Hacker News, Reddit, GitHub, arXiv, Hashnode, Dev.to, Medium, RSS), enriches and dedupes everything in Postgres, projects the graph into Neo4j, and hands a structured slice to the AI layer.
 
-## Setup
+The trend report is a four-pass pipeline: market snapshot, developer signals, signal interpretations, then an executive summary stitched on top. The output is a single JSONB document that drives the dashboard, the daily email, and an on-demand PDF render.
 
-Prerequisites: Node.js 20+, pnpm, Docker + Docker Compose, and an AI pipeline engine reachable on the `ROCKETRIDE_URI` you set in `.env.local`.
+The content drafter is two-pass. Pass 1 reads the finished report and picks one or more angles, each annotated with the platforms it should target. Pass 2 fans out across the chosen `(angle, platform)` pairs and writes a draft per pair: Hashnode, Medium, Dev.to, Hacker News, LinkedIn, Twitter, Discord. Operator voice samples are loaded only for the platforms the picker selected.
+
+## Adoption
+
+Marketing was the original use case. The trend reports drive the editorial calendar, and the platform drafts seed writing across LinkedIn, X, Medium, Hashnode, and other surfaces. Finance picked it up next, for external benchmarking: salary and equity comparisons against similar startups, funding-market tracking, and identifying geographic gaps in AI adoption. HR was the third, feeding Pulsar's outputs into an internal onboarding application that generates up-to-date new-hire briefs on mission, ICP, market standing, and tracked opportunities.
+
+None of those use cases were the one I designed it for. They emerged from people seeing what the system produced and recognizing it could do more.
+
+## Architecture
+
+The runtime is RocketRide. The agent loop loads operator context once per pass and threads voice context through the drafters. The two-pass content design exists for a reason: it lets pass 1 stay lightweight (no per-format samples) and lets pass 2 inject samples only for the platforms the picker chose, which keeps each draft call's prompt tight.
+
+Scraping is intentionally not in the runtime. It lives in the application layer as a TypeScript module, because scraping a known list of sources is a deterministic problem that does not need an agent. The principle: prepare deterministically, hand the AI layer only what needs non-determinism.
+
+The graph layer runs Louvain community detection and PageRank over the developer-content graph using Neo4j Graph Data Science. The clusters and centrality scores feed directly into the trend report's signal-interpretation pass, so the model is reasoning over an already-summarized topology rather than raw edges.
+
+The eval pipeline is three layers. Structural validators run deterministic checks on output shape and content (no em-dashes, word counts, code-fence integrity, schema conformance). LLM-graded scoring runs a Claude Haiku judge over each draft for qualitative quality. Retrospective grading runs after a 14-day window to score predictions against what actually played out, which feeds back into prompt iteration.
+
+```mermaid
+flowchart LR
+  S[Sources<br/>8 free, public] --> SC[Scraper<br/>TypeScript]
+  SC --> PG[(Postgres<br/>articles_raw + articles)]
+  SC --> N4[(Neo4j<br/>topics + entities)]
+  N4 --> GS[Graph snapshot<br/>Louvain + PageRank]
+  PG --> RR[RocketRide pipelines]
+  GS --> RR
+  RR --> TR[Trend report<br/>4-pass]
+  TR --> AP[Angle picker]
+  AP --> CD[Content drafter<br/>fan-out per angle x platform]
+  TR --> WEB[Next.js dashboard<br/>UI, email, PDF]
+  CD --> WEB
+  TR --> EV[Evals<br/>structural, Haiku, retro]
+  CD --> EV
+```
+
+For the long-form story behind these decisions, the postmortem on three architectural wrong turns is in the Reading section below.
+
+## Reading
+
+The Pulsar Medium series is the canonical depth on the architecture and adoption story.
+
+- **I Expected Pulsar to Land on the Repo Shelf. It Didn't.** How a weekend dogfood project ended up adopted by finance, HR, and marketing.
+- **I Tried to Use My Own Product for Everything. I Had to Redesign Around Using It Where It Makes Sense.** Postmortem on three architectural wrong turns and the principle I should have started with.
+- **The AI Layer Is Not Your Framework.** Where the runtime sits relative to orchestration frameworks, and why the architecture is shaped the way it is.
+- **The Full Stack Is One Layer Deeper. You've Been Building It.** The thesis piece on the AI layer of the stack.
+
+More pieces in the series are in flight, including a graph-database deep-dive. Index of everything I write: [joshuadarron.medium.com](https://joshuadarron.medium.com/).
+
+## Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 15 (App Router), Tailwind, Recharts |
+| Databases | PostgreSQL 16, Neo4j 5.x with Graph Data Science |
+| AI runtime | [RocketRide](https://github.com/rocketride-org/rocketride-server) (WebSocket, pipelines as JSON) |
+| LLM | Claude Sonnet (drafting + reasoning), Claude Haiku (eval scoring) |
+| Sources | 8 free, public developer-focused feeds |
+| Scheduling | node-cron |
+| PDF | Puppeteer (server-side, on-demand) |
+| Auth | NextAuth.js v5 (GitHub) |
+
+The monorepo layout, app contract, and per-package READMEs live under [`packages/`](packages/). The first shipping app is [`packages/apps/market-analysis/`](packages/apps/market-analysis/README.md). To add another app, see [`packages/apps/README.md`](packages/apps/README.md).
+
+## Running it
+
+Prerequisites: Node.js 20+, pnpm, Docker Compose, and a RocketRide server reachable at the `ROCKETRIDE_URI` you set in `.env.local`.
 
 ```bash
-git clone https://github.com/JoshuaDarron/pulsar && cd pulsar
+git clone https://github.com/joshuadarron/pulsar && cd pulsar
 docker-compose up -d
 pnpm install
 cp .env.example .env.local
@@ -35,118 +98,30 @@ pnpm run scrape
 pnpm dev
 ```
 
-`pnpm install` triggers an interactive operator setup the first time it runs. The hook walks you through `.voice/` (how you write) and `.context/` (your org's positioning, audience, hard rules, allowed GitHub logins). Both directories are gitignored.
+`pnpm install` triggers an interactive operator setup the first time it runs. The hook walks you through `.voice/` (how you write) and `.context/` (your org's positioning, audience, hard rules, allowed GitHub logins). Both directories are gitignored. If you ran with `--ignore-scripts`, run `pnpm setup` manually. For scripted setup, pass a YAML config: `pnpm exec pulsar init --from-config <path>`. Full walkthrough in [`packages/cli/README.md`](packages/cli/README.md).
 
-The hook is silent in three cases:
+Pipelines do not hardcode operator-specific knowledge. `loadOperatorContext()` ([`@pulsar/context`](packages/context/README.md)) and `loadVoiceContext()` ([`@pulsar/voice`](packages/voice/README.md)) inject the operator's positioning and voice at runtime, so the same code base serves any operator.
 
-- Non-TTY environments (CI, Docker builds): it prints a skip message and exits 0.
-- Pulsar installed as a transitive dependency: it does nothing.
-- Already configured (`.voice/` and `.context/` both exist): it prints a notice and exits 0.
-
-If you ran `pnpm install --ignore-scripts`, run setup manually:
-
-```bash
-pnpm setup
-```
-
-For CI/CD or scripted setup, pass a YAML config:
-
-```bash
-pnpm exec pulsar init --from-config path/to/your-config.yaml
-```
-
-A worked example config lives at `packages/cli/sample-config.rocketride.yaml`. Operators can rebuild it verbatim with `pulsar init --from-config packages/cli/sample-config.rocketride.yaml`. To wipe and redo setup, add `--reconfigure`.
-
-The full YAML schema, the file shapes written under `.voice/` and `.context/`, and the operator-onboarding walkthrough live in [`packages/cli/README.md`](packages/cli/README.md).
-
-## Configuration loading
-
-Pipelines do not hardcode operator-specific knowledge. Two pure-read loaders inject the operator's voice and context at runtime:
-
-- `loadOperatorContext()` from [`@pulsar/context`](packages/context/README.md) returns positioning, audience, hard rules, glossary, tracked entities, allowed GitHub logins, and grounding URLs from `.context/`.
-- `loadVoiceContext(formats)` from [`@pulsar/voice`](packages/voice/README.md) returns tone rules and up to three writing samples per requested format from `.voice/`.
-
-Both directories are operator-supplied and gitignored. Default locations are `.context/` and `.voice/` at the repo root. Override with `PULSAR_CONTEXT_DIR` and `PULSAR_VOICE_DIR` environment variables.
-
-If `.context/profile.md` or `.voice/profile.md` is missing, the loaders throw `OperatorContextNotConfiguredError` or `VoiceContextNotConfiguredError`. The pipeline runner refuses to start without a configured operator context. Run `pnpm setup` to generate the required files.
-
-## Architecture
-
-Three processes plus one web app:
-
-1. **Scheduler** (`packages/scraper/scheduler.ts`): runs daily at 05:30. Scrapes all sources, then triggers the active app's pipelines (for `market-analysis`: trend-report, content-drafts, email notification) in sequence. When `ENABLE_BACKFILL=true`, it also detects gaps and enqueues historical-backfill jobs.
-2. **Pipeline runner** (`packages/pipeline/runner.ts`): loads `.pipe` files from the active app under `packages/apps/<app>/pipelines/`, threads operator and voice context into every pass, and sends the pipelines to the AI pipeline engine over WebSocket. The trend report runs in four passes; content drafts run as a two-pass design (angle picker, then drafter).
-3. **Backfill worker** (`packages/scraper/backfill/worker.ts`, optional): long-running process that walks Wayback CDX (and per-source archives) to fill `articles_raw` back to 2022-12-01. Holds its own Postgres advisory lock so it never blocks the live scrape. See [`packages/scraper/backfill/README.md`](packages/scraper/backfill/README.md).
-4. **Next.js web app** (`packages/web/`): dashboard for reports, article feed, graph explorer, content drafts review, and on-demand PDF export. Apps re-export their UI components through thin shims under `packages/web/app/(dashboard)/` so the URLs stay stable.
-
-The single `report_data` JSONB column is the source of truth for UI, email, and PDF rendering. Charts are pre-snapshotted into `report_data.charts` at generation time so the three render paths stay consistent.
-
-## Stack
-
-| Layer | Technology |
-|---|---|
-| Runtime | Node.js 20+, pnpm (workspaces) |
-| Web framework | Next.js 15 (App Router) |
-| Databases | PostgreSQL 16 + Neo4j 5.x (Docker Compose) |
-| AI | RocketRide (WebSocket on port 5565, pipelines as JSON), Claude Sonnet 4.6 via `llm_anthropic` |
-| Auth | NextAuth.js v5 (GitHub) |
-| Charts | Recharts (UI), inline SVG helpers (email/PDF) |
-| PDF | Puppeteer (server-side, on-demand) |
-| Styling | Tailwind CSS |
-| Scheduling | node-cron |
-
-## Monorepo structure
-
-```
-packages/
-  shared/               @pulsar/shared              Config, DB clients, types, utilities
-  scraper/              @pulsar/scraper             Data collection process (with optional backfill subsystem)
-  pipeline/             @pulsar/pipeline            AI pipeline runner
-  voice/                @pulsar/voice               Voice profile + sample loader
-  context/              @pulsar/context             Operator context loader
-  cli/                  @pulsar/cli                 Setup CLI (pulsar init, pulsar setup, postinstall hook)
-  web/                  @pulsar/web                 Next.js app (UI + API routes)
-  apps/
-    market-analysis/    @pulsar/app-market-analysis Trend report + content drafts app (pipelines, prompts, UI)
-```
-
-## Commands
+Common commands:
 
 | Command | Description |
 |---|---|
-| `pnpm install` | Install workspace dependencies. Triggers interactive setup on first run. |
-| `pnpm setup` | Run interactive operator setup manually (fallback for `--ignore-scripts`). Add `--reconfigure` to wipe `.voice/` and `.context/` first. |
-| `pnpm dev` | Start the Next.js dev server. |
-| `pnpm run scrape` | Manual full scrape (all sources). |
-| `pnpm run scrape -- --source=hackernews` | Scrape a single source. |
-| `pnpm run pipeline` | Manual pipeline run. Loads `.pipe` files from the active app. |
-| `pnpm run pipeline -- --content-only --report-id=<uuid>` | Re-run content drafts against an existing report. |
-| `pnpm run scrape-scheduler` | Start the scheduler (scrape at 05:30, pipeline after). |
-| `pnpm run backfill -- --source=<name> --from=YYYY-MM-DD --to=YYYY-MM-DD` | Manually enqueue a historical backfill job. |
-| `pnpm run backfill-worker` | Start the long-running backfill worker. |
-| `pnpm run db:migrate` | Run database migrations. |
-| `pnpm build` | Production build. |
-| `pnpm test` | Run the test suite. |
-| `pnpm typecheck` | Type-check every workspace. |
+| `pnpm dev` | Start the Next.js dev server |
+| `pnpm run scrape` | Run a manual full scrape |
+| `pnpm run scrape -- --source=hackernews` | Scrape a single source |
+| `pnpm run pipeline` | Run the active app's pipelines manually |
+| `pnpm run scrape-scheduler` | Start the scheduler (scrape, then pipelines) |
+| `pnpm run backfill-worker` | Start the historical-backfill worker (gated by `ENABLE_BACKFILL`) |
+| `pnpm test` | Run the test suite |
+| `pnpm typecheck` | Type-check every workspace |
 
-## Adding a new source
+## Status
 
-1. Create `packages/scraper/sources/mysource.ts` implementing `SourceAdapter`:
+Pulsar is in active internal use. It is being prepped as a featured public-facing application on [RocketRide Cloud](https://rocketride.ai), where anyone running the runtime can view it, run it, or fork it. The runtime itself is open source and MIT-licensed.
 
-```typescript
-import type { SourceAdapter, ScrapedItem } from "@pulsar/shared/types";
+The codebase moves. The Medium series describes the system at the time each piece was written; if you are reading the code and find a delta, the code is the source of truth. More articles in the series are coming.
 
-export const mysource: SourceAdapter = async () => {
-  // Fetch and return ScrapedItem[]
-};
-```
-
-2. Register it in `packages/scraper/sources/index.ts`.
-3. Run with `pnpm run scrape -- --source=mysource`.
-
-## Adding a new app
-
-See [`packages/apps/README.md`](packages/apps/README.md) for the app contract, the directory layout, and the steps to scaffold a new app.
+Maintained by [Joshua Phillips](https://github.com/joshuadarron).
 
 ## License
 
