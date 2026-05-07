@@ -15,6 +15,60 @@ _A market intelligence agent for developer ecosystems._
 
 Pulsar is a market intelligence agent built on [RocketRide](https://github.com/rocketride-org/rocketride-server). It scrapes eight developer-focused sources on a daily schedule, runs the content through pipelines for trend analysis, and produces a daily trend report plus per-platform content drafts. It started as a weekend dogfood project for the content portion of my responsibilities. It is now used internally across three departments at RocketRide and is being prepped as a featured app on [RocketRide Cloud](https://rocketride.ai).
 
+## Setup
+
+1. Clone the repo.
+
+   ```bash
+   git clone https://github.com/joshuadarron/pulsar && cd pulsar
+   ```
+
+2. Install. The postinstall hook walks you through `.voice/` and `.context/`, then brings up Docker Compose, copies `.env.example` to `.env.local`, waits for Postgres, and runs the database migrations.
+
+   ```bash
+   pnpm install
+   ```
+
+3. Edit `.env.local` to fill in `ROCKETRIDE_APIKEY`, `ROCKETRIDE_ANTHROPIC_KEY`, and any other secrets, then start the dashboard.
+
+   ```bash
+   pnpm dev
+   ```
+
+If you ran step 2 with `--ignore-scripts`, run `pnpm setup` manually. For scripted setup, pass a YAML config: `pnpm exec pulsar init --from-config <path>`. The full walkthrough is in [`packages/cli/README.md`](packages/cli/README.md).
+
+Pipelines do not hardcode operator-specific knowledge. `loadOperatorContext()` ([`@pulsar/context`](packages/context/README.md)) and `loadVoiceContext()` ([`@pulsar/voice`](packages/voice/README.md)) inject the operator's positioning and voice at runtime, so the same code base serves any operator.
+
+Common commands:
+
+| Command | Description |
+|---|---|
+| `pnpm dev` | Start the Next.js dev server |
+| `pnpm run scrape` | Run a manual full scrape |
+| `pnpm run scrape -- --source=hackernews` | Scrape a single source |
+| `pnpm run pipeline` | Run the active app's pipelines manually |
+| `pnpm run scrape-scheduler` | Start the scheduler (scrape, then pipelines) |
+| `pnpm run backfill-worker` | Start the historical-backfill worker (gated by `ENABLE_BACKFILL`) |
+| `pnpm test` | Run the test suite |
+| `pnpm typecheck` | Type-check every workspace |
+
+## Requirements
+
+Local prerequisites: Node.js 20+, pnpm, and Docker Compose. You also need a RocketRide server reachable at the `ROCKETRIDE_URI` you set in `.env.local`.
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 15 (App Router), Tailwind, Recharts |
+| Databases | PostgreSQL 16, Neo4j 5.x with Graph Data Science |
+| AI runtime | [RocketRide](https://github.com/rocketride-org/rocketride-server) (WebSocket, pipelines as JSON) |
+| LLM | Claude Sonnet (drafting + reasoning), Claude Haiku (eval scoring) |
+| Sources | 8 free, public developer-focused feeds |
+| Scheduling | node-cron |
+| PDF | Puppeteer (server-side, on-demand) |
+| Auth | NextAuth.js v5 (GitHub) |
+
+The monorepo layout, app contract, and per-package READMEs live under [`packages/`](packages/). The first shipping app is [`packages/apps/market-analysis/`](packages/apps/market-analysis/README.md). To add another app, see [`packages/apps/README.md`](packages/apps/README.md).
+
 ## What it does
 
 A scheduled run pulls from eight sources (Hacker News, Reddit, GitHub, arXiv, Hashnode, Dev.to, Medium, RSS), enriches and dedupes everything in Postgres, projects the graph into Neo4j, and hands a structured slice to the AI layer.
@@ -68,52 +122,6 @@ The Pulsar Medium series is the canonical depth on the architecture and adoption
 - **The Full Stack Is One Layer Deeper. You've Been Building It.** The thesis piece on the AI layer of the stack.
 
 More pieces in the series are in flight, including a graph-database deep-dive. Index of everything I write: [joshuadarron.medium.com](https://joshuadarron.medium.com/).
-
-## Stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | Next.js 15 (App Router), Tailwind, Recharts |
-| Databases | PostgreSQL 16, Neo4j 5.x with Graph Data Science |
-| AI runtime | [RocketRide](https://github.com/rocketride-org/rocketride-server) (WebSocket, pipelines as JSON) |
-| LLM | Claude Sonnet (drafting + reasoning), Claude Haiku (eval scoring) |
-| Sources | 8 free, public developer-focused feeds |
-| Scheduling | node-cron |
-| PDF | Puppeteer (server-side, on-demand) |
-| Auth | NextAuth.js v5 (GitHub) |
-
-The monorepo layout, app contract, and per-package READMEs live under [`packages/`](packages/). The first shipping app is [`packages/apps/market-analysis/`](packages/apps/market-analysis/README.md). To add another app, see [`packages/apps/README.md`](packages/apps/README.md).
-
-## Running it
-
-Prerequisites: Node.js 20+, pnpm, Docker Compose, and a RocketRide server reachable at the `ROCKETRIDE_URI` you set in `.env.local`.
-
-```bash
-git clone https://github.com/joshuadarron/pulsar && cd pulsar
-docker-compose up -d
-pnpm install
-cp .env.example .env.local
-pnpm run db:migrate
-pnpm run scrape
-pnpm dev
-```
-
-`pnpm install` triggers an interactive operator setup the first time it runs. The hook walks you through `.voice/` (how you write) and `.context/` (your org's positioning, audience, hard rules, allowed GitHub logins). Both directories are gitignored. If you ran with `--ignore-scripts`, run `pnpm setup` manually. For scripted setup, pass a YAML config: `pnpm exec pulsar init --from-config <path>`. Full walkthrough in [`packages/cli/README.md`](packages/cli/README.md).
-
-Pipelines do not hardcode operator-specific knowledge. `loadOperatorContext()` ([`@pulsar/context`](packages/context/README.md)) and `loadVoiceContext()` ([`@pulsar/voice`](packages/voice/README.md)) inject the operator's positioning and voice at runtime, so the same code base serves any operator.
-
-Common commands:
-
-| Command | Description |
-|---|---|
-| `pnpm dev` | Start the Next.js dev server |
-| `pnpm run scrape` | Run a manual full scrape |
-| `pnpm run scrape -- --source=hackernews` | Scrape a single source |
-| `pnpm run pipeline` | Run the active app's pipelines manually |
-| `pnpm run scrape-scheduler` | Start the scheduler (scrape, then pipelines) |
-| `pnpm run backfill-worker` | Start the historical-backfill worker (gated by `ENABLE_BACKFILL`) |
-| `pnpm test` | Run the test suite |
-| `pnpm typecheck` | Type-check every workspace |
 
 ## Status
 
