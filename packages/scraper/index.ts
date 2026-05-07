@@ -1,18 +1,25 @@
-import { sources } from './sources/index.js';
-import { hashUrl, exists } from './dedup.js';
+import { query } from '@pulsar/shared/db/postgres';
+import { logRun } from '@pulsar/shared/run-logger';
+import { exists, hashUrl } from './dedup.js';
 import {
-	extractKeywords,
-	extractEntities,
-	categorizeSource,
 	analyzeSentiment,
+	categorizeSource,
 	classifyContentType,
+	extractEntities,
+	extractKeywords,
 	extractSummary
 } from './extract.js';
 import { writeArticleToGraph } from './graph-writer.js';
-import { updateTrendScores } from './trend-scorer.js';
-import { query } from '@pulsar/shared/db/postgres';
 import { withRetry } from './lib/retry.js';
-import { logRun } from '@pulsar/shared/run-logger';
+import { withSourceTimeout } from './lib/scrape-timeout.js';
+import { sources } from './sources/index.js';
+import { updateTrendScores } from './trend-scorer.js';
+
+// Per-source ceiling. Healthy adapters return well under 30s; 90s leaves
+// generous headroom for slow sources (RSS fan-out, GitHub rate-limit waits)
+// while guaranteeing one bad source cannot wedge the whole scheduler. Inner
+// network timeouts still guard each individual HTTP call.
+const SOURCE_TIMEOUT_MS = 90_000;
 
 export async function scrape(sourceFilter?: string, trigger: 'scheduled' | 'manual' = 'manual') {
 	// Atomic DB-level lock: the unique partial index on (run_type) WHERE status = 'running'
@@ -80,7 +87,11 @@ export async function scrape(sourceFilter?: string, trigger: 'scheduled' | 'manu
 	for (const [name, adapter] of Object.entries(adapters)) {
 		await logRun(runId, 'info', name, `Scraping ${name}...`);
 		try {
-			const items = await withRetry(() => adapter(), 3, 2000);
+			const items = await withRetry(
+				() => withSourceTimeout(name, () => adapter(), SOURCE_TIMEOUT_MS),
+				3,
+				2000
+			);
 			totalScraped += items.length;
 			await logRun(runId, 'info', name, `Fetched ${items.length} items from ${name}`);
 
