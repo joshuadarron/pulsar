@@ -174,12 +174,19 @@ async function readProjectId(filepath: string): Promise<string | undefined> {
 	}
 }
 
+function isServerNotConnected(err: unknown): boolean {
+	return err instanceof Error && err.message === 'Server is not connected';
+}
+
 /**
  * Centralized chokepoint for invoking a RocketRide pipeline.
  *
  * - Re-resolves `getClient()` so a stale (mid-reconnect) client doesn't bubble
  *   "Server is not connected" up the stack on the first call after a long
  *   non-WS phase (e.g. graph-snapshot, native-fetch context).
+ * - On a "Server is not connected" failure (the SDK's `isConnected()` flag
+ *   can lag behind a silent server-side close), force a disconnect and one
+ *   reconnect+retry before giving up.
  * - Always sets `pipelineTraceLevel: 'summary'` so FLOW events fire in the
  *   observability listener.
  * - Registers the returned token (plus project_id and any source the SDK
@@ -204,9 +211,35 @@ export async function usePipeline(
 
 	// Always resolve via getClient() so a dropped/reconnecting WS triggers a
 	// fresh connect rather than throwing "Server is not connected" on use().
-	const client = await getClient();
+	let client = await getClient();
 
-	const response = await client.use({ filepath: resolvedPath, pipelineTraceLevel: 'full' });
+	// Single-shot retry on "Server is not connected": isConnected() can lag the
+	// real transport state after a silent server-side close (observed after a
+	// long non-WS phase like graph-snapshot). Force a clean reconnect and try
+	// once more before surfacing the error.
+	let response: Awaited<ReturnType<RocketRideClient['use']>>;
+	try {
+		response = await client.use({ filepath: resolvedPath, pipelineTraceLevel: 'full' });
+	} catch (err) {
+		if (!isServerNotConnected(err)) throw err;
+		console.warn(
+			`[RocketRide] use(${basename}) hit stale connection; forcing reconnect and retrying once.`
+		);
+		try {
+			await logRun(
+				runId,
+				'warn',
+				`rr:${basename}:reconnect`,
+				'RocketRide WS appeared connected but use() failed; reconnecting and retrying once',
+				'rocketride'
+			);
+		} catch (logErr) {
+			console.warn('[RocketRide] failed to write reconnect-warn log:', logErr);
+		}
+		await disconnectClient();
+		client = await getClient();
+		response = await client.use({ filepath: resolvedPath, pipelineTraceLevel: 'full' });
+	}
 
 	const useResp = response as Record<string, unknown> & { token: string };
 	const projectIdFromResp =

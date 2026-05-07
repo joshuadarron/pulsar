@@ -146,10 +146,7 @@ function buildEntityImportance(rows: PageRankRow[]): GraphSnapshotEntity[] {
 	}));
 }
 
-async function runGraphSnapshot(
-	_client: Awaited<ReturnType<typeof getClient>>,
-	runId: string
-): Promise<string | null> {
+async function runGraphSnapshot(runId: string): Promise<string | null> {
 	const session = getSession();
 	try {
 		await logRun(
@@ -1362,16 +1359,16 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 			throw err;
 		}
 
-		client = await getClient();
-		await logRun(runId, 'info', 'init', 'Connected to RocketRide');
-
-		// Compute graph snapshot first (deterministic GDS algorithms over Neo4j)
-		const snapshotId = await runGraphSnapshot(client, runId);
+		// Compute graph snapshot first (deterministic GDS algorithms over Neo4j;
+		// no RocketRide WS needed). We defer `getClient()` until after this so
+		// the WebSocket cannot sit idle through the multi-second snapshot phase
+		// and silently die before the first `client.use()`.
+		const snapshotId = await runGraphSnapshot(runId);
 		if (!snapshotId) {
 			await warnIfSnapshotStale(runId);
 		}
 
-		// Fetch RocketRide product context once for both pipelines
+		// Fetch RocketRide product context (HTTP + Firecrawl, not the WS client).
 		await logRun(runId, 'info', 'context', 'Fetching RocketRide product context...');
 		const rocketrideContext = await fetchRocketRideContext(runId);
 		if (rocketrideContext) {
@@ -1385,6 +1382,12 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 				? `RocketRide context fetched (${rocketrideContext.fetched_at})`
 				: 'Failed to fetch RocketRide context, proceeding without it'
 		);
+
+		// Open the RocketRide WS now, immediately before the first pipeline use.
+		// `usePipeline()` re-resolves and one-shot-retries on stale connections,
+		// but minimizing the idle window is the cheapest first line of defense.
+		client = await getClient();
+		await logRun(runId, 'info', 'init', 'Connected to RocketRide');
 
 		// Sequential pipeline execution: trend report, predictions extraction, content drafts
 		const reportId = await runTrendReport(
