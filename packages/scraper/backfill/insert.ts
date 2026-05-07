@@ -35,11 +35,14 @@ export async function insertBackfilledItems(
 		const urlHash = hashUrl(item.url);
 
 		try {
-			await executor.query(
+			// The unique index on composite_hash is partial
+			// (`WHERE composite_hash IS NOT NULL`), so the ON CONFLICT predicate
+			// must include the same WHERE clause for Postgres to match it.
+			const result = await executor.query(
 				`INSERT INTO articles_raw
            (url_hash, url, raw_payload, source_name, source_origin, composite_hash, backfill_run_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (composite_hash) DO NOTHING`,
+         ON CONFLICT (composite_hash) WHERE composite_hash IS NOT NULL DO NOTHING`,
 				[
 					urlHash,
 					item.url,
@@ -50,7 +53,7 @@ export async function insertBackfilledItems(
 					backfillRunId
 				]
 			);
-			inserted += 1;
+			if ((result.rowCount ?? 0) > 0) inserted += 1;
 		} catch (err: unknown) {
 			// url_hash UNIQUE collisions with a live row are expected when wayback
 			// rediscovers a URL we already have live. Treat as a skip, not an error.

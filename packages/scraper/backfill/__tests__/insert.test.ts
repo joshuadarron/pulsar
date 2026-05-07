@@ -68,6 +68,10 @@ describe('insertBackfilledItems', () => {
 		assert.equal(inserted, 1);
 		const insertCall = calls.find((c) => /INSERT INTO articles_raw/.test(c.sql));
 		assert.ok(insertCall, 'expected an INSERT call');
+		// The unique index on composite_hash is partial; the ON CONFLICT predicate
+		// must match it or Postgres rejects with "no unique or exclusion constraint
+		// matching the ON CONFLICT specification".
+		assert.match(insertCall.sql, /ON CONFLICT \(composite_hash\) WHERE composite_hash IS NOT NULL/);
 		const params = insertCall.params;
 		// (urlHash, url, raw_payload, source_name, source_origin, composite_hash, backfill_run_id)
 		assert.equal(params[1], 'https://example.com/a');
@@ -76,6 +80,21 @@ describe('insertBackfilledItems', () => {
 		// composite_hash is 64-char hex.
 		assert.match(String(params[5]), /^[a-f0-9]{64}$/);
 		assert.equal(params[6], 'run-xyz');
+	});
+
+	it('does not count a row when ON CONFLICT silently skips the INSERT', async () => {
+		// `INSERT ... ON CONFLICT DO NOTHING` returns rowCount=0 on conflict
+		// without throwing. The counter must not increment in that case.
+		const handler: QueryHandler = (sql) => {
+			if (/SELECT 1 FROM articles_raw WHERE composite_hash/.test(sql)) {
+				return { rows: [], rowCount: 0 };
+			}
+			return { rows: [], rowCount: 0 };
+		};
+		const { executor } = makeExecutor(handler);
+
+		const inserted = await insertBackfilledItems(executor, [buildItem()], 'run-1');
+		assert.equal(inserted, 0);
 	});
 
 	it('defaults source_origin to wayback when item leaves it unset', async () => {
