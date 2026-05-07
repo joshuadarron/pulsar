@@ -120,13 +120,32 @@ const GAP_THRESHOLDS_DAYS: Record<string, number> = {
 	rss: 14
 };
 
+// Map adapter key to the `sourcePlatform` value(s) the live adapters write into
+// `articles_raw.raw_payload`. `articles_raw.source_name` stores display names
+// (e.g. "Hacker News", "r/golang") that do not match the adapter key, so we
+// look up by platform instead. The 'rss' adapter emits both 'rss' and
+// 'substack' platforms, so its key fans out.
+const SOURCE_PLATFORMS: Record<string, string[]> = {
+	arxiv: ['arxiv'],
+	devto: ['devto'],
+	github: ['github'],
+	hackernews: ['hackernews'],
+	hashnode: ['hashnode'],
+	medium: ['medium'],
+	reddit: ['reddit'],
+	rss: ['rss', 'substack']
+};
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 async function getLastIngestForSource(source: string): Promise<Date | null> {
+	const platforms = SOURCE_PLATFORMS[source];
+	if (!platforms || platforms.length === 0) return null;
 	const result = await query<{ last_at: Date | null }>(
 		`SELECT MAX(scraped_at) AS last_at FROM articles_raw
-     WHERE source_name = $1 AND source_origin = 'live'`,
-		[source]
+     WHERE source_origin = 'live'
+       AND raw_payload->>'sourcePlatform' = ANY($1::text[])`,
+		[platforms]
 	);
 	const row = result.rows[0];
 	return row?.last_at ?? null;

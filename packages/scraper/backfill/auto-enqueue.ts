@@ -57,15 +57,19 @@ export async function maybeAutoEnqueue(executor: DbExecutor): Promise<AutoEnqueu
 }
 
 /**
- * True if a backfill_runs row already exists for this source whose window
- * spans (window_start <= FIRST_DEPLOY_FROM) AND (window_end >= FIRST_DEPLOY_FROM).
- * Status is intentionally not filtered: a queued or running first-deploy run
- * already covers the source.
+ * True if a non-failed backfill_runs row already exists for this source whose
+ * window spans (window_start <= FIRST_DEPLOY_FROM) AND (window_end >= FIRST_DEPLOY_FROM).
+ * Failed runs are intentionally excluded so they no longer act as a permanent
+ * shield against retries. Queued, running, and complete runs all count as
+ * covered (a complete run with zero ingested still represents a finished
+ * attempt; rerunning it auto-magically would mask the problem). Operators
+ * who want to retry a "complete with 0 items" run should delete the row.
  */
 async function isAlreadyCovered(executor: DbExecutor, source: string): Promise<boolean> {
 	const result = await executor.query<{ id: string }>(
 		`SELECT id FROM backfill_runs
      WHERE source_name = $1
+       AND status <> 'failed'
        AND window_start <= $2
        AND window_end >= $2
      LIMIT 1`,

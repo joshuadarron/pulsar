@@ -102,6 +102,33 @@ describe('maybeAutoEnqueue', () => {
 		);
 	});
 
+	it('coverage check excludes failed runs so a failed first-deploy can be retried', async () => {
+		envModule.env.backfill.enabled = true;
+		let capturedCoverageSql: string | null = null;
+		const handler: QueryHandler = (sql) => {
+			if (/SELECT source_name, COUNT/.test(sql)) {
+				return { rows: [{ source_name: 'arxiv', count: '0' }], rowCount: 1 };
+			}
+			if (/SELECT id FROM backfill_runs/.test(sql)) {
+				capturedCoverageSql = sql;
+				return { rows: [], rowCount: 0 };
+			}
+			if (/INSERT INTO backfill_runs/.test(sql)) {
+				return { rows: [{ id: 'run-1' }], rowCount: 1 };
+			}
+			if (/INSERT INTO backfill_jobs/.test(sql)) {
+				return { rows: [{ id: 'job-1' }], rowCount: 1 };
+			}
+			return { rows: [], rowCount: 0 };
+		};
+		const { executor } = makeExecutor(handler);
+
+		const out = await maybeAutoEnqueue(executor);
+		assert.deepEqual(out.enqueued, ['arxiv']);
+		assert.ok(capturedCoverageSql, 'expected coverage check');
+		assert.match(capturedCoverageSql!, /status <> 'failed'/);
+	});
+
 	it('skips sources at or above the threshold', async () => {
 		envModule.env.backfill.enabled = true;
 		const handler: QueryHandler = (sql) => {
