@@ -2,6 +2,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runBootstrap } from './bootstrap.js';
 import { initInteractive } from './init-interactive.js';
 
 export type PostinstallResult =
@@ -27,9 +28,11 @@ export type PostinstallEnv = {
  *      from process.cwd(). Skip silently. (pnpm sets INIT_CWD to the directory
  *      where the user originally invoked `pnpm install`. When that matches the
  *      package-being-installed cwd, we are at the Pulsar repo root.)
- *   3. Already configured: both .voice/ and .context/ exist. Log and exit 0.
+ *   3. Already configured: both .voice/ and .context/ exist. Skip the
+ *      interactive flow but still run the local bootstrap (Docker, env file,
+ *      migrations) so a fresh clone is one `pnpm install` away from runnable.
  *
- * Otherwise, hand off to the interactive flow.
+ * Otherwise, hand off to the interactive flow, then bootstrap.
  */
 export async function runPostinstall(env: PostinstallEnv): Promise<PostinstallResult> {
 	if (!env.isTTY) {
@@ -47,12 +50,14 @@ export async function runPostinstall(env: PostinstallEnv): Promise<PostinstallRe
 
 	if (existsSync(voiceDir) && existsSync(contextDir)) {
 		console.log('Pulsar already configured. Run pnpm setup --reconfigure to reset.');
+		await tryBootstrap(env.cwd);
 		return { action: 'skipped-configured' };
 	}
 
 	try {
 		const result = await initInteractive({ cwd: env.cwd });
 		console.log(`Wrote ${result.files.length} files to .voice/ and .context/`);
+		await tryBootstrap(env.cwd);
 		return { action: 'configured', filesWritten: result.files.length };
 	} catch (err) {
 		if (isExitPromptError(err)) {
@@ -63,6 +68,20 @@ export async function runPostinstall(env: PostinstallEnv): Promise<PostinstallRe
 		console.error('Pulsar setup failed:', message);
 		// Do not fail the install. Setup can be re-run manually.
 		return { action: 'error', message };
+	}
+}
+
+/**
+ * Run the local bootstrap (env file, Docker, Postgres wait, migrations).
+ * Errors are logged but never thrown so the install still succeeds; the user
+ * can re-run any step from the README's command table.
+ */
+async function tryBootstrap(cwd: string): Promise<void> {
+	try {
+		await runBootstrap({ cwd });
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		console.warn(`Pulsar bootstrap encountered an error: ${message}`);
 	}
 }
 

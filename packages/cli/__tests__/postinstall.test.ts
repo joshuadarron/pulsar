@@ -18,9 +18,29 @@ const initSpy = mock.fn<InitFn>(async () => ({
 	files: ['a.md', 'b.md', 'c.md']
 }));
 
+type BootstrapFn = (opts: { cwd: string }) => Promise<{
+	envCopied: 'ok' | 'skipped' | 'failed';
+	docker: 'ok' | 'skipped' | 'failed';
+	postgres: 'ok' | 'skipped' | 'failed';
+	migrate: 'ok' | 'skipped' | 'failed';
+}>;
+
+const bootstrapSpy = mock.fn<BootstrapFn>(async () => ({
+	envCopied: 'skipped',
+	docker: 'skipped',
+	postgres: 'skipped',
+	migrate: 'skipped'
+}));
+
 mock.module('../src/init-interactive.js', {
 	namedExports: {
 		initInteractive: initSpy
+	}
+});
+
+mock.module('../src/bootstrap.js', {
+	namedExports: {
+		runBootstrap: bootstrapSpy
 	}
 });
 
@@ -46,6 +66,7 @@ describe('runPostinstall', () => {
 			errors.push(String(msg));
 		};
 		initSpy.mock.resetCalls();
+		bootstrapSpy.mock.resetCalls();
 	});
 
 	afterEach(() => {
@@ -86,7 +107,7 @@ describe('runPostinstall', () => {
 			}
 		});
 
-		it('skips with already-configured message when both .voice and .context exist', async () => {
+		it('skips interactive setup when both .voice and .context exist but still bootstraps', async () => {
 			mkdirSync(path.join(tmp, '.voice'));
 			mkdirSync(path.join(tmp, '.context'));
 			const result = await runPostinstall({
@@ -96,6 +117,7 @@ describe('runPostinstall', () => {
 			});
 			assert.deepEqual(result, { action: 'skipped-configured' });
 			assert.equal(initSpy.mock.callCount(), 0);
+			assert.equal(bootstrapSpy.mock.callCount(), 1);
 			assert.ok(
 				logs.some((line) => line.includes('Pulsar already configured')),
 				`expected configured log; got ${logs.join(' | ')}`
@@ -115,7 +137,7 @@ describe('runPostinstall', () => {
 	});
 
 	describe('successful path', () => {
-		it('invokes the interactive flow and reports file count', async () => {
+		it('invokes the interactive flow, then bootstrap, and reports file count', async () => {
 			const result = await runPostinstall({
 				cwd: tmp,
 				isTTY: true,
@@ -123,16 +145,31 @@ describe('runPostinstall', () => {
 			});
 			assert.deepEqual(result, { action: 'configured', filesWritten: 3 });
 			assert.equal(initSpy.mock.callCount(), 1);
+			assert.equal(bootstrapSpy.mock.callCount(), 1);
 		});
 
-		it('passes the cwd to the interactive flow', async () => {
+		it('passes the cwd to the interactive flow and the bootstrap', async () => {
 			await runPostinstall({
 				cwd: tmp,
 				isTTY: true,
 				initCwd: tmp
 			});
-			const callArg = initSpy.mock.calls[0]?.arguments[0];
-			assert.equal(callArg?.cwd, tmp);
+			assert.equal(initSpy.mock.calls[0]?.arguments[0]?.cwd, tmp);
+			assert.equal(bootstrapSpy.mock.calls[0]?.arguments[0]?.cwd, tmp);
+		});
+
+		it('does not run bootstrap when the operator cancels the interactive flow', async () => {
+			initSpy.mock.mockImplementationOnce(async () => {
+				const err = new Error('User cancelled');
+				err.name = 'ExitPromptError';
+				throw err;
+			});
+			await runPostinstall({
+				cwd: tmp,
+				isTTY: true,
+				initCwd: tmp
+			});
+			assert.equal(bootstrapSpy.mock.callCount(), 0);
 		});
 	});
 
