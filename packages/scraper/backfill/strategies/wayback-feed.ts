@@ -139,6 +139,7 @@ function makeWaybackFeedStrategy(sourceName: string): Strategy {
 	return async (ctx: StrategyContext): Promise<StrategyResult> => {
 		const items: ScrapedItem[] = [];
 		const errors: string[] = [];
+		const warnings: string[] = [];
 		const feedSources = buildFeedSources(sourceName);
 		const seen = new Set<string>();
 
@@ -153,9 +154,15 @@ function makeWaybackFeedStrategy(sourceName: string): Strategy {
 				continue;
 			}
 
+			let snapshotsFetched = 0;
+			let snapshotsParsed = 0;
+			let entriesParsed = 0;
+			let keptInWindow = 0;
+
 			try {
 				for await (const { entry, html } of stream) {
 					if (ctx.signal?.aborted) break;
+					snapshotsFetched++;
 					const snapshotDate = timestampToDate(entry.timestamp);
 					if (!snapshotDate) {
 						errors.push(`${sourceName} entry has invalid timestamp: ${entry.timestamp}`);
@@ -174,11 +181,14 @@ function makeWaybackFeedStrategy(sourceName: string): Strategy {
 					}
 
 					if (parsed.length === 0) continue;
+					snapshotsParsed++;
+					entriesParsed += parsed.length;
 
 					for (const item of parsed) {
 						if (!isWithinWindow(item.publishedAt, ctx.windowStart, ctx.windowEnd)) continue;
 						if (seen.has(item.url)) continue;
 						seen.add(item.url);
+						keptInWindow++;
 						items.push({
 							url: item.url,
 							title: item.title,
@@ -197,9 +207,13 @@ function makeWaybackFeedStrategy(sourceName: string): Strategy {
 				const message = err instanceof Error ? err.message : String(err);
 				errors.push(`${sourceName} ${feed.urlPattern} stream failed: ${message}`);
 			}
+
+			warnings.push(
+				`${sourceName} ${feed.urlPattern}: snapshots=${snapshotsFetched} parsed=${snapshotsParsed} entries=${entriesParsed} keptInWindow=${keptInWindow}`
+			);
 		}
 
-		return { items, errors };
+		return { items, errors, warnings };
 	};
 }
 

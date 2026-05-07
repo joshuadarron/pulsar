@@ -17,10 +17,14 @@ export type StrategyContext = {
  * Strategy output. `items` are emitted ScrapedItems with `sourceOrigin` and
  * `backfillRunId` set. `errors` collects non-fatal per-entry failures so the
  * worker can persist a partial-success summary on the backfill_run row.
+ * `warnings` collects diagnostic counters (e.g. "0 CDX entries for X")
+ * that should be visible to operators even when the run completes without
+ * a thrown error. The worker persists both arrays alongside the run.
  */
 export type StrategyResult = {
 	items: ScrapedItem[];
 	errors: string[];
+	warnings?: string[];
 };
 
 export type Strategy = (ctx: StrategyContext) => Promise<StrategyResult>;

@@ -66,11 +66,24 @@ export async function claimJobs(
 	return result.rows.map(rowToJob);
 }
 
-/** Mark a claimed job as complete with the count of articles ingested. */
+export type CompleteJobDiagnostics = {
+	errors?: string[];
+	warnings?: string[];
+};
+
+/**
+ * Mark a claimed job as complete with the count of articles ingested. Any
+ * non-fatal errors or diagnostic warnings the strategy collected are appended
+ * to `backfill_runs.errors` so a "complete with 0 items" run is still
+ * diagnosable from the DB without grepping worker logs. Errors are recorded
+ * with severity "error" and warnings with severity "warning" so the row
+ * shape reads back unambiguously.
+ */
 export async function completeJob(
 	executor: DbExecutor,
 	jobId: string,
-	articlesIngested: number
+	articlesIngested: number,
+	diagnostics: CompleteJobDiagnostics = {}
 ): Promise<void> {
 	await executor.query(
 		`UPDATE backfill_jobs
@@ -78,13 +91,35 @@ export async function completeJob(
      WHERE id = $1`,
 		[jobId]
 	);
+
+	const entries: { severity: 'error' | 'warning'; message: string }[] = [];
+	for (const message of diagnostics.errors ?? []) {
+		entries.push({ severity: 'error', message });
+	}
+	for (const message of diagnostics.warnings ?? []) {
+		entries.push({ severity: 'warning', message });
+	}
+
+	if (entries.length === 0) {
+		await executor.query(
+			`UPDATE backfill_runs
+       SET articles_ingested = articles_ingested + $2,
+           status = 'complete',
+           completed_at = now()
+       WHERE id = (SELECT backfill_run_id FROM backfill_jobs WHERE id = $1)`,
+			[jobId, articlesIngested]
+		);
+		return;
+	}
+
 	await executor.query(
 		`UPDATE backfill_runs
      SET articles_ingested = articles_ingested + $2,
          status = 'complete',
-         completed_at = now()
+         completed_at = now(),
+         errors = COALESCE(errors, '[]'::jsonb) || $3::jsonb
      WHERE id = (SELECT backfill_run_id FROM backfill_jobs WHERE id = $1)`,
-		[jobId, articlesIngested]
+		[jobId, articlesIngested, JSON.stringify(entries)]
 	);
 }
 

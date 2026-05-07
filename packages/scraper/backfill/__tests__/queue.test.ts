@@ -117,6 +117,28 @@ describe('completeJob', () => {
 		assert.match(calls[1].sql, /UPDATE backfill_runs/);
 		assert.match(calls[1].sql, /articles_ingested = articles_ingested \+ \$2/);
 		assert.equal(calls[1].params[1], 42);
+		// No diagnostics → the runs UPDATE must not append to errors.
+		assert.equal(/errors\s*=/.test(calls[1].sql), false);
+	});
+
+	it('persists strategy errors and warnings into backfill_runs.errors on success', async () => {
+		const handler: QueryHandler = () => ({ rows: [], rowCount: 1 });
+		const { executor, calls } = makeExecutor(handler);
+
+		await completeJob(executor, 'job-2', 0, {
+			errors: ['parse failed for X'],
+			warnings: ['feed Y: snapshots=10 keptInWindow=0']
+		});
+		assert.equal(calls.length, 2);
+		const runUpdate = calls[1];
+		assert.match(runUpdate.sql, /UPDATE backfill_runs/);
+		assert.match(runUpdate.sql, /errors = COALESCE\(errors, '\[\]'::jsonb\) \|\| \$3::jsonb/);
+		const payload = JSON.parse(String(runUpdate.params[2]));
+		assert.equal(payload.length, 2);
+		assert.equal(payload[0].severity, 'error');
+		assert.equal(payload[0].message, 'parse failed for X');
+		assert.equal(payload[1].severity, 'warning');
+		assert.equal(payload[1].message, 'feed Y: snapshots=10 keptInWindow=0');
 	});
 });
 

@@ -81,14 +81,19 @@ async function processJob(
 			backfillRunId: job.backfillRunId ?? '',
 			signal
 		});
+		const warnings = result.warnings ?? [];
 		const inserted = await insertBackfilledItems(executor, result.items, job.backfillRunId ?? '');
-		await completeJob(executor, job.id, inserted);
+		await completeJob(executor, job.id, inserted, {
+			errors: result.errors,
+			warnings
+		});
 		log('info', 'job.complete', {
 			jobId: job.id,
 			sourceName: job.sourceName,
 			itemsFromStrategy: result.items.length,
 			inserted,
 			strategyErrors: result.errors.length,
+			strategyWarnings: warnings.length,
 			durationMs: Date.now() - startedAt
 		});
 	} catch (err: unknown) {

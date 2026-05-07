@@ -63,6 +63,7 @@ function tryParseListing(body: string): RedditListing | null {
 export const redditStrategy: Strategy = async (ctx: StrategyContext): Promise<StrategyResult> => {
 	const items: ScrapedItem[] = [];
 	const errors: string[] = [];
+	const warnings: string[] = [];
 	const seen = new Set<string>();
 
 	for (const sub of redditSubreddits) {
@@ -78,19 +79,27 @@ export const redditStrategy: Strategy = async (ctx: StrategyContext): Promise<St
 			continue;
 		}
 
+		let snapshotsFetched = 0;
+		let snapshotsParsed = 0;
+		let postsSeen = 0;
+		let keptInWindow = 0;
+
 		try {
 			for await (const { entry, html } of stream) {
 				if (ctx.signal?.aborted) break;
+				snapshotsFetched++;
 				const listing = tryParseListing(html);
 				if (!listing) {
 					errors.push(`reddit r/${sub} entry not JSON: ${entry.timestamp}`);
 					continue;
 				}
+				snapshotsParsed++;
 				const children = listing.data?.children ?? [];
 				for (const child of children) {
 					const post = child.data;
 					if (!post) continue;
 					if (!post.url || !post.title) continue;
+					postsSeen++;
 					if (typeof post.created_utc !== 'number') {
 						errors.push(`reddit r/${sub} post missing created_utc: ${post.id ?? post.url}`);
 						continue;
@@ -104,6 +113,7 @@ export const redditStrategy: Strategy = async (ctx: StrategyContext): Promise<St
 						: post.url;
 					if (seen.has(articleUrl)) continue;
 					seen.add(articleUrl);
+					keptInWindow++;
 
 					items.push({
 						url: articleUrl,
@@ -128,7 +138,11 @@ export const redditStrategy: Strategy = async (ctx: StrategyContext): Promise<St
 			const message = err instanceof Error ? err.message : String(err);
 			errors.push(`reddit r/${sub} stream failed: ${message}`);
 		}
+
+		warnings.push(
+			`reddit r/${sub}: snapshots=${snapshotsFetched} parsed=${snapshotsParsed} posts=${postsSeen} keptInWindow=${keptInWindow}`
+		);
 	}
 
-	return { items, errors };
+	return { items, errors, warnings };
 };
