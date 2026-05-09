@@ -45,7 +45,13 @@ import { runEvaluations } from './lib/evals/runner.js';
 import { VALIDATOR_SUITES, runValidators } from './lib/evals/validators.js';
 import { type RocketRideContext, fetchRocketRideContext } from './lib/fetch-rocketride-context.js';
 import { extractJson } from './lib/parse-json.js';
-import { disconnectClient, getClient, terminatePipeline, usePipeline } from './lib/rocketride.js';
+import {
+	RocketRideRuntimeUnreachableError,
+	disconnectClient,
+	getClient,
+	terminatePipeline,
+	usePipeline
+} from './lib/rocketride.js';
 import { sendReportEmail } from './notify.js';
 
 const TREND_REPORT_PIPE = path.join(PIPELINES_DIR, 'trend-report.pipe');
@@ -1442,7 +1448,18 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 		const cancelled = activeRuns.get(runId)?.aborted;
 		activeRuns.delete(runId);
 		const status = cancelled ? 'cancelled' : 'failed';
-		const message = cancelled ? 'Run was cancelled by user' : String(err);
+		// Surface "runtime not running" as its own explicit log line so the run
+		// detail view points the operator at the real cause (start the runtime)
+		// rather than the SDK's downstream "Server is not connected" symptom.
+		let message: string;
+		if (cancelled) {
+			message = 'Run was cancelled by user';
+		} else if (err instanceof RocketRideRuntimeUnreachableError) {
+			message = err.message;
+			await logRun(runId, 'error', 'rocketride', message);
+		} else {
+			message = String(err);
+		}
 		await logRun(runId, 'error', 'fatal', message);
 		await query('UPDATE runs SET completed_at = now(), status = $1, error_log = $2 WHERE id = $3', [
 			status,

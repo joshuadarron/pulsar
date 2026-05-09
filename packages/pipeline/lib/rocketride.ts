@@ -1,4 +1,5 @@
 import { promises as fs, mkdtempSync, writeFileSync } from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { env } from '@pulsar/shared/config/env';
@@ -14,6 +15,102 @@ import {
 
 let client: RocketRideClient | null = null;
 let lastDisconnectAt: number | null = null;
+
+const REACHABILITY_PROBE_TIMEOUT_MS = 3_000;
+
+/**
+ * Thrown when the RocketRide runtime cannot be reached at all (TCP probe
+ * fails or `client.connect()` rejects with a connection-level error). The
+ * pipeline runner catches this at the top level and surfaces a clean
+ * "runtime is not running" message in `run_logs` instead of letting the
+ * SDK's generic `Server is not connected` bubble up.
+ */
+export class RocketRideRuntimeUnreachableError extends Error {
+	readonly uri: string;
+
+	constructor(uri: string, cause?: unknown) {
+		super(
+			`RocketRide runtime is not reachable at ${uri}. Make sure the runtime is running, then re-run the pipeline.`
+		);
+		this.name = 'RocketRideRuntimeUnreachableError';
+		this.uri = uri;
+		if (cause !== undefined) {
+			(this as Error & { cause?: unknown }).cause = cause;
+		}
+	}
+}
+
+/**
+ * Parse the host and port we should TCP-probe out of the configured runtime
+ * URI. Accepts the documented `ws://` / `wss://` shapes plus `http(s)://` so
+ * `ROCKETRIDE_URI=http://localhost:5565` still works.
+ */
+export function parseRuntimeHostPort(uri: string): { host: string; port: number } | null {
+	try {
+		const parsed = new URL(uri);
+		const host = parsed.hostname;
+		if (!host) return null;
+		if (parsed.port) {
+			const port = Number.parseInt(parsed.port, 10);
+			return Number.isFinite(port) ? { host, port } : null;
+		}
+		const defaultPort =
+			parsed.protocol === 'wss:' || parsed.protocol === 'https:'
+				? 443
+				: parsed.protocol === 'ws:' || parsed.protocol === 'http:'
+					? 80
+					: null;
+		return defaultPort ? { host, port: defaultPort } : null;
+	} catch {
+		return null;
+	}
+}
+
+function tcpProbe(host: string, port: number, timeoutMs: number): Promise<boolean> {
+	return new Promise((resolve) => {
+		const socket = new net.Socket();
+		let settled = false;
+		const finish = (ok: boolean) => {
+			if (settled) return;
+			settled = true;
+			socket.destroy();
+			resolve(ok);
+		};
+		socket.setTimeout(timeoutMs);
+		socket.once('connect', () => finish(true));
+		socket.once('timeout', () => finish(false));
+		socket.once('error', () => finish(false));
+		socket.connect(port, host);
+	});
+}
+
+/**
+ * Throw `RocketRideRuntimeUnreachableError` if a TCP connection to the
+ * runtime's host:port cannot be opened within the probe timeout. Exported
+ * for tests; production callers go through `getClient()`.
+ */
+export async function assertRuntimeReachable(uri: string): Promise<void> {
+	const target = parseRuntimeHostPort(uri);
+	if (!target) {
+		throw new RocketRideRuntimeUnreachableError(uri);
+	}
+	const ok = await tcpProbe(target.host, target.port, REACHABILITY_PROBE_TIMEOUT_MS);
+	if (!ok) {
+		throw new RocketRideRuntimeUnreachableError(uri);
+	}
+}
+
+function isConnectionRefusedError(err: unknown): boolean {
+	if (!err || typeof err !== 'object') return false;
+	const code = (err as NodeJS.ErrnoException).code;
+	return (
+		code === 'ECONNREFUSED' ||
+		code === 'ENOTFOUND' ||
+		code === 'EHOSTUNREACH' ||
+		code === 'ETIMEDOUT' ||
+		code === 'ENETUNREACH'
+	);
+}
 
 async function emitReconnectGapWarn(disconnectAt: number, reconnectAt: number): Promise<void> {
 	const active = getActiveRuns();
@@ -34,8 +131,16 @@ async function emitReconnectGapWarn(disconnectAt: number, reconnectAt: number): 
 export async function getClient(): Promise<RocketRideClient> {
 	if (client?.isConnected()) return client;
 
+	// Pre-flight TCP probe so a runtime that is simply not running fails fast
+	// with a clear message, instead of bubbling up the SDK's generic "Server
+	// is not connected" later when `client.use()` is called. The probe runs
+	// on every fresh connect (including reconnects from `usePipeline`) so the
+	// retry path also short-circuits when the runtime is genuinely down.
+	const uri = env.rocketride.wsUrl;
+	await assertRuntimeReachable(uri);
+
 	client = new RocketRideClient({
-		uri: env.rocketride.wsUrl,
+		uri,
 		auth: env.rocketride.apiKey,
 		persist: true,
 		maxRetryTime: 30000,
@@ -71,7 +176,19 @@ export async function getClient(): Promise<RocketRideClient> {
 		}
 	});
 
-	await client.connect();
+	try {
+		await client.connect();
+	} catch (err) {
+		// Probe passed but the SDK still failed at the WS handshake. If the
+		// underlying error looks like a connection refusal (NAT race, runtime
+		// stopping right between probe and connect), surface the same typed
+		// error so the runner's catch can log a clean operator-facing message.
+		client = null;
+		if (isConnectionRefusedError(err)) {
+			throw new RocketRideRuntimeUnreachableError(uri, err);
+		}
+		throw err;
+	}
 	return client;
 }
 
