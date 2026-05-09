@@ -92,21 +92,32 @@ export default function ViewerTabs({ platforms }: ViewerTabsProps) {
 
 	return (
 		<div>
-			<div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-neutral-700 pb-3">
-				{platforms.map((p) => (
-					<button
-						key={p.platform}
-						type="button"
-						onClick={() => setActivePlatform(p.platform)}
-						className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${
-							activePlatform === p.platform
-								? 'bg-indigo-600 text-white'
-								: 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-400 hover:bg-gray-200 dark:hover:bg-neutral-700'
-						}`}
-					>
-						{p.platform}
-					</button>
-				))}
+			<div className="border-b border-gray-200 dark:border-neutral-700">
+				<nav
+					role="tablist"
+					aria-label="Platforms"
+					className="-mb-px flex space-x-8 overflow-x-auto"
+				>
+					{platforms.map((p) => {
+						const isActive = activePlatform === p.platform;
+						return (
+							<button
+								key={p.platform}
+								role="tab"
+								type="button"
+								aria-selected={isActive}
+								onClick={() => setActivePlatform(p.platform)}
+								className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium capitalize ${
+									isActive
+										? 'border-indigo-500 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
+										: 'border-transparent text-gray-500 dark:text-neutral-400 hover:border-gray-300 hover:text-gray-700 dark:hover:border-neutral-600 dark:hover:text-neutral-200'
+								}`}
+							>
+								{p.platform}
+							</button>
+						);
+					})}
+				</nav>
 			</div>
 
 			<div className="mt-4 flex flex-wrap items-center gap-2">

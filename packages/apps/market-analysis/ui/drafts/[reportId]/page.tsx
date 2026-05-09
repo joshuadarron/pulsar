@@ -12,7 +12,8 @@ import { query } from '@pulsar/shared/db/postgres';
 import type { ContentDraft, ContentFormat, ReportData } from '@pulsar/shared/types';
 import { type VoiceContext, type VoiceFormat, loadVoiceContext } from '@pulsar/voice';
 
-import ViewerTabs, { type PlatformTabContent } from './ViewerTabs';
+import RecommendationsTabs, { type RecommendationTab } from './RecommendationsTabs';
+import type { PlatformTabContent } from './ViewerTabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -449,6 +450,81 @@ function buildPlatformTabContent(
 	};
 }
 
+const ONES = [
+	'',
+	'One',
+	'Two',
+	'Three',
+	'Four',
+	'Five',
+	'Six',
+	'Seven',
+	'Eight',
+	'Nine',
+	'Ten',
+	'Eleven',
+	'Twelve',
+	'Thirteen',
+	'Fourteen',
+	'Fifteen',
+	'Sixteen',
+	'Seventeen',
+	'Eighteen',
+	'Nineteen'
+];
+const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+/**
+ * Spell a small positive integer as a Title-Cased English word ("One",
+ * "Twenty One"). Tab labels use this so a long recommendation title cannot
+ * blow the tab strip out horizontally; the full title still shows in the
+ * tab's tooltip and again in the panel header below.
+ *
+ * Falls back to the numeric string for n outside 1..99, which is well past
+ * any realistic recommendation count.
+ */
+function numberWord(n: number): string {
+	if (!Number.isInteger(n) || n < 1 || n > 99) return String(n);
+	if (n < 20) return ONES[n];
+	const tens = Math.floor(n / 10);
+	const ones = n % 10;
+	if (ones === 0) return TENS[tens];
+	return `${TENS[tens]} ${ONES[ones]}`;
+}
+
+function recommendationTooltip(group: DraftGroup): string | undefined {
+	const candidate = group.title ?? group.angle;
+	if (!candidate) return undefined;
+	const trimmed = candidate.trim();
+	return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function buildRecommendationTabs(
+	groups: DraftGroup[],
+	operator: OperatorContext,
+	voice: VoiceContext,
+	report: ReportData
+): RecommendationTab[] {
+	return groups.map((group, index) => ({
+		key: group.key,
+		label: numberWord(index + 1),
+		tooltip: recommendationTooltip(group),
+		headerNode: group.title ? (
+			<RecommendationHeader
+				title={group.title}
+				format={group.format}
+				signal={group.signal}
+				angle={group.angle}
+				target={group.target}
+				whyNow={group.whyNow}
+			/>
+		) : (
+			<AngleHeader angle={group.angle} />
+		),
+		platforms: group.drafts.map((draft) => buildPlatformTabContent(draft, operator, voice, report))
+	}));
+}
+
 export default async function DraftViewerPage({
 	params
 }: {
@@ -497,32 +573,10 @@ export default async function DraftViewerPage({
 				{new Date(report.generated_at).toLocaleString()}
 			</p>
 
-			<div className="mt-8 space-y-10">
-				{groups.map((group) => {
-					const platforms = group.drafts.map((draft) =>
-						buildPlatformTabContent(draft, operator, voice, report.report_data)
-					);
-					return (
-						<section
-							key={group.key}
-							className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 p-5"
-						>
-							{group.title ? (
-								<RecommendationHeader
-									title={group.title}
-									format={group.format}
-									signal={group.signal}
-									angle={group.angle}
-									target={group.target}
-									whyNow={group.whyNow}
-								/>
-							) : (
-								<AngleHeader angle={group.angle} />
-							)}
-							<ViewerTabs platforms={platforms} />
-						</section>
-					);
-				})}
+			<div className="mt-8">
+				<RecommendationsTabs
+					recommendations={buildRecommendationTabs(groups, operator, voice, report.report_data)}
+				/>
 			</div>
 		</div>
 	);
