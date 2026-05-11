@@ -93,23 +93,6 @@ The graph layer runs Louvain community detection and PageRank over the developer
 
 The eval pipeline is three layers. Structural validators run deterministic checks on output shape and content (no em-dashes, word counts, code-fence integrity, schema conformance). LLM-graded scoring runs a Claude Haiku judge over each draft for qualitative quality. Retrospective grading runs after a 14-day window to score predictions against what actually played out, which feeds back into prompt iteration.
 
-```mermaid
-flowchart LR
-  S[Sources<br/>8 free, public] --> SC[Scraper<br/>TypeScript]
-  SC --> PG[(Postgres<br/>articles_raw + articles)]
-  SC --> N4[(Neo4j<br/>topics + entities)]
-  N4 --> GS[Graph snapshot<br/>Louvain + PageRank]
-  PG --> RR[RocketRide pipelines]
-  GS --> RR
-  RR --> TR[Trend report<br/>4-pass]
-  TR --> AP[Angle picker]
-  AP --> CD[Content drafter<br/>fan-out per angle x platform]
-  TR --> WEB[Next.js dashboard<br/>UI, email, PDF]
-  CD --> WEB
-  TR --> EV[Evals<br/>structural, Haiku, retro]
-  CD --> EV
-```
-
 For the long-form story behind these decisions, the postmortem on three architectural wrong turns is in the Reading section below.
 
 ## Reading
