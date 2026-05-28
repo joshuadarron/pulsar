@@ -9,6 +9,8 @@ const GITHUB_PER_PAGE = 100;
 const GITHUB_MAX_PAGES = 10;
 const GITHUB_RATE_LIMIT_MS_AUTH = 1000;
 const GITHUB_RATE_LIMIT_MS_UNAUTH = 2500;
+const GITHUB_RETRY_MAX_ATTEMPTS = 4;
+const GITHUB_RETRY_BASE_DELAY_MS = 2000;
 
 let lastGithubRequestAt = 0;
 
@@ -29,6 +31,28 @@ async function applyGithubRateLimit(hasToken: boolean): Promise<void> {
 	const wait = limit - elapsed;
 	if (wait > 0) await sleep(wait);
 	lastGithubRequestAt = Date.now();
+}
+
+/**
+ * Fetch with bounded exponential backoff on HTTP 403 or 429. The GitHub search
+ * API returns both codes when its short-window quota is exhausted, even with
+ * a token. A single transient hit must not kill the entire query loop.
+ * Backoff at baseDelay=2000ms: 2s, 4s, 8s, 16s. All other statuses propagate.
+ */
+async function fetchGithubWithBackoff(
+	url: string,
+	headers: Record<string, string>,
+	hasToken: boolean
+): Promise<Response> {
+	let last: Response | null = null;
+	for (let attempt = 1; attempt <= GITHUB_RETRY_MAX_ATTEMPTS; attempt++) {
+		await applyGithubRateLimit(hasToken);
+		last = await fetch(url, { headers });
+		if (last.status !== 429 && last.status !== 403) return last;
+		if (attempt === GITHUB_RETRY_MAX_ATTEMPTS) return last;
+		await sleep(GITHUB_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+	}
+	return last as Response;
 }
 
 function formatGithubDate(date: Date): string {
@@ -98,8 +122,7 @@ export const githubStrategy: Strategy = async (ctx: StrategyContext): Promise<St
 			const url = buildGithubUrl(query, ctx.windowStart, ctx.windowEnd, page);
 			let response: Response;
 			try {
-				await applyGithubRateLimit(Boolean(token));
-				response = await fetch(url, { headers });
+				response = await fetchGithubWithBackoff(url, headers, Boolean(token));
 			} catch (err) {
 				const message = err instanceof Error ? err.message : String(err);
 				errors.push(`github query "${query}" page ${page} fetch failed: ${message}`);

@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
 
 import {
-	articleCountsBySource,
+	MAX_JOB_ATTEMPTS,
+	articleCountsByAdapter,
 	claimJobs,
 	completeJob,
 	enqueueBackfill,
-	failJob
+	failJob,
+	requeueRetriableFailures
 } from '../queue.js';
 
 type Recorded = { sql: string; params: unknown[] };
@@ -165,6 +167,51 @@ describe('failJob', () => {
 	});
 });
 
+describe('requeueRetriableFailures', () => {
+	it('promotes failed jobs with attempts below the cap back to queued', async () => {
+		let capturedSql: string | null = null;
+		let capturedParams: unknown[] | null = null;
+		const handler: QueryHandler = (sql, params) => {
+			capturedSql = sql;
+			capturedParams = params;
+			return { rows: [], rowCount: 4 };
+		};
+		const { executor } = makeExecutor(handler);
+
+		const promoted = await requeueRetriableFailures(executor);
+		assert.equal(promoted, 4);
+		assert.match(capturedSql!, /UPDATE backfill_jobs/);
+		assert.match(capturedSql!, /status = 'queued'/);
+		assert.match(capturedSql!, /status = 'failed' AND attempts < \$1/);
+		assert.equal(capturedParams![0], MAX_JOB_ATTEMPTS);
+	});
+
+	it('clears claimed_by, claimed_at, completed_at, and error_message so the row reads as fresh', async () => {
+		const handler: QueryHandler = () => ({ rows: [], rowCount: 0 });
+		const { executor, calls } = makeExecutor(handler);
+		await requeueRetriableFailures(executor);
+		const sql = calls[0].sql;
+		assert.match(sql, /claimed_by = NULL/);
+		assert.match(sql, /claimed_at = NULL/);
+		assert.match(sql, /completed_at = NULL/);
+		assert.match(sql, /error_message = NULL/);
+	});
+
+	it('preserves the attempts counter so retries are bounded over time', async () => {
+		const handler: QueryHandler = () => ({ rows: [], rowCount: 0 });
+		const { executor, calls } = makeExecutor(handler);
+		await requeueRetriableFailures(executor);
+		assert.equal(/attempts\s*=/.test(calls[0].sql), false);
+	});
+
+	it('respects a caller-supplied maxAttempts override', async () => {
+		const handler: QueryHandler = () => ({ rows: [], rowCount: 0 });
+		const { executor, calls } = makeExecutor(handler);
+		await requeueRetriableFailures(executor, 5);
+		assert.equal(calls[0].params[0], 5);
+	});
+});
+
 describe('enqueueBackfill', () => {
 	it('inserts a backfill_runs row and a backfill_jobs row and returns both IDs', async () => {
 		const handler: QueryHandler = (sql) => {
@@ -194,19 +241,45 @@ describe('enqueueBackfill', () => {
 	});
 });
 
-describe('articleCountsBySource', () => {
-	it('returns a record keyed by source_name with integer counts', async () => {
+describe('articleCountsByAdapter', () => {
+	it('groups live counts by sourcePlatform and maps them back to adapter keys', async () => {
+		let capturedParams: unknown[] | null = null;
+		const handler: QueryHandler = (_sql, params) => {
+			capturedParams = params;
+			return {
+				rows: [
+					{ platform: 'hackernews', count: '120' },
+					{ platform: 'reddit', count: '5' }
+				],
+				rowCount: 2
+			};
+		};
+		const { executor } = makeExecutor(handler);
+
+		const counts = await articleCountsByAdapter(executor);
+		assert.equal(counts.hackernews, 120);
+		assert.equal(counts.reddit, 5);
+		// Adapter keys with no rows still show up with count 0 so the auto-enqueue
+		// sparse check fires for never-scraped adapters.
+		assert.equal(counts.arxiv, 0);
+		assert.equal(counts.devto, 0);
+		// Query was parameterized with the union of all known platforms.
+		const platforms = capturedParams![0] as string[];
+		assert.ok(platforms.includes('substack'), "'rss' adapter fans out to substack");
+		assert.ok(platforms.includes('rss'));
+	});
+
+	it('sums counts when one adapter maps to multiple platforms (rss -> rss + substack)', async () => {
 		const handler: QueryHandler = () => ({
 			rows: [
-				{ source_name: 'hackernews', count: '120' },
-				{ source_name: 'reddit', count: '5' }
+				{ platform: 'rss', count: '10' },
+				{ platform: 'substack', count: '7' }
 			],
 			rowCount: 2
 		});
 		const { executor } = makeExecutor(handler);
-
-		const counts = await articleCountsBySource(executor);
-		assert.deepEqual(counts, { hackernews: 120, reddit: 5 });
+		const counts = await articleCountsByAdapter(executor);
+		assert.equal(counts.rss, 17);
 	});
 });
 

@@ -38,6 +38,26 @@ function makeExecutor(handler: QueryHandler) {
 	return { executor, calls };
 }
 
+// Seed all known backfill adapters above the threshold; tests opt-in to making
+// a specific adapter sparse by overriding its count. This isolates each test
+// to exactly the adapter(s) it cares about, since articleCountsByAdapter
+// zero-fills unseen adapters and would otherwise mark them all as sparse.
+const ABOVE = String(FIRST_DEPLOY_THRESHOLD + 100);
+function platformRows(overrides: Record<string, string> = {}): FakeRow[] {
+	const base: Record<string, string> = {
+		arxiv: ABOVE,
+		devto: ABOVE,
+		github: ABOVE,
+		hackernews: ABOVE,
+		hashnode: ABOVE,
+		medium: ABOVE,
+		reddit: ABOVE,
+		rss: ABOVE
+	};
+	const merged = { ...base, ...overrides };
+	return Object.entries(merged).map(([platform, count]) => ({ platform, count }));
+}
+
 describe('maybeAutoEnqueue', () => {
 	it('returns feature-flag-off when env.backfill.enabled is false', async () => {
 		envModule.env.backfill.enabled = false;
@@ -49,17 +69,11 @@ describe('maybeAutoEnqueue', () => {
 		envModule.env.backfill.enabled = true;
 	});
 
-	it('enqueues sources whose count is below FIRST_DEPLOY_THRESHOLD and no coverage exists', async () => {
+	it('enqueues adapters whose count is below FIRST_DEPLOY_THRESHOLD and no coverage exists', async () => {
 		envModule.env.backfill.enabled = true;
 		const handler: QueryHandler = (sql) => {
-			if (/SELECT source_name, COUNT/.test(sql)) {
-				return {
-					rows: [
-						{ source_name: 'arxiv', count: '5' },
-						{ source_name: 'reddit', count: '1000' }
-					],
-					rowCount: 2
-				};
+			if (/sourcePlatform/.test(sql)) {
+				return { rows: platformRows({ arxiv: '5' }), rowCount: 8 };
 			}
 			if (/SELECT id FROM backfill_runs/.test(sql)) {
 				return { rows: [], rowCount: 0 };
@@ -79,11 +93,40 @@ describe('maybeAutoEnqueue', () => {
 		assert.deepEqual(out.skipped, []);
 	});
 
-	it('skips sources with existing coverage row', async () => {
+	it('passes the adapter key (not a display name) to backfill_jobs.source_name', async () => {
+		envModule.env.backfill.enabled = true;
+		let jobInsertParams: unknown[] | null = null;
+		const handler: QueryHandler = (sql, params) => {
+			if (/sourcePlatform/.test(sql)) {
+				return { rows: platformRows({ hackernews: '0' }), rowCount: 8 };
+			}
+			if (/SELECT id FROM backfill_runs/.test(sql)) {
+				return { rows: [], rowCount: 0 };
+			}
+			if (/INSERT INTO backfill_runs/.test(sql)) {
+				return { rows: [{ id: 'run-1' }], rowCount: 1 };
+			}
+			if (/INSERT INTO backfill_jobs/.test(sql)) {
+				jobInsertParams = params;
+				return { rows: [{ id: 'job-1' }], rowCount: 1 };
+			}
+			return { rows: [], rowCount: 0 };
+		};
+		const { executor } = makeExecutor(handler);
+		const out = await maybeAutoEnqueue(executor);
+		assert.deepEqual(out.enqueued, ['hackernews']);
+		assert.equal(
+			jobInsertParams![1],
+			'hackernews',
+			'job.source_name must be the adapter key, not a display name'
+		);
+	});
+
+	it('skips adapters with existing coverage row', async () => {
 		envModule.env.backfill.enabled = true;
 		const handler: QueryHandler = (sql) => {
-			if (/SELECT source_name, COUNT/.test(sql)) {
-				return { rows: [{ source_name: 'arxiv', count: '0' }], rowCount: 1 };
+			if (/sourcePlatform/.test(sql)) {
+				return { rows: platformRows({ arxiv: '0' }), rowCount: 8 };
 			}
 			if (/SELECT id FROM backfill_runs/.test(sql)) {
 				return { rows: [{ id: 'existing-run' }], rowCount: 1 };
@@ -95,10 +138,43 @@ describe('maybeAutoEnqueue', () => {
 		const out = await maybeAutoEnqueue(executor);
 		assert.deepEqual(out.enqueued, []);
 		assert.deepEqual(out.skipped, ['arxiv']);
-		// Did NOT call enqueue path.
 		assert.equal(
 			calls.some((c) => /INSERT INTO backfill_runs/.test(c.sql)),
 			false
+		);
+	});
+
+	it('coverage check excludes stale complete-with-zero runs so a fixed strategy retries', async () => {
+		envModule.env.backfill.enabled = true;
+		let capturedCoverageSql: string | null = null;
+		const handler: QueryHandler = (sql) => {
+			if (/sourcePlatform/.test(sql)) {
+				return { rows: platformRows({ arxiv: '0' }), rowCount: 8 };
+			}
+			if (/SELECT id FROM backfill_runs/.test(sql)) {
+				capturedCoverageSql = sql;
+				return { rows: [], rowCount: 0 };
+			}
+			if (/INSERT INTO backfill_runs/.test(sql)) {
+				return { rows: [{ id: 'run-1' }], rowCount: 1 };
+			}
+			if (/INSERT INTO backfill_jobs/.test(sql)) {
+				return { rows: [{ id: 'job-1' }], rowCount: 1 };
+			}
+			return { rows: [], rowCount: 0 };
+		};
+		const { executor } = makeExecutor(handler);
+		await maybeAutoEnqueue(executor);
+		assert.ok(capturedCoverageSql, 'expected coverage check');
+		assert.match(
+			capturedCoverageSql!,
+			/articles_ingested = 0/,
+			'predicate must skip stale zero-ingested complete runs'
+		);
+		assert.match(
+			capturedCoverageSql!,
+			/completed_at < now\(\) - /,
+			'predicate must enforce a cooldown so fresh empty completes still block'
 		);
 	});
 
@@ -106,8 +182,8 @@ describe('maybeAutoEnqueue', () => {
 		envModule.env.backfill.enabled = true;
 		let capturedCoverageSql: string | null = null;
 		const handler: QueryHandler = (sql) => {
-			if (/SELECT source_name, COUNT/.test(sql)) {
-				return { rows: [{ source_name: 'arxiv', count: '0' }], rowCount: 1 };
+			if (/sourcePlatform/.test(sql)) {
+				return { rows: platformRows({ arxiv: '0' }), rowCount: 8 };
 			}
 			if (/SELECT id FROM backfill_runs/.test(sql)) {
 				capturedCoverageSql = sql;
@@ -129,17 +205,11 @@ describe('maybeAutoEnqueue', () => {
 		assert.match(capturedCoverageSql!, /status <> 'failed'/);
 	});
 
-	it('skips sources at or above the threshold', async () => {
+	it('skips adapters at or above the threshold', async () => {
 		envModule.env.backfill.enabled = true;
 		const handler: QueryHandler = (sql) => {
-			if (/SELECT source_name, COUNT/.test(sql)) {
-				return {
-					rows: [
-						{ source_name: 'arxiv', count: String(FIRST_DEPLOY_THRESHOLD) },
-						{ source_name: 'reddit', count: String(FIRST_DEPLOY_THRESHOLD + 1) }
-					],
-					rowCount: 2
-				};
+			if (/sourcePlatform/.test(sql)) {
+				return { rows: platformRows(), rowCount: 8 };
 			}
 			return { rows: [], rowCount: 0 };
 		};
@@ -148,7 +218,6 @@ describe('maybeAutoEnqueue', () => {
 		const out = await maybeAutoEnqueue(executor);
 		assert.deepEqual(out.enqueued, []);
 		assert.deepEqual(out.skipped, []);
-		// No coverage check or insert performed.
 		assert.equal(
 			calls.some((c) => /INSERT INTO backfill_runs/.test(c.sql)),
 			false
@@ -159,8 +228,8 @@ describe('maybeAutoEnqueue', () => {
 		envModule.env.backfill.enabled = true;
 		let capturedRunInsert: unknown[] | null = null;
 		const handler: QueryHandler = (sql, params) => {
-			if (/SELECT source_name, COUNT/.test(sql)) {
-				return { rows: [{ source_name: 'arxiv', count: '0' }], rowCount: 1 };
+			if (/sourcePlatform/.test(sql)) {
+				return { rows: platformRows({ arxiv: '0' }), rowCount: 8 };
 			}
 			if (/SELECT id FROM backfill_runs/.test(sql)) {
 				return { rows: [], rowCount: 0 };

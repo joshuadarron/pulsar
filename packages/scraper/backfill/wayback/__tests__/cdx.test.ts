@@ -86,7 +86,11 @@ describe('buildCdxQueryUrl', () => {
 		assert.match(url, /output=json/);
 		assert.match(url, /collapse=urlkey/);
 		assert.match(url, /filter=statuscode%3A200/);
-		assert.match(url, /filter=mimetype%3Atext%2Fhtml/);
+		assert.doesNotMatch(
+			url,
+			/filter=mimetype/,
+			'mimetype filter must be absent so RSS/Atom feeds are not excluded'
+		);
 	});
 });
 

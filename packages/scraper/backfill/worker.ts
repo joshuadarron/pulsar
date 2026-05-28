@@ -1,16 +1,15 @@
+import '../load-env.js';
+
 import { hostname } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import dotenv from 'dotenv';
-
-dotenv.config({ path: path.resolve(fileURLToPath(import.meta.url), '../../../../.env') });
 
 import { env } from '@pulsar/shared/config/env';
 import { getClient } from '@pulsar/shared/db/postgres';
 
 import { insertBackfilledItems } from './insert.js';
 import type { ClaimedJob } from './queue.js';
-import { claimJobs, completeJob, failJob } from './queue.js';
+import { claimJobs, completeJob, failJob, requeueRetriableFailures } from './queue.js';
 import { getStrategy } from './strategies/index.js';
 
 const BACKFILL_LOCK_ID = 73953;
@@ -131,6 +130,15 @@ type WorkerLoopOptions = {
 export async function workerLoop(options: WorkerLoopOptions): Promise<void> {
 	const pollMs = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 	while (!options.abortSignal.aborted) {
+		try {
+			const promoted = await requeueRetriableFailures(options.executor);
+			if (promoted > 0) log('info', 'failed.requeued', { count: promoted });
+		} catch (err: unknown) {
+			log('error', 'requeue.failed', {
+				message: err instanceof Error ? err.message : String(err)
+			});
+		}
+
 		let jobs: ClaimedJob[];
 		try {
 			jobs = await claimJobs(options.executor, options.workerId, options.concurrency);

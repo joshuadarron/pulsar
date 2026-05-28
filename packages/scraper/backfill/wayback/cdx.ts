@@ -79,8 +79,11 @@ export function buildCdxQueryUrl(urlPattern: string, windowStart: Date, windowEn
 		output: 'json',
 		collapse: 'urlkey'
 	});
+	// Mimetype filter is intentionally omitted. Wayback serves RSS/Atom feeds
+	// with their original Content-Type (application/rss+xml, application/atom+xml),
+	// so filtering to text/html drops every feed snapshot. The body-shape check
+	// in wayback-feed.ts (looksLikeXml) rejects non-feeds at parse time instead.
 	params.append('filter', 'statuscode:200');
-	params.append('filter', 'mimetype:text/html');
 	return `${CDX_ENDPOINT}?${params.toString()}`;
 }
 

@@ -40,6 +40,7 @@ const completedJobs: Array<{ id: string; count: number }> = [];
 const failedJobs: Array<{ id: string; message: string }> = [];
 let claimQueue: ClaimedJob[][] = [];
 let claimCallCount = 0;
+let requeueCallCount = 0;
 
 mock.module('../queue.js', {
 	namedExports: {
@@ -52,6 +53,10 @@ mock.module('../queue.js', {
 		},
 		failJob: async (_executor: unknown, jobId: string, error: Error) => {
 			failedJobs.push({ id: jobId, message: error.message });
+		},
+		requeueRetriableFailures: async () => {
+			requeueCallCount += 1;
+			return 0;
 		}
 	}
 });
@@ -84,6 +89,7 @@ function reset() {
 	claimQueue = [];
 	strategyMap.clear();
 	claimCallCount = 0;
+	requeueCallCount = 0;
 }
 
 const fakeExecutor = {
@@ -192,6 +198,26 @@ describe('workerLoop', () => {
 		await loop;
 		assert.ok(Date.now() - start < 200, 'loop should exit promptly on abort');
 		assert.ok(claimCallCount >= 1, 'loop should have polled at least once');
+	});
+
+	it('sweeps retriable failures back to queued before each claim', async () => {
+		reset();
+		const controller = new AbortController();
+		const loop = workerLoop({
+			workerId: 'test',
+			concurrency: 1,
+			pollIntervalMs: 5,
+			abortSignal: controller.signal,
+			executor: fakeExecutor as never
+		});
+		await new Promise((r) => setTimeout(r, 30));
+		controller.abort();
+		await loop;
+		assert.ok(
+			requeueCallCount >= 1,
+			'workerLoop should call requeueRetriableFailures on every poll'
+		);
+		assert.ok(requeueCallCount === claimCallCount, 'requeue should run paired with each claim');
 	});
 
 	it('processes multiple jobs in one tick (concurrency)', async () => {

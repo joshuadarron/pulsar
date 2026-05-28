@@ -7,6 +7,8 @@ const ARXIV_QUERY_ENDPOINT = 'https://export.arxiv.org/api/query';
 const ARXIV_RATE_LIMIT_MS = 3000;
 const ARXIV_PAGE_SIZE = 100;
 const ARXIV_MAX_PAGES_PER_CATEGORY = 50;
+const ARXIV_RETRY_MAX_ATTEMPTS = 4;
+const ARXIV_RETRY_BASE_DELAY_MS = 2000;
 
 let lastArxivRequestAt = 0;
 
@@ -26,6 +28,24 @@ async function applyArxivRateLimit(): Promise<void> {
 	const wait = ARXIV_RATE_LIMIT_MS - elapsed;
 	if (wait > 0) await sleep(wait);
 	lastArxivRequestAt = Date.now();
+}
+
+/**
+ * Fetch with bounded exponential backoff on HTTP 429. The arXiv API returns
+ * 429 even when we honor robots.txt (their bursts share quota across clients),
+ * so a single 429 must not kill the entire category. Backoff sequence at
+ * baseDelay=2000ms: 2s, 4s, 8s, 16s. Non-429 responses are returned as-is.
+ */
+async function fetchArxivWithBackoff(url: string): Promise<Response> {
+	let last: Response | null = null;
+	for (let attempt = 1; attempt <= ARXIV_RETRY_MAX_ATTEMPTS; attempt++) {
+		await applyArxivRateLimit();
+		last = await fetch(url);
+		if (last.status !== 429) return last;
+		if (attempt === ARXIV_RETRY_MAX_ATTEMPTS) return last;
+		await sleep(ARXIV_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+	}
+	return last as Response;
 }
 
 function formatArxivDate(date: Date): string {
@@ -102,8 +122,7 @@ export const arxivStrategy: Strategy = async (ctx: StrategyContext): Promise<Str
 			const url = buildArxivUrl(category, ctx.windowStart, ctx.windowEnd, page);
 			let xml: string;
 			try {
-				await applyArxivRateLimit();
-				const response = await fetch(url);
+				const response = await fetchArxivWithBackoff(url);
 				if (!response.ok) {
 					errors.push(`arxiv ${category} page ${page} HTTP ${response.status}`);
 					break;

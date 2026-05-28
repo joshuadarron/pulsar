@@ -1,8 +1,7 @@
+import '../load-env.js';
+
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import dotenv from 'dotenv';
-
-dotenv.config({ path: path.resolve(fileURLToPath(import.meta.url), '../../../../.env') });
 
 import pool from '@pulsar/shared/db/postgres';
 

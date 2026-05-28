@@ -1,5 +1,6 @@
 import type { BackfillJob, BackfillJobStatus, BackfillStatus } from '@pulsar/shared/types';
 import type { DbExecutor } from '../dedup.js';
+import { BACKFILL_PLATFORMS } from './source-platforms.js';
 
 export type ClaimedJob = BackfillJob;
 
@@ -124,6 +125,14 @@ export async function completeJob(
 }
 
 /**
+ * Maximum number of times a single job will be attempted before being marked
+ * terminally failed. Each `claimJobs` call increments `attempts`, so a job that
+ * is retried twice will record three attempts in total before
+ * `requeueRetriableFailures` stops promoting it.
+ */
+export const MAX_JOB_ATTEMPTS = 3;
+
+/**
  * Mark a claimed job as failed. Increments `attempts` (already incremented at
  * claim time) is intentionally not re-incremented here; the failure is
  * recorded on the row that was already claimed.
@@ -143,6 +152,37 @@ export async function failJob(executor: DbExecutor, jobId: string, error: Error)
      WHERE id = (SELECT backfill_run_id FROM backfill_jobs WHERE id = $1)`,
 		[jobId, error.message]
 	);
+}
+
+/**
+ * Promote failed jobs whose attempt count is still below `maxAttempts` back to
+ * `status='queued'` so the worker's next claim picks them up again. Clears
+ * `claimed_by`/`claimed_at`/`completed_at`/`error_message` so the row is
+ * indistinguishable from a fresh queued job. `attempts` is preserved so the
+ * count keeps growing across retries and eventually crosses the threshold.
+ *
+ * The parent `backfill_runs.status` is left as 'failed' here; the eventual
+ * `completeJob` flips it to 'complete' if/when the retry succeeds, which is
+ * the same recovery path used by any re-enqueue.
+ *
+ * Returns the number of rows promoted. Safe to call on every poll: a no-op
+ * when nothing is eligible.
+ */
+export async function requeueRetriableFailures(
+	executor: DbExecutor,
+	maxAttempts = MAX_JOB_ATTEMPTS
+): Promise<number> {
+	const result = await executor.query(
+		`UPDATE backfill_jobs
+     SET status = 'queued',
+         claimed_by = NULL,
+         claimed_at = NULL,
+         completed_at = NULL,
+         error_message = NULL
+     WHERE status = 'failed' AND attempts < $1`,
+		[maxAttempts]
+	);
+	return result.rowCount ?? 0;
 }
 
 /**
@@ -174,18 +214,39 @@ export async function enqueueBackfill(
 }
 
 /**
- * Per-source article counts. Used by gap detection to decide whether to
- * auto-enqueue a full backfill for a sparse source.
+ * Per-adapter article counts. Returns one entry per known backfill adapter key
+ * (the key used to look up a Strategy in `strategies/index.ts`), counting live
+ * `articles_raw` rows whose `raw_payload->>'sourcePlatform'` matches the
+ * adapter's platform list in `BACKFILL_PLATFORMS`.
+ *
+ * This is the source of truth for auto-enqueue's "sparse source" check. The
+ * keys are adapter keys (e.g. `'hackernews'`), not display names (e.g.
+ * `'Hacker News'`), so the values can be passed straight to `enqueueBackfill`
+ * and the worker's `getStrategy()` resolver.
  */
-export async function articleCountsBySource(executor: DbExecutor): Promise<Record<string, number>> {
-	const result = await executor.query<{ source_name: string; count: string }>(
-		`SELECT source_name, COUNT(*)::text AS count
+export async function articleCountsByAdapter(
+	executor: DbExecutor
+): Promise<Record<string, number>> {
+	const platformToAdapter: Record<string, string> = {};
+	for (const [adapter, platforms] of Object.entries(BACKFILL_PLATFORMS)) {
+		for (const platform of platforms) platformToAdapter[platform] = adapter;
+	}
+	const allPlatforms = Object.keys(platformToAdapter);
+
+	const result = await executor.query<{ platform: string; count: string }>(
+		`SELECT raw_payload->>'sourcePlatform' AS platform, COUNT(*)::text AS count
      FROM articles_raw
-     GROUP BY source_name`
+     WHERE raw_payload->>'sourcePlatform' = ANY($1::text[])
+     GROUP BY raw_payload->>'sourcePlatform'`,
+		[allPlatforms]
 	);
+
 	const out: Record<string, number> = {};
+	for (const adapter of Object.keys(BACKFILL_PLATFORMS)) out[adapter] = 0;
 	for (const row of result.rows) {
-		out[row.source_name] = Number.parseInt(row.count, 10);
+		const adapter = platformToAdapter[row.platform];
+		if (!adapter) continue;
+		out[adapter] = (out[adapter] ?? 0) + Number.parseInt(row.count, 10);
 	}
 	return out;
 }

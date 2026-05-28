@@ -1,8 +1,4 @@
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import dotenv from 'dotenv';
-
-dotenv.config({ path: path.resolve(fileURLToPath(import.meta.url), '../../../.env') });
+import './load-env.js';
 
 import { spawn } from 'node:child_process';
 import { env } from '@pulsar/shared/config/env';
@@ -10,6 +6,7 @@ import { getClient as getPgClient, query } from '@pulsar/shared/db/postgres';
 import cron from 'node-cron';
 import { FIRST_DEPLOY_FROM, maybeAutoEnqueue } from './backfill/auto-enqueue.js';
 import { enqueueBackfill } from './backfill/queue.js';
+import { BACKFILL_PLATFORMS } from './backfill/source-platforms.js';
 import { scrape } from './index.js';
 import { ScrapeTimeoutError, withScrapeTimeout } from './lib/scrape-timeout.js';
 
@@ -33,6 +30,7 @@ let pipelineRunning = false;
 let retrospectiveRunning = false;
 
 const RELOAD_INTERVAL_MS = 60_000;
+const BACKFILL_TICK_INTERVAL_MS = 15 * 60_000;
 
 // Fail-safe ceiling on a single scrape run. A healthy full scrape finishes in
 // 2-3 minutes; 30 minutes is a comfortable upper bound. If a source adapter
@@ -120,26 +118,10 @@ const GAP_THRESHOLDS_DAYS: Record<string, number> = {
 	rss: 14
 };
 
-// Map adapter key to the `sourcePlatform` value(s) the live adapters write into
-// `articles_raw.raw_payload`. `articles_raw.source_name` stores display names
-// (e.g. "Hacker News", "r/golang") that do not match the adapter key, so we
-// look up by platform instead. The 'rss' adapter emits both 'rss' and
-// 'substack' platforms, so its key fans out.
-const SOURCE_PLATFORMS: Record<string, string[]> = {
-	arxiv: ['arxiv'],
-	devto: ['devto'],
-	github: ['github'],
-	hackernews: ['hackernews'],
-	hashnode: ['hashnode'],
-	medium: ['medium'],
-	reddit: ['reddit'],
-	rss: ['rss', 'substack']
-};
-
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 async function getLastIngestForSource(source: string): Promise<Date | null> {
-	const platforms = SOURCE_PLATFORMS[source];
+	const platforms = BACKFILL_PLATFORMS[source];
 	if (!platforms || platforms.length === 0) return null;
 	const result = await query<{ last_at: Date | null }>(
 		`SELECT MAX(scraped_at) AS last_at FROM articles_raw
@@ -362,6 +344,15 @@ async function main() {
 
 	setInterval(reloadIfChanged, RELOAD_INTERVAL_MS);
 	console.log('[Scheduler] Started. Polling for schedule changes every 60s.');
+
+	// Backfill tick is independent of the scrape cron so the auto-enqueue and
+	// gap-fill paths get a chance to run on boot and at least every 15 minutes,
+	// rather than only after the once-a-day scrape cron fires.
+	if (env.backfill.enabled) {
+		await runBackfillTick();
+		setInterval(runBackfillTick, BACKFILL_TICK_INTERVAL_MS);
+		console.log('[Scheduler] Backfill tick scheduled every 15 minutes.');
+	}
 
 	process.on('SIGINT', () => {
 		console.log('\n[Scheduler] Shutting down...');
