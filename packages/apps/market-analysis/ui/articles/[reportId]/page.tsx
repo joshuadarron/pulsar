@@ -38,10 +38,9 @@ interface SeriesStateRow {
 const ARTICLES_APP_SLUG = 'market-analysis';
 
 async function loadReport(reportId: string): Promise<ReportRow | null> {
-	const result = await query<ReportRow>(
-		'SELECT id, generated_at FROM reports WHERE id = $1',
-		[reportId]
-	);
+	const result = await query<ReportRow>('SELECT id, generated_at FROM reports WHERE id = $1', [
+		reportId
+	]);
 	return result.rows[0] ?? null;
 }
 
@@ -82,7 +81,9 @@ function buildImagesHeader(metaphor: string | null, recent: string[]): string {
 	if (recent.length > 0) {
 		const others = recent.filter((entry) => entry !== metaphor);
 		if (others.length > 0) {
-			lines.push(`- Recently used (excluded for next pick): ${others.map((f) => `\`${f}\``).join(', ')}`);
+			lines.push(
+				`- Recently used (excluded for next pick): ${others.map((f) => `\`${f}\``).join(', ')}`
+			);
 		}
 	}
 	return `${lines.join('\n')}\n\n`;
@@ -104,14 +105,6 @@ function buildPublicationsHeader(
 	return `${lines.join('\n')}\n\n`;
 }
 
-function formatDate(date: Date): string {
-	return date.toLocaleDateString(undefined, {
-		year: 'numeric',
-		month: 'short',
-		day: 'numeric'
-	});
-}
-
 export default async function ArticleViewerPage({
 	params
 }: {
@@ -127,9 +120,8 @@ export default async function ArticleViewerPage({
 	]);
 
 	const fileSets: ArticleFileSet[] = articles.map((row) => {
-		const imagesPrefixed =
-			buildImagesHeader(row.metaphor_family, seriesState.recent) + row.images_md;
-		const publicationsPrefixed =
+		const imagesMd = buildImagesHeader(row.metaphor_family, seriesState.recent) + row.images_md;
+		const publicationsMd =
 			buildPublicationsHeader(row.primary_medium_pub, seriesState.queue) + row.publications_md;
 		return {
 			id: row.id,
@@ -140,29 +132,35 @@ export default async function ArticleViewerPage({
 			opportunitySignal: row.opportunity_signal,
 			metaphorFamily: row.metaphor_family,
 			primaryMediumPub: row.primary_medium_pub,
+			contentMd: row.content_md,
+			quotesMd: row.quotes_md,
+			imagesMd,
+			publicationsMd,
 			contentHtml: renderMarkdown(row.content_md),
 			quotesHtml: renderMarkdown(row.quotes_md),
-			imagesHtml: renderMarkdown(imagesPrefixed),
-			publicationsHtml: renderMarkdown(publicationsPrefixed)
+			imagesHtml: renderMarkdown(imagesMd),
+			publicationsHtml: renderMarkdown(publicationsMd)
 		};
 	});
 
+	const generatedAt =
+		report.generated_at instanceof Date ? report.generated_at : new Date(report.generated_at);
+
 	return (
 		<div>
-			<div className="mb-6 flex items-baseline justify-between gap-4">
-				<div>
-					<Link href="/articles" className="text-sm text-indigo-600 underline">
-						Articles
-					</Link>
-					<h1 className="mt-1 text-2xl font-bold text-gray-900 dark:text-neutral-100">
-						Articles for report {report.id.slice(0, 8)}
-					</h1>
-					<p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">
-						Generated {formatDate(report.generated_at instanceof Date ? report.generated_at : new Date(report.generated_at))}
-					</p>
-				</div>
+			<Link href="/articles" className="text-sm text-indigo-600 hover:text-indigo-700">
+				Back to articles
+			</Link>
+			<h1 className="mt-3 text-2xl font-bold text-gray-900 dark:text-neutral-100">
+				Articles for report
+			</h1>
+			<p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">
+				{generatedAt.toLocaleString()}
+			</p>
+
+			<div className="mt-8">
+				<ArticleViewer articles={fileSets} />
 			</div>
-			<ArticleViewer articles={fileSets} />
 		</div>
 	);
 }
