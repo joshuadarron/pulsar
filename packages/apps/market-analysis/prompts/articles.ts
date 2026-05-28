@@ -363,9 +363,7 @@ function formatRecentMetaphorFamilies(state: SeriesState): string {
 	if (state.recentMetaphorFamilies.length === 0) {
 		return '(no metaphor families used recently)';
 	}
-	return state.recentMetaphorFamilies
-		.map((family, idx) => `${idx + 1}. ${family}`)
-		.join('\n');
+	return state.recentMetaphorFamilies.map((family, idx) => `${idx + 1}. ${family}`).join('\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -540,10 +538,7 @@ Pick 1 to N high-signal opportunities from the interpretations above. For each, 
  * profile and long-form samples and produces the article body (title,
  * subtitle, content_md) for one spec at a time.
  */
-export function buildArticleWriterSystemPrompt(
-	ctx: OperatorContext,
-	voice: VoiceContext
-): string {
+export function buildArticleWriterSystemPrompt(ctx: OperatorContext, voice: VoiceContext): string {
 	return `You are the article writer for Pulsar, writing on behalf of the operator below.
 
 ## Who you serve
@@ -598,11 +593,12 @@ export function buildArticleWriterUserPrompt(args: {
 	reportContext: { executiveSummary: string; marketSnapshot: string };
 	crossRefs: PublishedArticleRef[];
 }): string {
-	const crossRefBlock = args.crossRefs.length === 0
-		? '(no cross-references)'
-		: args.crossRefs
-				.map((ref) => `- [${ref.slug}] ${ref.title} - argument: ${ref.angle}`)
-				.join('\n');
+	const crossRefBlock =
+		args.crossRefs.length === 0
+			? '(no cross-references)'
+			: args.crossRefs
+					.map((ref) => `- [${ref.slug}] ${ref.title} - argument: ${ref.angle}`)
+					.join('\n');
 
 	return `## Article spec
 
@@ -693,15 +689,21 @@ ${formatMediumQueue(state)}
 
 ## Output contract
 
-Respond with ONLY a raw JSON object. No markdown fences, no preamble, no commentary.
+Respond with ONLY tagged sections in the exact format below. No JSON, no preamble, no commentary, no outer code fences. Each section's body is raw markdown with no escaping; the literal delimiters separate the three files.
 
-{
-  "quotes_md": "<full markdown file body>",
-  "images_md": "<full markdown file body>",
-  "publications_md": "<full markdown file body>"
-}
+<<<QUOTES_MD>>>
+<full quotes.md markdown body here, with no escaping>
+<<<END_QUOTES_MD>>>
 
-Each value is the complete file contents in markdown. Escape literal double-quotes as \\" and literal newlines as \\n so the outer JSON parses cleanly. Do not wrap the markdown in code fences.
+<<<IMAGES_MD>>>
+<full images.md markdown body here, with no escaping>
+<<<END_IMAGES_MD>>>
+
+<<<PUBLICATIONS_MD>>>
+<full publications.md markdown body here, with no escaping>
+<<<END_PUBLICATIONS_MD>>>
+
+The opening delimiter (<<<QUOTES_MD>>> etc.) appears on its own line. The closing delimiter (<<<END_QUOTES_MD>>> etc.) also appears on its own line. Between the delimiters, write the file body verbatim: real newlines, real double quotes, literal triple-backtick code fences, anything. Do not wrap the inner markdown in any fence or quote.
 
 ## Hard rules
 

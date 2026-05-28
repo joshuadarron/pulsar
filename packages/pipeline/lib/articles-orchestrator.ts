@@ -212,38 +212,190 @@ interface RawAnnotatorResponse {
 	publications_md?: unknown;
 }
 
+type AnnotatorFieldKey = 'quotes_md' | 'images_md' | 'publications_md';
+
+const ANNOTATOR_OPEN_TAGS: Record<AnnotatorFieldKey, RegExp> = {
+	quotes_md: /<<<\s*QUOTES_MD\s*>>>/i,
+	images_md: /<<<\s*IMAGES_MD\s*>>>/i,
+	publications_md: /<<<\s*PUBLICATIONS_MD\s*>>>/i
+};
+
+// Strip any trailing END markers (or fragments of them) plus any orphan
+// opening markers that fell into the same section.
+const END_TAG_TRAILER_RE = /<<<\s*END_(?:QUOTES|IMAGES|PUBLICATIONS)_MD\s*>>>[\s\S]*$/i;
+
+/**
+ * Extract the three annotator sections using opening tags as boundaries.
+ * Tolerates missing <<<END_*_MD>>> markers, which is the common failure mode
+ * when the model runs out of output tokens during the final (publications)
+ * section. The order of opening tags is fixed by the system prompt.
+ *
+ * Each section runs from its opening tag to whichever comes first: the next
+ * opening tag, an explicit END marker, or end-of-string. We strip any END
+ * marker (and anything after) from the captured slice so the returned
+ * markdown is clean.
+ */
+function extractTaggedSections(raw: string): {
+	quotes_md: string;
+	images_md: string;
+	publications_md: string;
+} | null {
+	const positions: Array<{ key: AnnotatorFieldKey; start: number; tagLen: number }> = [];
+	for (const key of ['quotes_md', 'images_md', 'publications_md'] as AnnotatorFieldKey[]) {
+		const match = raw.match(ANNOTATOR_OPEN_TAGS[key]);
+		if (!match || match.index === undefined) return null;
+		positions.push({ key, start: match.index, tagLen: match[0].length });
+	}
+
+	positions.sort((a, b) => a.start - b.start);
+	const out: Partial<Record<AnnotatorFieldKey, string>> = {};
+	for (let i = 0; i < positions.length; i += 1) {
+		const current = positions[i];
+		const next = positions[i + 1];
+		const sliceStart = current.start + current.tagLen;
+		const sliceEnd = next ? next.start : raw.length;
+		const body = raw.slice(sliceStart, sliceEnd).replace(END_TAG_TRAILER_RE, '').trim();
+		if (body.length === 0) return null;
+		out[current.key] = body;
+	}
+
+	if (!out.quotes_md || !out.images_md || !out.publications_md) return null;
+	return {
+		quotes_md: out.quotes_md,
+		images_md: out.images_md,
+		publications_md: out.publications_md
+	};
+}
+
+/**
+ * Lenient JSON-field recovery for the case where the LLM emitted a JSON
+ * object but the markdown values inside contain unescaped characters that
+ * break a strict JSON.parse. Walks the string keyed on field names and reads
+ * up to the next field-name boundary, then strips outer quotes and unescapes
+ * common sequences. Brittle by design; only used as a last-ditch fallback
+ * before we give up on the response.
+ */
+function lenientJsonFieldExtract(raw: string): {
+	quotes_md: string;
+	images_md: string;
+	publications_md: string;
+} | null {
+	const fields: AnnotatorFieldKey[] = ['quotes_md', 'images_md', 'publications_md'];
+	const out: Partial<Record<AnnotatorFieldKey, string>> = {};
+
+	for (const field of fields) {
+		const startRe = new RegExp(`"${field}"\\s*:\\s*"`);
+		const startMatch = raw.match(startRe);
+		if (!startMatch || startMatch.index === undefined) return null;
+		const valueStart = startMatch.index + startMatch[0].length;
+
+		// Find the boundary: next field key or end-of-object.
+		const otherFields = fields.filter((f) => f !== field);
+		const boundaryRe = new RegExp(
+			`("\\s*,\\s*"(?:${otherFields.join('|')})"\\s*:|"\\s*\\}\\s*$)`,
+			'g'
+		);
+		boundaryRe.lastIndex = valueStart;
+		const boundaryMatch = boundaryRe.exec(raw);
+		if (!boundaryMatch) return null;
+		const valueEnd = boundaryMatch.index;
+
+		const rawValue = raw.slice(valueStart, valueEnd);
+		// Best-effort unescape of common sequences the LLM does get right.
+		const unescaped = rawValue
+			.replace(/\\n/g, '\n')
+			.replace(/\\t/g, '\t')
+			.replace(/\\"/g, '"')
+			.replace(/\\\\/g, '\\');
+		out[field] = unescaped.trim();
+	}
+
+	if (!out.quotes_md || !out.images_md || !out.publications_md) return null;
+	return {
+		quotes_md: out.quotes_md,
+		images_md: out.images_md,
+		publications_md: out.publications_md
+	};
+}
+
+/**
+ * Parse the annotator response into the three companion-file bodies.
+ *
+ * Resilience order:
+ *   1. Raw string with <<<QUOTES_MD>>>...<<<END_QUOTES_MD>>> tagged sections
+ *      (the primary format; chosen because escaping multi-kilobyte markdown
+ *      into JSON proved brittle).
+ *   2. Object form (legacy JSON shape; works if the LLM ignores the new
+ *      contract and RocketRide pre-parses its output).
+ *   3. Lenient JSON-field extract from a string (the LLM emitted JSON but
+ *      JSON.parse failed because of unescaped characters in markdown).
+ */
 function parseAnnotatorResponse(raw: unknown): {
 	quotes_md: string;
 	images_md: string;
 	publications_md: string;
 } | null {
-	if (!raw || typeof raw !== 'object') return null;
-	const data = raw as RawAnnotatorResponse;
-	const quotes = typeof data.quotes_md === 'string' ? data.quotes_md : '';
-	const images = typeof data.images_md === 'string' ? data.images_md : '';
-	const publications = typeof data.publications_md === 'string' ? data.publications_md : '';
-	if (
-		quotes.trim().length === 0 ||
-		images.trim().length === 0 ||
-		publications.trim().length === 0
-	) {
+	if (typeof raw === 'string') {
+		const tagged = extractTaggedSections(raw);
+		if (tagged) return tagged;
+
+		// Fallback: maybe the LLM still emitted JSON. Try lenient recovery.
+		const lenient = lenientJsonFieldExtract(raw);
+		if (lenient) return lenient;
+
 		return null;
 	}
-	return {
-		quotes_md: quotes,
-		images_md: images,
-		publications_md: publications
-	};
+
+	if (raw && typeof raw === 'object') {
+		const data = raw as RawAnnotatorResponse;
+		const quotes = typeof data.quotes_md === 'string' ? data.quotes_md : '';
+		const images = typeof data.images_md === 'string' ? data.images_md : '';
+		const publications = typeof data.publications_md === 'string' ? data.publications_md : '';
+		if (
+			quotes.trim().length === 0 ||
+			images.trim().length === 0 ||
+			publications.trim().length === 0
+		) {
+			return null;
+		}
+		return {
+			quotes_md: quotes,
+			images_md: images,
+			publications_md: publications
+		};
+	}
+
+	return null;
+}
+
+/**
+ * Best-effort diagnostic summary of a failed annotator response. Returned to
+ * the orchestrator to include in the warn log so we can see what the LLM
+ * actually emitted on failure, since we no longer hit the JSON-extract path
+ * in the runner.
+ */
+function describeAnnotatorResponse(raw: unknown): string {
+	if (typeof raw === 'string') {
+		const head = raw.slice(0, 600);
+		const tail = raw.length > 900 ? raw.slice(-300) : '';
+		const preview = tail
+			? `[string ${raw.length} chars] ${head}\n...[middle elided]...\n${tail}`
+			: `[string ${raw.length} chars] ${raw}`;
+		return preview;
+	}
+	if (raw && typeof raw === 'object') {
+		const keys = Object.keys(raw as Record<string, unknown>).join(',');
+		const json = JSON.stringify(raw).slice(0, 800);
+		return `[object keys=${keys}] ${json}`;
+	}
+	return `[type=${typeof raw}] ${String(raw).slice(0, 200)}`;
 }
 
 // ---------------------------------------------------------------------------
 // Series state helpers
 // ---------------------------------------------------------------------------
 
-function resolveCrossRefs(
-	candidates: string[],
-	state: SeriesState
-): PublishedArticleRef[] {
+function resolveCrossRefs(candidates: string[], state: SeriesState): PublishedArticleRef[] {
 	if (candidates.length === 0) return [];
 	const bySlug = new Map(state.publishedArticles.map((ref) => [ref.slug, ref]));
 	const out: PublishedArticleRef[] = [];
@@ -369,11 +521,12 @@ export async function orchestrateArticles(
 		});
 		const annotation = parseAnnotatorResponse(annotatorResponse);
 		if (!annotation) {
+			const preview = describeAnnotatorResponse(annotatorResponse);
 			await log(
 				runId,
 				'warn',
 				stageLabel,
-				'Annotator returned no parseable companion files. Skipping spec.'
+				`Annotator returned no parseable companion files. Skipping spec. Raw: ${preview}`
 			);
 			continue;
 		}

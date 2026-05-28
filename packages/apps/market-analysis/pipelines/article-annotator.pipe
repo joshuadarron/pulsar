@@ -47,7 +47,7 @@
       "config": {
         "profile": "default",
         "default": {
-          "question": "You will receive a JSON payload with two fields: \"prompt\" (your task instructions, including the operator system prompt with the metaphor family details, pull-quote rules, image style rules, publications rules, and series state, plus the user prompt with the article spec and finalized body) and \"data\" (a structured copy of the same). Follow the prompt instructions exactly. Respond with ONLY a raw JSON object as specified in your system instructions. No markdown fences, no preamble."
+          "question": "You will receive a JSON payload with two fields: \"prompt\" (your task instructions, including the operator system prompt with the metaphor family details, pull-quote rules, image style rules, publications rules, and series state, plus the user prompt with the article spec and finalized body) and \"data\" (a structured copy of the same). Follow the prompt instructions exactly. Respond with the three tagged sections (<<<QUOTES_MD>>>...<<<END_QUOTES_MD>>>, <<<IMAGES_MD>>>...<<<END_IMAGES_MD>>>, <<<PUBLICATIONS_MD>>>...<<<END_PUBLICATIONS_MD>>>) as specified in your system instructions. No JSON, no markdown fences, no preamble."
         },
         "parameters": {}
       },
@@ -72,9 +72,9 @@
       "name": "Article Annotator",
       "config": {
         "instructions": [
-          "You are the article annotator. Your full operator identity, hard rules, voice profile, pull-quote rules, image style rules with the assigned metaphor family details, publications rules with the queue state, and the JSON output contract are supplied in the user prompt under the \"prompt\" field at runtime.",
+          "You are the article annotator. Your full operator identity, hard rules, voice profile, pull-quote rules, image style rules with the assigned metaphor family details, publications rules with the queue state, and the tagged-section output contract are supplied in the user prompt under the \"prompt\" field at runtime.",
           "Read the article spec and the finalized title, subtitle, and body. Produce three markdown files: quotes_md (pull quotes with placement anchors), images_md (cover plus three section anchor Midjourney prompts using the spec metaphor family, with captions, a summary table, generation tips, and a series visual variety note), and publications_md (ranked targets with fit assessments, submission sequence, and a series-level publication conflict update).",
-          "Respond with ONLY a raw JSON object: {\"quotes_md\": \"...\", \"images_md\": \"...\", \"publications_md\": \"...\"}. No markdown fences, no preamble, no commentary. Inside each markdown string escape literal double-quotes as \\\" and literal newlines as \\n so the outer JSON parses cleanly. Do not wrap the markdown in code fences."
+          "Respond with ONLY the three tagged sections in this exact format: <<<QUOTES_MD>>> ... <<<END_QUOTES_MD>>> <<<IMAGES_MD>>> ... <<<END_IMAGES_MD>>> <<<PUBLICATIONS_MD>>> ... <<<END_PUBLICATIONS_MD>>>. Each opening and closing delimiter appears on its own line. Inside the delimiters, write raw markdown with no escaping (real newlines, real double quotes, literal triple-backtick code fences are fine). Do not emit JSON. Do not wrap the inner markdown in any code fence. Do not include any preamble or commentary outside the delimiters."
         ],
         "parameters": {}
       },

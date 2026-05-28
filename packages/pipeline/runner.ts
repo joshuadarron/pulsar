@@ -1370,6 +1370,15 @@ async function invokeArticlePipeline(
 		return first;
 	}
 	const str = typeof first === 'string' ? first : JSON.stringify(first ?? '{}');
+
+	// The annotator pipe emits tagged sections (<<<QUOTES_MD>>>...) instead of
+	// JSON because escaping multi-kilobyte markdown into JSON string values is
+	// too brittle. Pass the raw string straight through for the orchestrator
+	// to extract by delimiter.
+	if (pipeName === 'article-annotator.pipe') {
+		return str;
+	}
+
 	try {
 		return extractJson<Record<string, unknown>>(str);
 	} catch (parseErr) {
