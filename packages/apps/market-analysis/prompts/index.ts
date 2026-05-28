@@ -1,4 +1,23 @@
 export {
+	type ArticleAnnotation,
+	type ArticleBody,
+	type ArticleSpec,
+	buildArticleAnnotatorSystemPrompt,
+	buildArticleAnnotatorUserPrompt,
+	buildArticlePickerSystemPrompt,
+	buildArticlePickerUserPrompt,
+	buildArticleWriterSystemPrompt,
+	buildArticleWriterUserPrompt,
+	MEDIUM_PUBLICATIONS,
+	type MediumPublication,
+	METAPHOR_FAMILIES,
+	METAPHOR_FAMILY_DESCRIPTIONS,
+	type MetaphorFamily,
+	type PublishedArticleRef,
+	pushRecentMetaphorFamily,
+	type SeriesState
+} from './articles.js';
+export {
 	ALL_CONTENT_PLATFORMS,
 	type AngleChoice,
 	buildAnglePickerSystemPrompt,

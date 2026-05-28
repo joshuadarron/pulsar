@@ -25,6 +25,8 @@ function makeStubContext(overrides: Partial<OperatorContext> = {}): OperatorCont
 		],
 		glossary: {},
 		trackedEntities: { entities: [], keywords: [], technologies: [] },
+		authorIdentity: '',
+		anchorPhrase: '',
 		...overrides
 	};
 }

@@ -37,7 +37,9 @@ function makeOperatorContext(): OperatorContext {
 		audience: 'Senior backend engineers building production systems.',
 		hardRules: ['No em-dashes anywhere. Use commas, colons, periods, parentheses.'],
 		glossary: {},
-		trackedEntities: { entities: [], keywords: [], technologies: [] }
+		trackedEntities: { entities: [], keywords: [], technologies: [] },
+		authorIdentity: '',
+		anchorPhrase: ''
 	};
 }
 

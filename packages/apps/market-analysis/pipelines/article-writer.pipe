@@ -1,0 +1,154 @@
+{
+  "_comment": "Article-package pass 2 (writer). Takes one article spec from the picker plus the operator long-form voice samples and the report context. Writes the finalized article body in markdown. The runner calls this pipe once per spec. The operator system prompt (voice profile, long-form samples, structure rules) and user prompt (spec + report context) are injected via the webhook payload at runtime. See packages/apps/market-analysis/prompts/articles.ts for the prompt builders.",
+  "components": [
+    {
+      "id": "webhook_1",
+      "provider": "webhook",
+      "name": "Web Hook",
+      "config": {
+        "hideForm": true,
+        "mode": "Source",
+        "parameters": {},
+        "type": "webhook"
+      },
+      "ui": {
+        "position": {
+          "x": 0,
+          "y": 440
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      }
+    },
+    {
+      "id": "parse_1",
+      "provider": "parse",
+      "name": "Parser",
+      "config": {},
+      "ui": {
+        "position": {
+          "x": 230,
+          "y": 420
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "tags",
+          "from": "webhook_1"
+        }
+      ]
+    },
+    {
+      "id": "question_1",
+      "provider": "question",
+      "name": "Question",
+      "config": {
+        "profile": "default",
+        "default": {
+          "question": "You will receive a JSON payload with two fields: \"prompt\" (your task instructions, including the operator system prompt with voice profile and long-form samples, plus the user prompt with the article spec and report context) and \"data\" (a structured copy of the same). Follow the prompt instructions exactly. Respond with ONLY a raw JSON object as specified in your system instructions. No markdown fences, no preamble."
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 472,
+          "y": 476.1666666666667
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "text",
+          "from": "parse_1"
+        }
+      ]
+    },
+    {
+      "id": "article_writer",
+      "provider": "agent_crewai",
+      "name": "Article Writer",
+      "config": {
+        "instructions": [
+          "You are the article writer. Your full operator identity, positioning, audience, hard rules, voice profile, long-form voice samples, article structure rules, and the JSON output contract are supplied in the user prompt under the \"prompt\" field at runtime.",
+          "Read the article spec in the payload and write the full article body in markdown. Follow the section pattern: opening (no header), context, body sections, worked example, optional honest limit, what-to-do recommendations, runtime reveal at the close, cross-reference inline links, and a Resources footnote when external sources informed the post.",
+          "Respond with ONLY a raw JSON object: {\"title\": \"...\", \"subtitle\": \"...\", \"content_md\": \"...\"}. No markdown fences, no preamble, no commentary. Inside the content_md string escape literal double-quotes as \\\" and literal newlines as \\n so the outer JSON parses cleanly. Do not include the title or subtitle inside content_md; they go in their own fields."
+        ],
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 702,
+          "y": 460.6666666666667
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "questions",
+          "from": "question_1"
+        }
+      ]
+    },
+    {
+      "id": "llm_anthropic_1",
+      "provider": "llm_anthropic",
+      "name": "Anthropic",
+      "config": {
+        "profile": "claude-sonnet-4-6",
+        "claude-sonnet-4-6": {
+          "apikey": "${ROCKETRIDE_ANTHROPIC_KEY}"
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 550,
+          "y": 670
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "llm",
+          "from": "article_writer"
+        }
+      ]
+    },
+    {
+      "id": "response_answers_1",
+      "provider": "response_answers",
+      "name": "Return Answers",
+      "config": {
+        "laneName": "answers"
+      },
+      "ui": {
+        "position": {
+          "x": 940,
+          "y": 470
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "answers",
+          "from": "article_writer"
+        }
+      ]
+    }
+  ],
+  "project_id": "78ba704d-ad37-40fc-a940-9d153db9b934",
+  "version": 1,
+  "isLocked": false,
+  "snapToGrid": true,
+  "snapGridSize": [
+    10,
+    10
+  ],
+  "docRevision": 1
+}

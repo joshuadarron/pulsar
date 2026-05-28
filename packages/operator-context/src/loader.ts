@@ -100,6 +100,8 @@ function loadProfile(contextDir: string): {
 	groundingUrls: string[];
 	positioning: string;
 	audience: string;
+	authorIdentity: string;
+	anchorPhrase: string;
 } {
 	const profilePath = path.join(contextDir, 'profile.md');
 	if (!existsSync(profilePath)) {
@@ -121,7 +123,9 @@ function loadProfile(contextDir: string): {
 		allowedGitHubLogins: asStringArray(frontmatter.allowedGitHubLogins),
 		groundingUrls: asStringArray(frontmatter.groundingUrls),
 		positioning: readBodySection(body, 'Positioning'),
-		audience: readBodySection(body, 'Audience')
+		audience: readBodySection(body, 'Audience'),
+		authorIdentity: asString(frontmatter.authorIdentity),
+		anchorPhrase: asString(frontmatter.anchorPhrase)
 	};
 }
 

@@ -1,6 +1,11 @@
 import path from 'node:path';
 import { pipelinesDir as PIPELINES_DIR } from '@pulsar/app-market-analysis/pipelines';
 import {
+	METAPHOR_FAMILIES,
+	type MetaphorFamily,
+	type SeriesState
+} from '@pulsar/app-market-analysis/prompts/articles';
+import {
 	buildSectionPrompts,
 	buildSystemPrompt
 } from '@pulsar/app-market-analysis/prompts/trend-report';
@@ -31,6 +36,11 @@ import type {
 	SupportingResource
 } from '@pulsar/shared/types';
 import { loadVoiceContext } from '@pulsar/voice';
+import {
+	type ArticlePipelineName,
+	type ContentArticleRow,
+	orchestrateArticles
+} from './lib/articles-orchestrator.js';
 import {
 	type ContentDraftRow,
 	orchestrateContentDrafts
@@ -1321,6 +1331,315 @@ export async function runContentDraftsForReport(
 }
 
 // ---------------------------------------------------------------------------
+// Article-package wiring. The article-picker / article-writer / article-
+// annotator triple supersedes the angle-picker / content-drafter pair.
+// runContentArticles is the production entry point; runContentDrafts above
+// stays for backward compatibility with legacy reports already persisted in
+// content_drafts.
+// ---------------------------------------------------------------------------
+
+const ARTICLES_APP_SLUG = 'market-analysis';
+
+async function invokeArticlePipeline(
+	client: Awaited<ReturnType<typeof getClient>>,
+	runId: string,
+	pipeName: ArticlePipelineName,
+	payload: { system: string; user: string }
+): Promise<unknown> {
+	checkCancelled(runId);
+	const pipePath = path.join(PIPELINES_DIR, pipeName);
+	const { token } = await usePipeline(client, runId, pipePath);
+	setActiveToken(runId, client, token);
+
+	const wirePayload = {
+		prompt: `${payload.system}\n\n---\n\n${payload.user}`,
+		data: {}
+	};
+
+	let response: unknown;
+	try {
+		response = await client.send(token, JSON.stringify(wirePayload), {}, 'application/json');
+	} finally {
+		await terminatePipeline(client, token);
+	}
+
+	const answers = (response as { answers?: unknown })?.answers ?? [];
+	const first = Array.isArray(answers) ? answers[0] : answers;
+
+	if (first && typeof first === 'object' && !Array.isArray(first)) {
+		return first;
+	}
+	const str = typeof first === 'string' ? first : JSON.stringify(first ?? '{}');
+	try {
+		return extractJson<Record<string, unknown>>(str);
+	} catch (parseErr) {
+		const head = str.slice(0, 1500);
+		const tail = str.length > 2100 ? str.slice(-600) : '';
+		const preview = tail
+			? `[${str.length} chars] ${head}\n...[middle elided]...\n${tail}`
+			: `[${str.length} chars] ${str}`;
+		const reason = parseErr instanceof Error ? parseErr.message : String(parseErr);
+		await logRun(
+			runId,
+			'warn',
+			'articles',
+			`Could not parse ${pipeName} answer (${reason}). Raw: ${preview}`
+		);
+		return {};
+	}
+}
+
+async function persistContentArticleRow(row: ContentArticleRow): Promise<void> {
+	await query(
+		`INSERT INTO content_articles
+		   (run_id, report_id, article_slug, opportunity_signal, angle, title, subtitle,
+		    metaphor_family, primary_medium_pub, content_md, quotes_md, images_md,
+		    publications_md, cross_refs)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		 ON CONFLICT (report_id, article_slug) DO UPDATE SET
+		   run_id = EXCLUDED.run_id,
+		   opportunity_signal = EXCLUDED.opportunity_signal,
+		   angle = EXCLUDED.angle,
+		   title = EXCLUDED.title,
+		   subtitle = EXCLUDED.subtitle,
+		   metaphor_family = EXCLUDED.metaphor_family,
+		   primary_medium_pub = EXCLUDED.primary_medium_pub,
+		   content_md = EXCLUDED.content_md,
+		   quotes_md = EXCLUDED.quotes_md,
+		   images_md = EXCLUDED.images_md,
+		   publications_md = EXCLUDED.publications_md,
+		   cross_refs = EXCLUDED.cross_refs,
+		   updated_at = now()`,
+		[
+			row.runId,
+			row.reportId,
+			row.articleSlug,
+			row.opportunitySignal,
+			row.angle,
+			row.title,
+			row.subtitle,
+			row.metaphorFamily,
+			row.primaryMediumPub,
+			row.contentMd,
+			row.quotesMd,
+			row.imagesMd,
+			row.publicationsMd,
+			JSON.stringify(row.crossRefs)
+		]
+	);
+}
+
+function isMetaphorFamily(value: unknown): value is MetaphorFamily {
+	return typeof value === 'string' && (METAPHOR_FAMILIES as readonly string[]).includes(value);
+}
+
+async function loadSeriesState(): Promise<SeriesState> {
+	const result = await query<{
+		recent_metaphor_families: unknown;
+		medium_publication_queue: unknown;
+		published_articles: unknown;
+	}>(
+		`SELECT recent_metaphor_families, medium_publication_queue, published_articles
+		 FROM content_series_state WHERE app_slug = $1`,
+		[ARTICLES_APP_SLUG]
+	);
+
+	if (result.rows.length === 0) {
+		return {
+			recentMetaphorFamilies: [],
+			mediumPublicationQueue: {},
+			publishedArticles: []
+		};
+	}
+
+	const row = result.rows[0];
+	const recent = Array.isArray(row.recent_metaphor_families)
+		? row.recent_metaphor_families.filter(isMetaphorFamily)
+		: [];
+	const queue =
+		row.medium_publication_queue && typeof row.medium_publication_queue === 'object'
+			? (row.medium_publication_queue as Record<string, string>)
+			: {};
+	const published = Array.isArray(row.published_articles)
+		? row.published_articles
+				.filter((entry): entry is { slug: string; title: string; angle: string } => {
+					return (
+						entry !== null &&
+						typeof entry === 'object' &&
+						typeof (entry as { slug?: unknown }).slug === 'string' &&
+						typeof (entry as { title?: unknown }).title === 'string' &&
+						typeof (entry as { angle?: unknown }).angle === 'string'
+					);
+				})
+				.map((entry) => ({ slug: entry.slug, title: entry.title, angle: entry.angle }))
+		: [];
+
+	return {
+		recentMetaphorFamilies: recent,
+		mediumPublicationQueue: queue,
+		publishedArticles: published
+	};
+}
+
+async function saveSeriesState(state: SeriesState): Promise<void> {
+	await query(
+		`INSERT INTO content_series_state
+		   (app_slug, recent_metaphor_families, medium_publication_queue, published_articles)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (app_slug) DO UPDATE SET
+		   recent_metaphor_families = EXCLUDED.recent_metaphor_families,
+		   medium_publication_queue = EXCLUDED.medium_publication_queue,
+		   published_articles = EXCLUDED.published_articles,
+		   updated_at = now()`,
+		[
+			ARTICLES_APP_SLUG,
+			JSON.stringify(state.recentMetaphorFamilies),
+			JSON.stringify(state.mediumPublicationQueue),
+			JSON.stringify(state.publishedArticles)
+		]
+	);
+}
+
+async function runContentArticles(
+	client: Awaited<ReturnType<typeof getClient>>,
+	runId: string,
+	reportId: string,
+	reportData: ReportData
+): Promise<number> {
+	await logRun(runId, 'info', 'articles', 'Starting article-package pipeline...');
+
+	const invoke = (
+		innerRunId: string,
+		pipeName: ArticlePipelineName,
+		payload: { system: string; user: string }
+	) => invokeArticlePipeline(client, innerRunId, pipeName, payload);
+	const log = (
+		innerRunId: string,
+		level: 'info' | 'warn' | 'error' | 'success',
+		stage: string,
+		message: string
+	) => logRun(innerRunId, level, stage, message);
+
+	const result = await orchestrateArticles(
+		{
+			loadOperator: loadOperatorContext,
+			loadVoice: loadVoiceContext,
+			loadSeriesState,
+			saveSeriesState,
+			invokePipeline: invoke,
+			insertArticle: persistContentArticleRow,
+			log
+		},
+		{ runId, reportId, reportData }
+	);
+
+	if (result.articleCount > 0) {
+		await query(
+			`INSERT INTO notifications (type, title, message, link, reference_id)
+			 VALUES ($1, $2, $3, $4, $5)`,
+			[
+				'drafts',
+				'Articles Ready',
+				`${result.articleCount} article package(s) generated.`,
+				'/drafts',
+				reportId
+			]
+		);
+	}
+
+	return result.articleCount;
+}
+
+/**
+ * Run only the article-package pipeline against an existing report row.
+ *
+ * Use case: re-run articles for a previously generated report without
+ * regenerating the report itself (e.g., after iterating on prompts or voice
+ * samples). Driven by `pnpm run pipeline -- --content-only --report-id=<id>`.
+ *
+ * @param reportId Existing `reports.id` UUID. Throws if the row is missing.
+ * @param trigger Run trigger label written to the `runs` row.
+ * @returns The new run id, the report id, and the count of article packages persisted.
+ */
+export async function runContentArticlesForReport(
+	reportId: string,
+	trigger: 'scheduled' | 'manual' = 'manual'
+): Promise<{ runId: string; reportId: string; articleCount: number }> {
+	const reportRow = await query<{ report_data: ReportData }>(
+		'SELECT report_data FROM reports WHERE id = $1',
+		[reportId]
+	);
+	if (reportRow.rows.length === 0) {
+		throw new Error(`Report not found: ${reportId}`);
+	}
+	const reportData = reportRow.rows[0].report_data;
+
+	let runId: string;
+	try {
+		const runResult = await query<{ id: string }>(
+			"INSERT INTO runs (trigger, run_type) VALUES ($1, 'pipeline') RETURNING id",
+			[trigger]
+		);
+		runId = runResult.rows[0].id;
+	} catch (err: unknown) {
+		if (
+			err &&
+			typeof err === 'object' &&
+			'code' in err &&
+			(err as { code: string }).code === '23505'
+		) {
+			throw new Error('Another pipeline is already running. Try again once it completes.');
+		}
+		throw err;
+	}
+
+	let client: Awaited<ReturnType<typeof getClient>> | null = null;
+	try {
+		await logRun(
+			runId,
+			'info',
+			'init',
+			`Content-only pipeline run started for report ${reportId} (trigger: ${trigger})`
+		);
+
+		try {
+			loadOperatorContext();
+		} catch (err) {
+			if (err instanceof OperatorContextNotConfiguredError) {
+				const message =
+					'Pulsar pipeline requires .context/ configuration. Run pnpm setup to configure.';
+				await logRun(runId, 'error', 'init', message);
+			}
+			throw err;
+		}
+
+		client = await getClient();
+		await logRun(runId, 'info', 'init', 'Connected to RocketRide');
+
+		const articleCount = await runContentArticles(client, runId, reportId, reportData);
+
+		await query("UPDATE runs SET completed_at = now(), status = 'complete' WHERE id = $1", [runId]);
+		await logRun(runId, 'success', 'complete', 'Content-only pipeline complete');
+
+		activeRuns.delete(runId);
+		return { runId, reportId, articleCount };
+	} catch (err) {
+		const cancelled = activeRuns.get(runId)?.aborted;
+		activeRuns.delete(runId);
+		const status = cancelled ? 'cancelled' : 'failed';
+		const message = cancelled ? 'Run was cancelled by user' : String(err);
+		await logRun(runId, 'error', 'fatal', message);
+		await query('UPDATE runs SET completed_at = now(), status = $1, error_log = $2 WHERE id = $3', [
+			status,
+			message,
+			runId
+		]);
+		if (!cancelled) throw err;
+		return { runId, reportId, articleCount: 0 };
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Orchestration entry point
 // ---------------------------------------------------------------------------
 
@@ -1414,7 +1733,7 @@ export async function runAllPipelines(trigger: 'scheduled' | 'manual' = 'schedul
 			if (reportRow.rows.length > 0) {
 				const reportData = reportRow.rows[0].report_data;
 				await extractPredictions(runId, reportId, reportData);
-				draftCount = await runContentDrafts(client, runId, reportId, reportData);
+				draftCount = await runContentArticles(client, runId, reportId, reportData);
 			}
 		}
 

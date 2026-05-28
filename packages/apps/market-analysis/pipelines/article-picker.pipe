@@ -1,0 +1,154 @@
+{
+  "_comment": "Article-package pass 1 (picker). Reads the completed trend report plus the series state (recent metaphor families, Medium publication queue, published articles) and emits 1 to N article specs. The operator system prompt and the user prompt with report context and series state are injected via the webhook payload at runtime; the agent_crewai instructions here describe the agent role at the structural level only. See packages/apps/market-analysis/prompts/articles.ts for the full prompt builders. The downstream writer and annotator pipes turn each spec into a four-file article package.",
+  "components": [
+    {
+      "id": "webhook_1",
+      "provider": "webhook",
+      "name": "Web Hook",
+      "config": {
+        "hideForm": true,
+        "mode": "Source",
+        "parameters": {},
+        "type": "webhook"
+      },
+      "ui": {
+        "position": {
+          "x": 0,
+          "y": 440
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      }
+    },
+    {
+      "id": "parse_1",
+      "provider": "parse",
+      "name": "Parser",
+      "config": {},
+      "ui": {
+        "position": {
+          "x": 230,
+          "y": 420
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "tags",
+          "from": "webhook_1"
+        }
+      ]
+    },
+    {
+      "id": "question_1",
+      "provider": "question",
+      "name": "Question",
+      "config": {
+        "profile": "default",
+        "default": {
+          "question": "You will receive a JSON payload with two fields: \"prompt\" (your task instructions, including the operator system prompt with the metaphor family rotation rules and Medium publication queue state, plus the user prompt with the report context) and \"data\" (a structured copy of the same). Follow the prompt instructions exactly. Respond with ONLY a raw JSON object as specified in your system instructions. No markdown fences, no preamble."
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 472,
+          "y": 476.1666666666667
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "text",
+          "from": "parse_1"
+        }
+      ]
+    },
+    {
+      "id": "article_picker",
+      "provider": "agent_crewai",
+      "name": "Article Picker",
+      "config": {
+        "instructions": [
+          "You are the article picker. Your full operator identity, positioning, audience, hard rules, voice profile, metaphor family rotation rules, Medium publication queue rules, cross-reference candidate rules, and the JSON output contract are supplied in the user prompt under the \"prompt\" field at runtime.",
+          "Read the report sections in the payload (executive summary, market snapshot, developer signals, signal interpretations). Pick 1 to N high-signal opportunities. For each, emit one article spec with article_slug, opportunity_signal, angle, proposed_title, proposed_subtitle, metaphor_family, primary_medium_pub, and cross_ref_candidates.",
+          "Respond with ONLY a raw JSON object: {\"articles\": [{\"article_slug\": \"...\", \"opportunity_signal\": \"...\", \"angle\": \"...\", \"proposed_title\": \"...\", \"proposed_subtitle\": \"...\", \"metaphor_family\": \"...\", \"primary_medium_pub\": null | \"...\", \"cross_ref_candidates\": [\"...\"]}]}. If no interpretations qualify, emit {\"articles\": []}. No markdown fences, no preamble, no commentary."
+        ],
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 702,
+          "y": 460.6666666666667
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "questions",
+          "from": "question_1"
+        }
+      ]
+    },
+    {
+      "id": "llm_anthropic_1",
+      "provider": "llm_anthropic",
+      "name": "Anthropic",
+      "config": {
+        "profile": "claude-sonnet-4-6",
+        "claude-sonnet-4-6": {
+          "apikey": "${ROCKETRIDE_ANTHROPIC_KEY}"
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 550,
+          "y": 670
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "llm",
+          "from": "article_picker"
+        }
+      ]
+    },
+    {
+      "id": "response_answers_1",
+      "provider": "response_answers",
+      "name": "Return Answers",
+      "config": {
+        "laneName": "answers"
+      },
+      "ui": {
+        "position": {
+          "x": 940,
+          "y": 470
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "answers",
+          "from": "article_picker"
+        }
+      ]
+    }
+  ],
+  "project_id": "4825badd-0165-499c-a946-3f2cae2fdcfc",
+  "version": 1,
+  "isLocked": false,
+  "snapToGrid": true,
+  "snapGridSize": [
+    10,
+    10
+  ],
+  "docRevision": 1
+}

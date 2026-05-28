@@ -7,12 +7,15 @@
 		"./app.config": "./app.config.ts",
 		"./prompts": "./prompts/index.ts",
 		"./prompts/trend-report": "./prompts/trend-report.ts",
+		"./prompts/articles": "./prompts/articles.ts",
 		"./prompts/content-drafts": "./prompts/content-drafts.ts",
 		"./prompts/content-recommendations": "./prompts/content-recommendations.ts",
 		"./pipelines": "./pipelines/index.ts",
 		"./templates": "./templates/index.ts",
 		"./ui/drafts": "./ui/drafts/index.tsx",
-		"./ui/drafts/[reportId]": "./ui/drafts/[reportId]/index.ts"
+		"./ui/drafts/[reportId]": "./ui/drafts/[reportId]/index.ts",
+		"./ui/articles": "./ui/articles/index.tsx",
+		"./ui/articles/[reportId]": "./ui/articles/[reportId]/index.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit"

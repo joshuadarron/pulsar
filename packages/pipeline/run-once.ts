@@ -7,7 +7,7 @@ dotenv.config({ path: path.resolve(fileURLToPath(import.meta.url), '../../../.en
 import { closeDriver } from '@pulsar/shared/db/neo4j';
 import pool from '@pulsar/shared/db/postgres';
 import { disconnectClient } from './lib/rocketride.js';
-import { runAllPipelines, runContentDraftsForReport } from './runner.js';
+import { runAllPipelines, runContentArticlesForReport } from './runner.js';
 
 interface CliFlags {
 	contentOnly: boolean;
@@ -72,9 +72,9 @@ async function main() {
 
 	try {
 		if (flags.contentOnly && flags.reportId) {
-			const result = await runContentDraftsForReport(flags.reportId, flags.trigger);
+			const result = await runContentArticlesForReport(flags.reportId, flags.trigger);
 			console.log(
-				`[Pipeline] Content-only run complete: runId=${result.runId} draftCount=${result.draftCount}`
+				`[Pipeline] Content-only run complete: runId=${result.runId} articleCount=${result.articleCount}`
 			);
 		} else {
 			await runAllPipelines(flags.trigger);

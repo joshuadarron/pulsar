@@ -1,0 +1,154 @@
+{
+  "_comment": "Article-package pass 3 (annotator). Takes the finalized title, subtitle, and body from the writer along with the original spec and the series state, and emits the three companion markdown files (quotes_md, images_md, publications_md) grounded on the locked-in body. Pull quote placement and image section anchors reference the body verbatim. The operator system prompt with the metaphor family details, pull-quote rules, image style rules, and publications rules, plus the user prompt with the spec and body, are injected via the webhook payload at runtime. See packages/apps/market-analysis/prompts/articles.ts for the prompt builders.",
+  "components": [
+    {
+      "id": "webhook_1",
+      "provider": "webhook",
+      "name": "Web Hook",
+      "config": {
+        "hideForm": true,
+        "mode": "Source",
+        "parameters": {},
+        "type": "webhook"
+      },
+      "ui": {
+        "position": {
+          "x": 0,
+          "y": 440
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      }
+    },
+    {
+      "id": "parse_1",
+      "provider": "parse",
+      "name": "Parser",
+      "config": {},
+      "ui": {
+        "position": {
+          "x": 230,
+          "y": 420
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "tags",
+          "from": "webhook_1"
+        }
+      ]
+    },
+    {
+      "id": "question_1",
+      "provider": "question",
+      "name": "Question",
+      "config": {
+        "profile": "default",
+        "default": {
+          "question": "You will receive a JSON payload with two fields: \"prompt\" (your task instructions, including the operator system prompt with the metaphor family details, pull-quote rules, image style rules, publications rules, and series state, plus the user prompt with the article spec and finalized body) and \"data\" (a structured copy of the same). Follow the prompt instructions exactly. Respond with ONLY a raw JSON object as specified in your system instructions. No markdown fences, no preamble."
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 472,
+          "y": 476.1666666666667
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "text",
+          "from": "parse_1"
+        }
+      ]
+    },
+    {
+      "id": "article_annotator",
+      "provider": "agent_crewai",
+      "name": "Article Annotator",
+      "config": {
+        "instructions": [
+          "You are the article annotator. Your full operator identity, hard rules, voice profile, pull-quote rules, image style rules with the assigned metaphor family details, publications rules with the queue state, and the JSON output contract are supplied in the user prompt under the \"prompt\" field at runtime.",
+          "Read the article spec and the finalized title, subtitle, and body. Produce three markdown files: quotes_md (pull quotes with placement anchors), images_md (cover plus three section anchor Midjourney prompts using the spec metaphor family, with captions, a summary table, generation tips, and a series visual variety note), and publications_md (ranked targets with fit assessments, submission sequence, and a series-level publication conflict update).",
+          "Respond with ONLY a raw JSON object: {\"quotes_md\": \"...\", \"images_md\": \"...\", \"publications_md\": \"...\"}. No markdown fences, no preamble, no commentary. Inside each markdown string escape literal double-quotes as \\\" and literal newlines as \\n so the outer JSON parses cleanly. Do not wrap the markdown in code fences."
+        ],
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 702,
+          "y": 460.6666666666667
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "questions",
+          "from": "question_1"
+        }
+      ]
+    },
+    {
+      "id": "llm_anthropic_1",
+      "provider": "llm_anthropic",
+      "name": "Anthropic",
+      "config": {
+        "profile": "claude-sonnet-4-6",
+        "claude-sonnet-4-6": {
+          "apikey": "${ROCKETRIDE_ANTHROPIC_KEY}"
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 550,
+          "y": 670
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "llm",
+          "from": "article_annotator"
+        }
+      ]
+    },
+    {
+      "id": "response_answers_1",
+      "provider": "response_answers",
+      "name": "Return Answers",
+      "config": {
+        "laneName": "answers"
+      },
+      "ui": {
+        "position": {
+          "x": 940,
+          "y": 470
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "answers",
+          "from": "article_annotator"
+        }
+      ]
+    }
+  ],
+  "project_id": "80a77896-7d48-4a0f-a153-fddb0a24f531",
+  "version": 1,
+  "isLocked": false,
+  "snapToGrid": true,
+  "snapGridSize": [
+    10,
+    10
+  ],
+  "docRevision": 1
+}

@@ -46,7 +46,9 @@ function makeOperator(): OperatorContext {
 		audience: 'Backend engineers.',
 		hardRules: [],
 		glossary: {},
-		trackedEntities: { entities: [], keywords: [], technologies: [] }
+		trackedEntities: { entities: [], keywords: [], technologies: [] },
+		authorIdentity: '',
+		anchorPhrase: ''
 	};
 }
 

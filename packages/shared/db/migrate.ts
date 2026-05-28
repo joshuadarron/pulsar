@@ -474,6 +474,57 @@ async function migratePostgres() {
     WHERE NOT EXISTS (SELECT 1 FROM schedules WHERE type = 'retrospective')
   `);
 
+	// Phase: article-package content. One row per published-ready article (one
+	// per opportunity signal), holding the four-file output of the article
+	// packager (content, quotes, images, publications) plus the metaphor family
+	// and primary Medium publication assigned by the picker so series-level
+	// rotation can be enforced.
+	await query(`
+    CREATE TABLE IF NOT EXISTS content_articles (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      run_id UUID REFERENCES runs(id),
+      report_id UUID REFERENCES reports(id),
+      article_slug TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      opportunity_signal TEXT NOT NULL,
+      angle TEXT NOT NULL,
+      title TEXT,
+      subtitle TEXT,
+      metaphor_family TEXT,
+      primary_medium_pub TEXT,
+      content_md TEXT NOT NULL,
+      quotes_md TEXT NOT NULL,
+      images_md TEXT NOT NULL,
+      publications_md TEXT NOT NULL,
+      cross_refs JSONB DEFAULT '[]'::jsonb,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+
+	await query(`
+    CREATE INDEX IF NOT EXISTS content_articles_report_id_idx
+    ON content_articles (report_id)
+  `);
+
+	await query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS content_articles_report_slug_uniq
+    ON content_articles (report_id, article_slug)
+  `);
+
+	// Series-level state that survives across runs: drives metaphor family
+	// rotation, Medium publication queue avoidance, and cross-reference candidate
+	// resolution. One row per app slug. Initialized lazily by the runner.
+	await query(`
+    CREATE TABLE IF NOT EXISTS content_series_state (
+      app_slug TEXT PRIMARY KEY,
+      recent_metaphor_families JSONB NOT NULL DEFAULT '[]'::jsonb,
+      medium_publication_queue JSONB NOT NULL DEFAULT '{}'::jsonb,
+      published_articles JSONB NOT NULL DEFAULT '[]'::jsonb,
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )
+  `);
+
 	console.log('PostgreSQL migrations complete.');
 }
 

@@ -31,6 +31,8 @@ export type OperatorContext = {
 	hardRules: string[];
 	glossary: Record<string, string>;
 	trackedEntities: TrackedEntities;
+	authorIdentity: string;
+	anchorPhrase: string;
 };
 
 export class OperatorContextNotConfiguredError extends Error {

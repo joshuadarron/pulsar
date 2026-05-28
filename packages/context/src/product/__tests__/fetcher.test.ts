@@ -58,6 +58,8 @@ function makeOperator(overrides: Partial<OperatorContext> = {}): OperatorContext
 		hardRules: [],
 		glossary: {},
 		trackedEntities: { entities: [], keywords: [], technologies: [] },
+		authorIdentity: '',
+		anchorPhrase: '',
 		...overrides
 	};
 }

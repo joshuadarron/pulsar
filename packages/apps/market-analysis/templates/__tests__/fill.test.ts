@@ -26,6 +26,8 @@ function makeOperator(overrides: Partial<OperatorContext> = {}): OperatorContext
 		hardRules: ['No em-dashes anywhere.'],
 		glossary: {},
 		trackedEntities: { entities: [], keywords: [], technologies: [] },
+		authorIdentity: '',
+		anchorPhrase: '',
 		...overrides
 	};
 }
