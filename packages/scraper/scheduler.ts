@@ -21,7 +21,23 @@ let reclaimingLock = false;
 process.on('uncaughtException', (err: Error & { code?: string }) => {
 	if (reclaimingLock && (err.code === '57P01' || err.message?.includes('terminated unexpectedly')))
 		return;
-	console.error('[Scheduler] Uncaught exception:', err);
+	// Emit a single-line JSON record instead of the full stack. The previous
+	// console.error dumped each nested error (AggregateError on ECONNREFUSED
+	// expands to one frame per address family), and when pm2 restarts the
+	// process instantly this turns into hundreds of thousands of duplicated
+	// stacks. On 2026-05-28 the scheduler-error.log hit 900 MB this way.
+	const firstStackFrame = err.stack?.split('\n').slice(0, 2).join(' ');
+	process.stderr.write(
+		`${JSON.stringify({
+			ts: new Date().toISOString(),
+			level: 'error',
+			component: 'scheduler',
+			message: 'uncaught-exception',
+			code: err.code,
+			errorMessage: err.message,
+			stack: firstStackFrame
+		})}\n`
+	);
 	process.exit(1);
 });
 
