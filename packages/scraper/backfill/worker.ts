@@ -14,6 +14,7 @@ import { getStrategy } from './strategies/index.js';
 
 const BACKFILL_LOCK_ID = 73953;
 const POLL_INTERVAL_MS = 5000;
+const HEARTBEAT_INTERVAL_MS = 60_000;
 
 type LogFields = Record<string, unknown>;
 
@@ -118,6 +119,7 @@ type WorkerLoopOptions = {
 	workerId: string;
 	concurrency: number;
 	pollIntervalMs?: number;
+	heartbeatIntervalMs?: number;
 	abortSignal: AbortSignal;
 	executor: LockClient;
 };
@@ -129,6 +131,11 @@ type WorkerLoopOptions = {
  */
 export async function workerLoop(options: WorkerLoopOptions): Promise<void> {
 	const pollMs = options.pollIntervalMs ?? POLL_INTERVAL_MS;
+	const heartbeatMs = options.heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS;
+	let pollsSinceHeartbeat = 0;
+	let lastJobCompletedAt: string | null = null;
+	let lastHeartbeatAt = Date.now();
+
 	while (!options.abortSignal.aborted) {
 		try {
 			const promoted = await requeueRetriableFailures(options.executor);
@@ -146,16 +153,60 @@ export async function workerLoop(options: WorkerLoopOptions): Promise<void> {
 			log('error', 'claim.failed', {
 				message: err instanceof Error ? err.message : String(err)
 			});
+			pollsSinceHeartbeat++;
+			if (Date.now() - lastHeartbeatAt >= heartbeatMs) {
+				log('info', 'worker.heartbeat', {
+					workerId: options.workerId,
+					pollsSinceHeartbeat,
+					lastJobCompletedAt,
+					queueDepth: null,
+					dbHealthy: false
+				});
+				lastHeartbeatAt = Date.now();
+				pollsSinceHeartbeat = 0;
+			}
 			await sleep(pollMs, options.abortSignal);
 			continue;
 		}
 
+		pollsSinceHeartbeat++;
+
 		if (jobs.length === 0) {
+			if (Date.now() - lastHeartbeatAt >= heartbeatMs) {
+				const queueDepth = await safeQueueDepth(options.executor);
+				log('info', 'worker.heartbeat', {
+					workerId: options.workerId,
+					pollsSinceHeartbeat,
+					lastJobCompletedAt,
+					queueDepth,
+					dbHealthy: true
+				});
+				lastHeartbeatAt = Date.now();
+				pollsSinceHeartbeat = 0;
+			}
 			await sleep(pollMs, options.abortSignal);
 			continue;
 		}
 
 		await Promise.all(jobs.map((job) => processJob(options.executor, job, options.abortSignal)));
+		lastJobCompletedAt = new Date().toISOString();
+	}
+}
+
+/**
+ * Best-effort queue-depth probe used only by the heartbeat. Failures here
+ * must not interrupt the loop; they get folded into the next heartbeat as
+ * queueDepth=null so the operator can still distinguish "DB up, no jobs"
+ * from "DB unreachable".
+ */
+async function safeQueueDepth(executor: LockClient): Promise<number | null> {
+	try {
+		const result = await executor.query<{ count: string }>(
+			"SELECT COUNT(*)::text AS count FROM backfill_jobs WHERE status = 'queued'"
+		);
+		return Number.parseInt(result.rows[0]?.count ?? '0', 10);
+	} catch {
+		return null;
 	}
 }
 

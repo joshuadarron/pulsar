@@ -200,6 +200,42 @@ describe('workerLoop', () => {
 		assert.ok(claimCallCount >= 1, 'loop should have polled at least once');
 	});
 
+	it('emits a worker.heartbeat line once per heartbeatIntervalMs while idle', async () => {
+		reset();
+		const stdoutWrites: string[] = [];
+		const realWrite = process.stdout.write.bind(process.stdout);
+		process.stdout.write = ((chunk: string | Uint8Array): boolean => {
+			const text = typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString();
+			stdoutWrites.push(text);
+			return true;
+		}) as typeof process.stdout.write;
+
+		try {
+			const controller = new AbortController();
+			const loop = workerLoop({
+				workerId: 'hb-test',
+				concurrency: 1,
+				pollIntervalMs: 5,
+				heartbeatIntervalMs: 10,
+				abortSignal: controller.signal,
+				executor: fakeExecutor as never
+			});
+			await new Promise((r) => setTimeout(r, 60));
+			controller.abort();
+			await loop;
+		} finally {
+			process.stdout.write = realWrite;
+		}
+
+		const heartbeats = stdoutWrites
+			.filter((line) => line.includes('"message":"worker.heartbeat"'))
+			.map((line) => JSON.parse(line.trim()));
+		assert.ok(heartbeats.length >= 1, 'should emit at least one heartbeat in 60ms with 10ms interval');
+		assert.equal(heartbeats[0].workerId, 'hb-test');
+		assert.equal(heartbeats[0].dbHealthy, true);
+		assert.equal(heartbeats[0].queueDepth, 0);
+	});
+
 	it('sweeps retriable failures back to queued before each claim', async () => {
 		reset();
 		const controller = new AbortController();
