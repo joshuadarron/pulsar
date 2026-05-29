@@ -277,6 +277,15 @@ export const MAX_INFLIGHT_PER_ADAPTER = 1;
 export const MONTH_RETRY_COOLDOWN_DAYS = 7;
 
 /**
+ * Hard ceiling on `backfill_runs` rows per `(source, window_start)` tuple.
+ * Once this many attempts exist for a given month, the auto-enqueue path
+ * stops trying — Wayback / upstream archives are genuinely empty for that
+ * month and re-running burns rate-limit budget for no gain. The diagnostic
+ * trail (errors, warnings, articles_ingested) remains in `backfill_runs`.
+ */
+export const MAX_MONTH_ATTEMPTS = 2;
+
+/**
  * Count of in-flight month-fill jobs for an adapter (queued or claimed).
  * Used by `enqueueMonthlyCoverage` to enforce per-adapter concurrency.
  */
@@ -287,6 +296,25 @@ export async function inflightCount(executor: DbExecutor, adapter: string): Prom
        AND strategy = 'month-fill'
        AND status IN ('queued', 'claimed')`,
 		[adapter]
+	);
+	return Number.parseInt(result.rows[0]?.count ?? '0', 10);
+}
+
+/**
+ * Total `backfill_runs` rows ever created for this `(adapter, monthStart)`.
+ * Used by `enqueueMonthlyCoverage` to retire a month after `MAX_MONTH_ATTEMPTS`
+ * — Wayback empties stop consuming queue slots forever, the diagnostic stays
+ * preserved in the failed/empty-complete rows.
+ */
+export async function monthAttemptCount(
+	executor: DbExecutor,
+	adapter: string,
+	monthStart: Date
+): Promise<number> {
+	const result = await executor.query<{ count: string }>(
+		`SELECT COUNT(*)::text AS count FROM backfill_runs
+     WHERE source_name = $1 AND window_start = $2`,
+		[adapter, monthStart]
 	);
 	return Number.parseInt(result.rows[0]?.count ?? '0', 10);
 }

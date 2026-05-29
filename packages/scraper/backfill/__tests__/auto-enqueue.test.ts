@@ -226,13 +226,90 @@ describe('enqueueMonthlyCoverage', () => {
 		const { executor, calls } = makeExecutor(handler);
 		const out = await enqueueMonthlyCoverage(executor);
 		assert.ok(
-			out.skipped.some((s) => s.startsWith('hashnode (all candidate months on cooldown)')),
+			out.skipped.some((s) => s.startsWith('hashnode (all candidate months')),
 			'should report cooldown skip for hashnode'
 		);
 		assert.equal(
 			calls.some((c) => /INSERT INTO backfill_runs/.test(c.sql) && c.params[0] === 'hashnode'),
 			false,
 			'no hashnode enqueue when all candidates on cooldown'
+		);
+	});
+
+	it('skips a month whose attempt count is at MAX_MONTH_ATTEMPTS', async () => {
+		envModule.env.backfill.enabled = true;
+		const capped = new Date('2024-03-01T00:00:00Z');
+		const fresh = new Date('2024-02-01T00:00:00Z');
+		const inserts: Recorded[] = [];
+		const handler: QueryHandler = (sql, params) => {
+			if (/SELECT COUNT\(\*\).*backfill_jobs/.test(sql)) {
+				return { rows: [{ count: '0' }], rowCount: 1 };
+			}
+			if (/SELECT m.month_start/.test(sql)) {
+				const platforms = params[1] as string[];
+				if (platforms.includes('medium')) {
+					return {
+						rows: [{ month_start: capped }, { month_start: fresh }],
+						rowCount: 2
+					};
+				}
+				return { rows: [], rowCount: 0 };
+			}
+			if (/SELECT COUNT\(\*\).*backfill_runs/.test(sql)) {
+				// Attempt-count probe: report 2 for the capped month, 0 for fresh.
+				const month = params[1] as Date;
+				const count = month.getTime() === capped.getTime() ? '2' : '0';
+				return { rows: [{ count }], rowCount: 1 };
+			}
+			if (/SELECT id FROM backfill_runs/.test(sql)) {
+				return { rows: [], rowCount: 0 }; // none on cooldown
+			}
+			if (/INSERT INTO backfill_runs/.test(sql)) {
+				inserts.push({ sql, params });
+				return { rows: [{ id: 'run-1' }], rowCount: 1 };
+			}
+			if (/INSERT INTO backfill_jobs/.test(sql)) {
+				return { rows: [{ id: 'job-1' }], rowCount: 1 };
+			}
+			return { rows: [], rowCount: 0 };
+		};
+		const { executor } = makeExecutor(handler);
+		const out = await enqueueMonthlyCoverage(executor);
+		assert.ok(
+			out.enqueued.some((s) => s.startsWith('medium@2024-02')),
+			'should fall through to the not-yet-capped month'
+		);
+		const mediumInsert = inserts.find((i) => i.params[0] === 'medium');
+		assert.equal((mediumInsert!.params[1] as Date).toISOString(), fresh.toISOString());
+	});
+
+	it('skips an adapter whose only missing months are all capped', async () => {
+		envModule.env.backfill.enabled = true;
+		const handler: QueryHandler = (sql, params) => {
+			if (/SELECT COUNT\(\*\).*backfill_jobs/.test(sql)) {
+				return { rows: [{ count: '0' }], rowCount: 1 };
+			}
+			if (/SELECT m.month_start/.test(sql)) {
+				const platforms = params[1] as string[];
+				if (platforms.includes('hashnode')) {
+					return {
+						rows: [{ month_start: new Date('2024-01-01T00:00:00Z') }],
+						rowCount: 1
+					};
+				}
+				return { rows: [], rowCount: 0 };
+			}
+			if (/SELECT COUNT\(\*\).*backfill_runs/.test(sql)) {
+				return { rows: [{ count: '2' }], rowCount: 1 }; // always capped
+			}
+			return { rows: [], rowCount: 0 };
+		};
+		const { executor, calls } = makeExecutor(handler);
+		const out = await enqueueMonthlyCoverage(executor);
+		assert.ok(out.skipped.some((s) => s.includes('hashnode (all candidate months')));
+		assert.equal(
+			calls.some((c) => /INSERT INTO backfill_runs/.test(c.sql) && c.params[0] === 'hashnode'),
+			false
 		);
 	});
 

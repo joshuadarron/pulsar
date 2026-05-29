@@ -4,6 +4,7 @@ import { describe, it, mock } from 'node:test';
 import {
 	COVERAGE_WINDOW_START,
 	MAX_JOB_ATTEMPTS,
+	MAX_MONTH_ATTEMPTS,
 	MONTH_COVERAGE_THRESHOLD,
 	MONTH_RETRY_COOLDOWN_DAYS,
 	articleCountsByAdapter,
@@ -12,6 +13,7 @@ import {
 	enqueueBackfill,
 	failJob,
 	inflightCount,
+	monthAttemptCount,
 	monthAttemptedRecently,
 	monthsMissingCoverage,
 	requeueRetriableFailures
@@ -246,6 +248,36 @@ describe('inflightCount', () => {
 		const { executor } = makeExecutor(handler);
 		const count = await inflightCount(executor, 'devto');
 		assert.equal(count, 0);
+	});
+});
+
+describe('monthAttemptCount', () => {
+	it('returns the COUNT of backfill_runs rows for (source, window_start)', async () => {
+		let capturedSql: string | null = null;
+		let capturedParams: unknown[] | null = null;
+		const handler: QueryHandler = (sql, params) => {
+			capturedSql = sql;
+			capturedParams = params;
+			return { rows: [{ count: '2' }], rowCount: 1 };
+		};
+		const { executor } = makeExecutor(handler);
+		const month = new Date('2024-01-01T00:00:00Z');
+		const count = await monthAttemptCount(executor, 'hashnode', month);
+		assert.equal(count, 2);
+		assert.match(capturedSql!, /SELECT COUNT\(\*\).*backfill_runs/);
+		assert.equal(capturedParams![0], 'hashnode');
+		assert.equal((capturedParams![1] as Date).getTime(), month.getTime());
+	});
+
+	it('returns 0 when no rows match', async () => {
+		const handler: QueryHandler = () => ({ rows: [], rowCount: 0 });
+		const { executor } = makeExecutor(handler);
+		const count = await monthAttemptCount(executor, 'hashnode', new Date());
+		assert.equal(count, 0);
+	});
+
+	it('MAX_MONTH_ATTEMPTS is at least 2 so first attempt + 1 retry is allowed', () => {
+		assert.ok(MAX_MONTH_ATTEMPTS >= 2, 'cap below 2 would block legitimate retries');
 	});
 });
 

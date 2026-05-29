@@ -4,8 +4,10 @@ import type { DbExecutor } from '../dedup.js';
 import {
 	COVERAGE_WINDOW_START,
 	MAX_INFLIGHT_PER_ADAPTER,
+	MAX_MONTH_ATTEMPTS,
 	enqueueBackfill,
 	inflightCount,
+	monthAttemptCount,
 	monthAttemptedRecently,
 	monthsMissingCoverage
 } from './queue.js';
@@ -54,19 +56,22 @@ export async function enqueueMonthlyCoverage(executor: DbExecutor): Promise<Enqu
 			continue;
 		}
 
-		// Walk newest-first; cooldown shields months that were attempted recently
-		// (whether they succeeded, failed, or completed empty). Pick the first
-		// eligible month and stop — one enqueue per adapter per tick.
+		// Walk newest-first. A candidate month is eligible iff it has been
+		// attempted fewer than MAX_MONTH_ATTEMPTS times AND its most recent
+		// attempt is older than the cooldown. Both checks are needed: the
+		// cap stops permanent retries on genuinely-empty months, the cooldown
+		// stops a tick from spamming a month between back-to-back attempts.
 		let picked: Date | null = null;
 		for (const candidate of missing) {
+			const attempts = await monthAttemptCount(executor, adapter, candidate);
+			if (attempts >= MAX_MONTH_ATTEMPTS) continue;
 			const recent = await monthAttemptedRecently(executor, adapter, candidate);
-			if (!recent) {
-				picked = candidate;
-				break;
-			}
+			if (recent) continue;
+			picked = candidate;
+			break;
 		}
 		if (!picked) {
-			skipped.push(`${adapter} (all candidate months on cooldown)`);
+			skipped.push(`${adapter} (all candidate months on cooldown or capped)`);
 			continue;
 		}
 
