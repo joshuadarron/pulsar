@@ -1,88 +1,130 @@
-import { type NextRequest, NextResponse } from 'next/server';
-import neo4j from 'neo4j-driver';
-import { getSession } from '@pulsar/shared/db/neo4j';
+import { NextResponse } from 'next/server';
+import { query } from '@pulsar/shared/db/postgres';
+import type { GraphSnapshotCluster, GraphSnapshotEntity } from '@pulsar/shared/types';
 
-export async function GET(request: NextRequest) {
-	const { searchParams } = request.nextUrl;
-	const nodeType = searchParams.get('type') || 'Topic';
-	const limit = Math.min(Number.parseInt(searchParams.get('limit') || '100'), 500);
+// Renders the latest `graph_snapshots` row (Louvain + PageRank output) as a
+// force-graph payload. The old node-type-filtered view (Topic / Entity /
+// Article / Author / Source) was replaced because the snapshot is the
+// authoritative analytical artifact and the live Neo4j scan did not surface
+// cluster membership or pagerank rank.
+//
+// Shape:
+//   - One hub node per Louvain cluster (id `cluster-<n>`), labelled with the
+//     top topic's name, sized by its topic_count.
+//   - One topic node per topic in each cluster, sized by trend_score, linked
+//     to the parent cluster hub.
+//   - One entity node per entity in the snapshot's entity_importance list,
+//     sized by pagerank_score. Entities are not linked to clusters because
+//     the snapshot does not record that relationship.
+//
+// Returns `{ snapshot: null }` when no snapshot row exists yet so the UI can
+// render an empty state.
 
-	const allowedTypes = ['Topic', 'Entity', 'Article', 'Author', 'Source'];
-	if (!allowedTypes.includes(nodeType)) {
-		return NextResponse.json({ error: 'Invalid node type' }, { status: 400 });
-	}
+interface SnapshotRow {
+	id: string;
+	computed_at: Date | string;
+	topic_clusters: unknown;
+	entity_importance: unknown;
+}
 
-	const session = getSession();
+type GraphNode = {
+	id: string;
+	label: string;
+	kind: 'cluster' | 'topic' | 'entity';
+	type: string;
+	score: number;
+	clusterId: number | null;
+};
+
+type GraphLink = {
+	source: string;
+	target: string;
+	type: string;
+	weight: number;
+};
+
+export async function GET() {
 	try {
-		// Get nodes and their relationships
-		const result = await session.run(
-			`MATCH (n:${nodeType})
-       OPTIONAL MATCH (n)-[r]-(m)
-       WITH n, collect(DISTINCT {
-         target: coalesce(m.name, m.title, m.handle, id(m)),
-         targetType: labels(m)[0],
-         relType: type(r),
-         weight: coalesce(r.weight, r.count, 1)
-       }) AS rels
-       RETURN n, rels
-       ORDER BY coalesce(n.trendScore, 0) DESC
-       LIMIT $limit`,
-			{ limit: neo4j.int(limit) }
+		const result = await query<SnapshotRow>(
+			`SELECT id, computed_at, topic_clusters, entity_importance
+			 FROM graph_snapshots
+			 ORDER BY computed_at DESC
+			 LIMIT 1`
 		);
 
-		const nodesMap = new Map<string, { id: string; label: string; type: string; score: number }>();
-		const links: { source: string; target: string; type: string; weight: number }[] = [];
+		const row = result.rows[0];
+		if (!row) {
+			return NextResponse.json({ snapshot: null, nodes: [], links: [] });
+		}
 
-		for (const record of result.records) {
-			const node = record.get('n');
-			const props = node.properties;
-			const id = props.name || props.title || props.handle || String(node.identity);
-			const type = node.labels[0];
+		const topicClusters: GraphSnapshotCluster[] = Array.isArray(row.topic_clusters)
+			? (row.topic_clusters as GraphSnapshotCluster[])
+			: [];
+		const entityImportance: GraphSnapshotEntity[] = Array.isArray(row.entity_importance)
+			? (row.entity_importance as GraphSnapshotEntity[])
+			: [];
 
-			nodesMap.set(id, {
-				id,
-				label: id,
-				type,
-				score: props.trendScore || props.score || 0
+		const nodes: GraphNode[] = [];
+		const links: GraphLink[] = [];
+
+		for (const cluster of topicClusters) {
+			const hubId = `cluster-${cluster.cluster_id}`;
+			const top = cluster.topics[0]?.name ?? `Cluster ${cluster.cluster_id}`;
+			nodes.push({
+				id: hubId,
+				label: `Cluster ${cluster.cluster_id}: ${top}`,
+				kind: 'cluster',
+				type: 'Cluster',
+				score: cluster.topic_count,
+				clusterId: cluster.cluster_id
 			});
 
-			const rels = record.get('rels') as Array<{
-				target: string;
-				targetType: string;
-				relType: string;
-				weight: number;
-			}>;
-
-			for (const rel of rels) {
-				if (!rel.target || !rel.relType) continue;
-
-				nodesMap.set(String(rel.target), {
-					id: String(rel.target),
-					label: String(rel.target),
-					type: rel.targetType || 'Unknown',
-					score: 0
+			for (const topic of cluster.topics) {
+				const topicId = `topic:${cluster.cluster_id}:${topic.name}`;
+				nodes.push({
+					id: topicId,
+					label: topic.name,
+					kind: 'topic',
+					type: 'Topic',
+					score: topic.trend_score,
+					clusterId: cluster.cluster_id
 				});
-
 				links.push({
-					source: id,
-					target: String(rel.target),
-					type: rel.relType,
-					weight:
-						typeof rel.weight === 'object'
-							? (rel.weight as { toNumber(): number }).toNumber()
-							: rel.weight || 1
+					source: topicId,
+					target: hubId,
+					type: 'MEMBER_OF',
+					weight: Math.max(1, topic.trend_score)
 				});
 			}
 		}
 
+		for (const entity of entityImportance) {
+			nodes.push({
+				id: `entity:${entity.name}`,
+				label: entity.name,
+				kind: 'entity',
+				type: entity.type || 'Entity',
+				score: entity.pagerank_score,
+				clusterId: null
+			});
+		}
+
+		const computedAt =
+			row.computed_at instanceof Date ? row.computed_at.toISOString() : String(row.computed_at);
+
 		return NextResponse.json({
-			nodes: Array.from(nodesMap.values()),
+			snapshot: {
+				id: row.id,
+				computedAt,
+				clusterCount: topicClusters.length,
+				entityCount: entityImportance.length,
+				topicCount: topicClusters.reduce((sum, c) => sum + c.topic_count, 0)
+			},
+			nodes,
 			links
 		});
 	} catch (err) {
 		console.error('[Graph API] Error:', err);
 		return NextResponse.json({ error: String(err) }, { status: 500 });
-	} finally {
-		await session.close();
 	}
 }

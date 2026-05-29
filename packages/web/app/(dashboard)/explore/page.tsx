@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -9,8 +9,10 @@ const ForceGraph2D = dynamic(() => import('react-force-graph-2d') as any, { ssr:
 interface GraphNode {
 	id: string;
 	label: string;
+	kind: 'cluster' | 'topic' | 'entity';
 	type: string;
 	score: number;
+	clusterId: number | null;
 }
 
 interface GraphLink {
@@ -20,91 +22,182 @@ interface GraphLink {
 	weight: number;
 }
 
-const NODE_TYPES = ['Topic', 'Entity', 'Article', 'Author', 'Source'];
-const TYPE_COLORS: Record<string, string> = {
-	Topic: '#6366f1',
-	Entity: '#ec4899',
-	Article: '#f59e0b',
-	Author: '#10b981',
-	Source: '#06b6d4',
-	Unknown: '#9ca3af'
-};
+interface SnapshotInfo {
+	id: string;
+	computedAt: string;
+	clusterCount: number;
+	entityCount: number;
+	topicCount: number;
+}
+
+// 12-color qualitative palette for Louvain clusters. Hash cluster_id into
+// this list so the same cluster keeps the same color across renders.
+const CLUSTER_PALETTE = [
+	'#6366f1',
+	'#ec4899',
+	'#10b981',
+	'#f59e0b',
+	'#06b6d4',
+	'#a855f7',
+	'#ef4444',
+	'#14b8a6',
+	'#f97316',
+	'#84cc16',
+	'#8b5cf6',
+	'#d946ef'
+];
+
+const ENTITY_COLOR = '#facc15';
+const CLUSTER_HUB_COLOR_FALLBACK = '#9ca3af';
+
+function colorForCluster(clusterId: number | null): string {
+	if (clusterId === null || clusterId === undefined) return CLUSTER_HUB_COLOR_FALLBACK;
+	const idx =
+		((clusterId % CLUSTER_PALETTE.length) + CLUSTER_PALETTE.length) % CLUSTER_PALETTE.length;
+	return CLUSTER_PALETTE[idx];
+}
+
+function nodeColor(node: GraphNode): string {
+	if (node.kind === 'entity') return ENTITY_COLOR;
+	return colorForCluster(node.clusterId);
+}
+
+function nodeRadius(node: GraphNode): number {
+	if (node.kind === 'cluster') return 8 + Math.min(12, Math.sqrt(node.score));
+	if (node.kind === 'entity') return 3 + Math.min(10, node.score * 40);
+	return 3 + Math.min(8, Math.sqrt(Math.max(1, node.score)) / 2);
+}
+
+function formatTimestamp(iso: string): string {
+	const date = new Date(iso);
+	if (Number.isNaN(date.getTime())) return iso;
+	return date.toLocaleString();
+}
 
 export default function ExplorePage() {
-	const [nodeType, setNodeType] = useState('Topic');
+	const [snapshot, setSnapshot] = useState<SnapshotInfo | null>(null);
 	const [graphData, setGraphData] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({
 		nodes: [],
 		links: []
 	});
+	const [loading, setLoading] = useState(true);
 	const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
 	const graphRef = useRef<{ centerAt: (x: number, y: number, ms: number) => void } | null>(null);
 
 	useEffect(() => {
-		fetch(`/api/graph?type=${nodeType}&limit=100`)
+		let cancelled = false;
+		setLoading(true);
+		fetch('/api/graph')
 			.then((r) => r.json())
-			.then(setGraphData);
-	}, [nodeType]);
+			.then((data) => {
+				if (cancelled) return;
+				setSnapshot(data.snapshot ?? null);
+				setGraphData({ nodes: data.nodes ?? [], links: data.links ?? [] });
+			})
+			.catch(() => {
+				if (cancelled) return;
+				setSnapshot(null);
+				setGraphData({ nodes: [], links: [] });
+			})
+			.finally(() => {
+				if (!cancelled) setLoading(false);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
-	const handleNodeClick = useCallback(
-		(node: { id?: string; label?: string; type?: string; score?: number }) => {
-			setSelectedNode(node as GraphNode);
-		},
-		[]
-	);
+	const handleNodeClick = useCallback((node: GraphNode) => {
+		setSelectedNode(node);
+	}, []);
 
 	const nodeCanvasObject = useCallback(
-		(
-			node: { x?: number; y?: number; id?: string; label?: string; type?: string; score?: number },
-			ctx: CanvasRenderingContext2D
-		) => {
-			const label = (node.label || node.id || '') as string;
-			const type = (node.type || 'Unknown') as string;
-			const size = 4 + Math.min(12, Math.sqrt((node.score as number) || 1));
+		(node: GraphNode & { x?: number; y?: number }, ctx: CanvasRenderingContext2D) => {
+			const label = node.label ?? node.id;
+			const radius = nodeRadius(node);
 
 			ctx.beginPath();
-			ctx.arc(node.x!, node.y!, size, 0, 2 * Math.PI);
-			ctx.fillStyle = TYPE_COLORS[type] || TYPE_COLORS.Unknown;
+			ctx.arc(node.x!, node.y!, radius, 0, 2 * Math.PI);
+			ctx.fillStyle = nodeColor(node);
 			ctx.fill();
 
-			ctx.font = '3px sans-serif';
+			if (node.kind === 'cluster') {
+				ctx.lineWidth = 1.5;
+				ctx.strokeStyle = '#111827';
+				ctx.stroke();
+			}
+
+			const showLabel = node.kind === 'cluster' || node.kind === 'entity' || radius > 6;
+			if (!showLabel) return;
+
+			ctx.font = node.kind === 'cluster' ? '4px sans-serif' : '3px sans-serif';
 			ctx.textAlign = 'center';
-			ctx.fillStyle = document.documentElement.classList.contains('dark') ? '#a3a3a3' : '#374151';
-			ctx.fillText(label.slice(0, 20), node.x!, node.y! + size + 4);
+			ctx.fillStyle = document.documentElement.classList.contains('dark') ? '#d4d4d4' : '#1f2937';
+			ctx.fillText(label.slice(0, 30), node.x!, node.y! + radius + 4);
 		},
 		[]
 	);
+
+	const clusterLegend = useMemo(() => {
+		const seen = new Map<number, string>();
+		for (const node of graphData.nodes) {
+			if (node.kind !== 'cluster' || node.clusterId === null) continue;
+			if (!seen.has(node.clusterId)) {
+				seen.set(node.clusterId, node.label);
+			}
+		}
+		return Array.from(seen.entries())
+			.sort((a, b) => a[0] - b[0])
+			.slice(0, 12);
+	}, [graphData.nodes]);
+
+	const selectedScoreLabel = useMemo(() => {
+		if (!selectedNode) return null;
+		if (selectedNode.kind === 'cluster') return `Topic count: ${selectedNode.score}`;
+		if (selectedNode.kind === 'topic') return `Trend score: ${selectedNode.score.toFixed(2)}`;
+		return `PageRank score: ${selectedNode.score.toFixed(4)}`;
+	}, [selectedNode]);
 
 	return (
 		<div>
-			<div className="flex items-center justify-between">
+			<div className="flex items-start justify-between gap-4">
 				<div>
 					<h1 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">Graph Explorer</h1>
 					<p className="mt-1 text-gray-500 dark:text-neutral-400">
-						Explore relationships between topics, entities, and articles
+						Latest Louvain clusters and PageRank entity importance from the most recent graph
+						snapshot
 					</p>
 				</div>
-				<select
-					value={nodeType}
-					onChange={(e) => setNodeType(e.target.value)}
-					className="rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-gray-900 dark:text-neutral-100 px-3 py-2 text-sm"
-				>
-					{NODE_TYPES.map((t) => (
-						<option key={t} value={t}>
-							{t}s
-						</option>
-					))}
-				</select>
+				{snapshot ? (
+					<div className="text-right text-xs text-gray-500 dark:text-neutral-400">
+						<p>
+							Snapshot <code className="font-mono text-[11px]">{snapshot.id.slice(0, 8)}</code>
+						</p>
+						<p className="mt-0.5">{formatTimestamp(snapshot.computedAt)}</p>
+						<p className="mt-0.5">
+							{snapshot.clusterCount} clusters, {snapshot.topicCount} topics, {snapshot.entityCount}{' '}
+							entities
+						</p>
+					</div>
+				) : null}
 			</div>
 
-			<div className="mt-4 flex gap-3">
-				{Object.entries(TYPE_COLORS)
-					.filter(([k]) => k !== 'Unknown')
-					.map(([type, color]) => (
-						<div key={type} className="flex items-center gap-1.5">
-							<div className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
-							<span className="text-xs text-gray-600 dark:text-neutral-400">{type}</span>
-						</div>
-					))}
+			<div className="mt-4 flex flex-wrap gap-3 text-xs text-gray-600 dark:text-neutral-400">
+				{clusterLegend.map(([clusterId, label]) => (
+					<div key={clusterId} className="flex items-center gap-1.5">
+						<div
+							className="h-3 w-3 rounded-full"
+							style={{ backgroundColor: colorForCluster(clusterId) }}
+						/>
+						<span className="max-w-[14rem] truncate">{label}</span>
+					</div>
+				))}
+				{clusterLegend.length > 0 ? (
+					<div className="flex items-center gap-1.5">
+						<div className="h-3 w-3 rounded-full" style={{ backgroundColor: ENTITY_COLOR }} />
+						<span>Entities (size by PageRank)</span>
+					</div>
+				) : null}
 			</div>
 
 			<div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -113,6 +206,8 @@ export default function ExplorePage() {
 					graphData={graphData}
 					nodeCanvasObject={nodeCanvasObject}
 					handleNodeClick={handleNodeClick}
+					loading={loading}
+					hasSnapshot={snapshot !== null}
 				/>
 
 				<div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
@@ -125,13 +220,16 @@ export default function ExplorePage() {
 								{selectedNode.label}
 							</p>
 							<p className="text-sm text-gray-500 dark:text-neutral-400">
-								Type: {selectedNode.type}
+								Kind: {selectedNode.kind}
 							</p>
-							{selectedNode.score > 0 && (
+							{selectedNode.clusterId !== null ? (
 								<p className="text-sm text-gray-500 dark:text-neutral-400">
-									Score: {selectedNode.score.toFixed(2)}
+									Cluster: {selectedNode.clusterId}
 								</p>
-							)}
+							) : null}
+							{selectedScoreLabel ? (
+								<p className="text-sm text-gray-500 dark:text-neutral-400">{selectedScoreLabel}</p>
+							) : null}
 						</div>
 					) : (
 						<p className="mt-3 text-sm text-gray-400 dark:text-neutral-500">
@@ -148,7 +246,7 @@ export default function ExplorePage() {
 								{graphData.nodes.length} nodes
 							</p>
 							<p className="text-sm text-gray-600 dark:text-neutral-400">
-								{graphData.links.length} relationships
+								{graphData.links.length} edges
 							</p>
 						</div>
 					</div>
@@ -162,12 +260,19 @@ function GraphCanvas({
 	graphRef,
 	graphData,
 	nodeCanvasObject,
-	handleNodeClick
+	handleNodeClick,
+	loading,
+	hasSnapshot
 }: {
 	graphRef: React.MutableRefObject<{ centerAt: (x: number, y: number, ms: number) => void } | null>;
 	graphData: { nodes: GraphNode[]; links: GraphLink[] };
-	nodeCanvasObject: (node: Record<string, unknown>, ctx: CanvasRenderingContext2D) => void;
-	handleNodeClick: (node: Record<string, unknown>) => void;
+	nodeCanvasObject: (
+		node: GraphNode & { x?: number; y?: number },
+		ctx: CanvasRenderingContext2D
+	) => void;
+	handleNodeClick: (node: GraphNode) => void;
+	loading: boolean;
+	hasSnapshot: boolean;
 }) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [width, setWidth] = useState(600);
@@ -183,6 +288,12 @@ function GraphCanvas({
 		setWidth(containerRef.current.clientWidth);
 		return () => observer.disconnect();
 	}, []);
+
+	const emptyMessage = loading
+		? 'Loading latest snapshot...'
+		: hasSnapshot
+			? 'Snapshot has no data. Trigger a pipeline run to recompute.'
+			: 'No graph snapshot yet. Trigger a pipeline run to compute one.';
 
 	return (
 		<div
@@ -206,7 +317,7 @@ function GraphCanvas({
 				/>
 			) : (
 				<div className="flex h-full items-center justify-center text-gray-400 dark:text-neutral-500">
-					No graph data available. Run a scrape first.
+					{emptyMessage}
 				</div>
 			)}
 		</div>
