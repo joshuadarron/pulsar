@@ -285,22 +285,14 @@ describe('monthAttemptedRecently', () => {
 	it('returns true when a backfill_runs row exists in the cooldown window', async () => {
 		const handler: QueryHandler = () => ({ rows: [{ id: 'r1' }], rowCount: 1 });
 		const { executor } = makeExecutor(handler);
-		const recent = await monthAttemptedRecently(
-			executor,
-			'rss',
-			new Date('2024-01-01T00:00:00Z')
-		);
+		const recent = await monthAttemptedRecently(executor, 'rss', new Date('2024-01-01T00:00:00Z'));
 		assert.equal(recent, true);
 	});
 
 	it('returns false when no row matches', async () => {
 		const handler: QueryHandler = () => ({ rows: [], rowCount: 0 });
 		const { executor } = makeExecutor(handler);
-		const recent = await monthAttemptedRecently(
-			executor,
-			'rss',
-			new Date('2024-01-01T00:00:00Z')
-		);
+		const recent = await monthAttemptedRecently(executor, 'rss', new Date('2024-01-01T00:00:00Z'));
 		assert.equal(recent, false);
 	});
 

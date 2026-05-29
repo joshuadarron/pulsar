@@ -78,10 +78,7 @@ describe('enqueueMonthlyCoverage', () => {
 	it('enqueues the newest missing month per adapter, one per tick', async () => {
 		envModule.env.backfill.enabled = true;
 		const { handler, inserts } = handlerWithMissingMonths({
-			devto: [
-				new Date('2024-03-01T00:00:00Z'),
-				new Date('2024-02-01T00:00:00Z')
-			]
+			devto: [new Date('2024-03-01T00:00:00Z'), new Date('2024-02-01T00:00:00Z')]
 		});
 		const { executor } = makeExecutor(handler);
 		const out = await enqueueMonthlyCoverage(executor);

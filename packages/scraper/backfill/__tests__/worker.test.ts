@@ -230,7 +230,10 @@ describe('workerLoop', () => {
 		const heartbeats = stdoutWrites
 			.filter((line) => line.includes('"message":"worker.heartbeat"'))
 			.map((line) => JSON.parse(line.trim()));
-		assert.ok(heartbeats.length >= 1, 'should emit at least one heartbeat in 60ms with 10ms interval');
+		assert.ok(
+			heartbeats.length >= 1,
+			'should emit at least one heartbeat in 60ms with 10ms interval'
+		);
 		assert.equal(heartbeats[0].workerId, 'hb-test');
 		assert.equal(heartbeats[0].dbHealthy, true);
 		assert.equal(heartbeats[0].queueDepth, 0);
