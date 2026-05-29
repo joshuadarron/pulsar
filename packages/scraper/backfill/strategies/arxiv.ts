@@ -113,7 +113,13 @@ export const arxivStrategy: Strategy = async (ctx: StrategyContext): Promise<Str
 	const items: ScrapedItem[] = [];
 	const errors: string[] = [];
 
-	for (const category of arxivCategories) {
+	// Shuffle so a 429 on the first iteration does not always penalize the same
+	// trailing categories. With fixed order, an arxiv-wide rate-limit budget
+	// gets spent on cs.AI every run and cs.LG / cs.CL / cs.SE keep failing on
+	// page 0. Randomizing converges to roughly equal attempts per category.
+	const categories = [...arxivCategories].sort(() => Math.random() - 0.5);
+
+	for (const category of categories) {
 		if (ctx.signal?.aborted) break;
 
 		for (let page = 0; page < ARXIV_MAX_PAGES_PER_CATEGORY; page++) {
