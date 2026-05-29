@@ -161,6 +161,17 @@ export async function workerLoop(options: WorkerLoopOptions): Promise<void> {
 
 async function main(): Promise<void> {
 	const lockClient = await getClient();
+	// The worker holds this client for its whole lifetime so the postgres
+	// advisory lock stays granted. That means we own its error surface: if
+	// the socket dies we want a JSON log line instead of an unhandled
+	// 'error' event killing the process. The pool's own error handler in
+	// postgres.ts covers idle clients; this covers the lock-holder.
+	lockClient.on('error', (err: Error & { code?: string }) => {
+		log('error', 'db.client-error', { code: err.code, message: err.message });
+	});
+	lockClient.on('end', () => {
+		log('warn', 'db.client-end', { lockId: BACKFILL_LOCK_ID });
+	});
 	const acquired = await tryAcquireAdvisoryLock(lockClient, BACKFILL_LOCK_ID);
 	if (!acquired) {
 		log('info', 'lock.not-acquired', {
