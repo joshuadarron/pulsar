@@ -1,94 +1,60 @@
 import { env } from '@pulsar/shared/config/env';
 
 import type { DbExecutor } from '../dedup.js';
-import { articleCountsByAdapter, enqueueBackfill } from './queue.js';
+import { COVERAGE_WINDOW_START, enqueueBackfill, monthsMissingCoverage } from './queue.js';
+import { BACKFILL_PLATFORMS } from './source-platforms.js';
 
-/**
- * Sources whose article count falls below this threshold are eligible for an
- * auto-enqueue full backfill on first deploy.
- */
-export const FIRST_DEPLOY_THRESHOLD = 30;
+/** Strategy name recorded on backfill_jobs for month-coverage enqueues. */
+const MONTH_FILL_STRATEGY = 'month-fill';
 
-/** Earliest backfill window start: ChatGPT public release. */
-export const FIRST_DEPLOY_FROM = new Date('2022-12-01T00:00:00Z');
+/** Earliest month-fill window start. Kept as a named export for callers
+ * (CLI, tests) that need to align with the auto-enqueue window. */
+export const FIRST_DEPLOY_FROM = COVERAGE_WINDOW_START;
 
-/** Strategy name recorded on the backfill_jobs row for auto-enqueued runs. */
-const FIRST_DEPLOY_STRATEGY = 'first-deploy';
-
-/**
- * A `complete` run with zero ingested items is treated as "covered" for this
- * many days after it completed. After the cooldown elapses, the source is
- * eligible for re-enqueue so a transient upstream issue (Wayback empty,
- * rate-limit storm, broken parser) does not freeze the source forever once
- * the bug is fixed.
- */
-const EMPTY_COMPLETE_COOLDOWN_DAYS = 7;
-
-export type AutoEnqueueResult = {
+export type EnqueueResult = {
 	enqueued: string[];
 	skipped: string[];
 };
 
 /**
- * Idempotent auto-enqueue. For each source whose row count is below the
- * first-deploy threshold AND that does not already have a backfill_runs row
- * covering the full first-deploy window, enqueue a full backfill from
- * 2022-12-01 to now.
+ * For each known backfill adapter, find the most recent month in the coverage
+ * window that has fewer than `MONTH_COVERAGE_THRESHOLD` rows and enqueue a
+ * month-fill job for it. One job per adapter per tick so the worker queue
+ * stays bounded — subsequent ticks walk older months.
  *
- * No-ops when `env.backfill.enabled` is false. Safe to call on every scheduler
- * tick: existing coverage rows short-circuit duplicate enqueues.
+ * Replaces the previous total-rows gate (`maybeAutoEnqueue`) which masked
+ * historical gaps for platforms that had plenty of recent live data.
+ * No-ops when `env.backfill.enabled` is false.
  */
-export async function maybeAutoEnqueue(executor: DbExecutor): Promise<AutoEnqueueResult> {
+export async function enqueueMonthlyCoverage(executor: DbExecutor): Promise<EnqueueResult> {
 	if (!env.backfill.enabled) {
 		return { enqueued: [], skipped: ['feature flag off'] };
 	}
 
-	const counts = await articleCountsByAdapter(executor);
 	const enqueued: string[] = [];
 	const skipped: string[] = [];
 
-	const sparseAdapters = Object.entries(counts).filter(
-		([, count]) => count < FIRST_DEPLOY_THRESHOLD
-	);
-
-	const now = new Date();
-	for (const [adapter] of sparseAdapters) {
-		const covered = await isAlreadyCovered(executor, adapter);
-		if (covered) {
+	for (const adapter of Object.keys(BACKFILL_PLATFORMS)) {
+		const missing = await monthsMissingCoverage(executor, adapter);
+		if (missing.length === 0) {
 			skipped.push(adapter);
 			continue;
 		}
-		await enqueueBackfill(executor, adapter, FIRST_DEPLOY_FROM, now, FIRST_DEPLOY_STRATEGY);
-		enqueued.push(adapter);
+		const monthStart = missing[0];
+		const monthEnd = addOneMonth(monthStart);
+		try {
+			await enqueueBackfill(executor, adapter, monthStart, monthEnd, MONTH_FILL_STRATEGY);
+			enqueued.push(`${adapter}@${monthStart.toISOString().slice(0, 7)}`);
+		} catch (err) {
+			skipped.push(`${adapter} (enqueue failed: ${err instanceof Error ? err.message : err})`);
+		}
 	}
 
 	return { enqueued, skipped };
 }
 
-/**
- * True if a non-failed backfill_runs row already exists for this source whose
- * window spans (window_start <= FIRST_DEPLOY_FROM) AND (window_end >= FIRST_DEPLOY_FROM).
- *
- * Failed runs are excluded so they don't shield against retries. Complete runs
- * that ingested zero items are excluded ONLY after the empty-complete cooldown
- * has elapsed — that gives operators a window to notice a genuinely-empty
- * source without masking real upstream regressions, while still letting the
- * system self-heal long-term if a strategy bug is later fixed.
- */
-async function isAlreadyCovered(executor: DbExecutor, source: string): Promise<boolean> {
-	const result = await executor.query<{ id: string }>(
-		`SELECT id FROM backfill_runs
-     WHERE source_name = $1
-       AND status <> 'failed'
-       AND window_start <= $2
-       AND window_end >= $2
-       AND NOT (
-         status = 'complete'
-         AND articles_ingested = 0
-         AND completed_at < now() - ($3::text || ' days')::interval
-       )
-     LIMIT 1`,
-		[source, FIRST_DEPLOY_FROM, String(EMPTY_COMPLETE_COOLDOWN_DAYS)]
-	);
-	return (result.rowCount ?? 0) > 0;
+function addOneMonth(d: Date): Date {
+	const next = new Date(d);
+	next.setUTCMonth(next.getUTCMonth() + 1);
+	return next;
 }

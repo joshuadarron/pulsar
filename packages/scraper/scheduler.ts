@@ -4,9 +4,7 @@ import { spawn } from 'node:child_process';
 import { env } from '@pulsar/shared/config/env';
 import { getClient as getPgClient, query } from '@pulsar/shared/db/postgres';
 import cron from 'node-cron';
-import { FIRST_DEPLOY_FROM, maybeAutoEnqueue } from './backfill/auto-enqueue.js';
-import { enqueueBackfill } from './backfill/queue.js';
-import { BACKFILL_PLATFORMS } from './backfill/source-platforms.js';
+import { enqueueMonthlyCoverage } from './backfill/auto-enqueue.js';
 import { scrape } from './index.js';
 import { ScrapeTimeoutError, withScrapeTimeout } from './lib/scrape-timeout.js';
 
@@ -121,73 +119,12 @@ const dbExecutor = {
 	}
 };
 
-// Per-source gap thresholds in days. A "gap" is no live ingest in the last
-// N days for that source. Backfill is enqueued for the gap window only.
-const GAP_THRESHOLDS_DAYS: Record<string, number> = {
-	arxiv: 2,
-	devto: 7,
-	github: 3,
-	hackernews: 1,
-	hashnode: 7,
-	medium: 14,
-	reddit: 7,
-	rss: 14
-};
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-async function getLastIngestForSource(source: string): Promise<Date | null> {
-	const platforms = BACKFILL_PLATFORMS[source];
-	if (!platforms || platforms.length === 0) return null;
-	const result = await query<{ last_at: Date | null }>(
-		`SELECT MAX(scraped_at) AS last_at FROM articles_raw
-     WHERE source_origin = 'live'
-       AND raw_payload->>'sourcePlatform' = ANY($1::text[])`,
-		[platforms]
-	);
-	const row = result.rows[0];
-	return row?.last_at ?? null;
-}
-
-async function detectGaps(): Promise<{ enqueued: string[]; skipped: string[] }> {
-	if (!env.backfill.enabled) {
-		return { enqueued: [], skipped: ['feature flag off'] };
-	}
-	const enqueued: string[] = [];
-	const skipped: string[] = [];
-	const now = new Date();
-	for (const [source, days] of Object.entries(GAP_THRESHOLDS_DAYS)) {
-		const lastIngest = await getLastIngestForSource(source);
-		const gapDays = lastIngest
-			? (now.getTime() - lastIngest.getTime()) / MS_PER_DAY
-			: Number.POSITIVE_INFINITY;
-		if (gapDays <= days) {
-			skipped.push(source);
-			continue;
-		}
-		const windowStart = lastIngest ?? FIRST_DEPLOY_FROM;
-		try {
-			await enqueueBackfill(dbExecutor, source, windowStart, now, 'gap-fill');
-			enqueued.push(source);
-		} catch (err) {
-			console.error(`[Scheduler] Gap enqueue failed for ${source}:`, err);
-		}
-	}
-	return { enqueued, skipped };
-}
-
 async function runBackfillTick(): Promise<void> {
 	if (!env.backfill.enabled) return;
 	try {
-		const auto = await maybeAutoEnqueue(dbExecutor);
-		if (auto.enqueued.length > 0) {
-			console.log(
-				`[Scheduler] Auto-enqueued first-deploy backfill for: ${auto.enqueued.join(', ')}`
-			);
-		}
-		const gaps = await detectGaps();
-		if (gaps.enqueued.length > 0) {
-			console.log(`[Scheduler] Gap-fill backfill enqueued for: ${gaps.enqueued.join(', ')}`);
+		const result = await enqueueMonthlyCoverage(dbExecutor);
+		if (result.enqueued.length > 0) {
+			console.log(`[Scheduler] Month-fill enqueued: ${result.enqueued.join(', ')}`);
 		}
 	} catch (err) {
 		console.error('[Scheduler] Backfill tick failed:', err);

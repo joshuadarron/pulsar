@@ -219,10 +219,10 @@ export async function enqueueBackfill(
  * `articles_raw` rows whose `raw_payload->>'sourcePlatform'` matches the
  * adapter's platform list in `BACKFILL_PLATFORMS`.
  *
- * This is the source of truth for auto-enqueue's "sparse source" check. The
- * keys are adapter keys (e.g. `'hackernews'`), not display names (e.g.
- * `'Hacker News'`), so the values can be passed straight to `enqueueBackfill`
- * and the worker's `getStrategy()` resolver.
+ * Retained as a diagnostic surface. The auto-enqueue path uses
+ * `monthsMissingCoverage` instead because total-row count masks historical
+ * gaps (a platform with 3,000 live rows in 2 months looks healthy while 40
+ * prior months are empty).
  */
 export async function articleCountsByAdapter(
 	executor: DbExecutor
@@ -249,6 +249,65 @@ export async function articleCountsByAdapter(
 		out[adapter] = (out[adapter] ?? 0) + Number.parseInt(row.count, 10);
 	}
 	return out;
+}
+
+/**
+ * Earliest month included in the per-month coverage check. Matches the live
+ * scraper's start-of-history (ChatGPT public release).
+ */
+export const COVERAGE_WINDOW_START = new Date('2022-12-01T00:00:00Z');
+
+/**
+ * A `(adapter, month)` pair is "covered" when the live and backfilled rows for
+ * that month total at least this many. Set low because Wayback / archive feeds
+ * are sparse for some platforms; a handful of articles per month is a
+ * meaningful signal that the strategy did *something*.
+ */
+export const MONTH_COVERAGE_THRESHOLD = 5;
+
+/**
+ * Months in `[COVERAGE_WINDOW_START, current month]` where the adapter has
+ * fewer than `threshold` rows in `articles_raw`. Newest-first so the
+ * auto-enqueue path prioritizes recent gaps over deep history.
+ *
+ * Counts live and backfilled rows together: the goal is overall coverage
+ * per month, not "did we backfill this month" — a month already populated
+ * by the live scraper should not consume a backfill slot.
+ */
+export async function monthsMissingCoverage(
+	executor: DbExecutor,
+	adapter: string,
+	threshold = MONTH_COVERAGE_THRESHOLD
+): Promise<Date[]> {
+	const platforms = BACKFILL_PLATFORMS[adapter];
+	if (!platforms || platforms.length === 0) return [];
+
+	const result = await executor.query<{ month_start: Date }>(
+		`WITH months AS (
+       SELECT generate_series(
+         $1::timestamptz,
+         date_trunc('month', now() AT TIME ZONE 'UTC'),
+         interval '1 month'
+       ) AS month_start
+     ),
+     covered AS (
+       SELECT date_trunc('month', (raw_payload->>'publishedAt')::timestamptz)
+                AS month_start,
+              COUNT(*) AS row_count
+       FROM articles_raw
+       WHERE raw_payload->>'sourcePlatform' = ANY($2::text[])
+         AND (raw_payload->>'publishedAt')::timestamptz >= $1::timestamptz
+       GROUP BY 1
+     )
+     SELECT m.month_start
+     FROM months m
+     LEFT JOIN covered c USING (month_start)
+     WHERE COALESCE(c.row_count, 0) < $3
+     ORDER BY m.month_start DESC`,
+		[COVERAGE_WINDOW_START, platforms, threshold]
+	);
+
+	return result.rows.map((r) => new Date(r.month_start));
 }
 
 export type { BackfillJob, BackfillJobStatus, BackfillStatus };

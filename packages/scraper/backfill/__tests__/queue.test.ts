@@ -2,12 +2,15 @@ import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
 
 import {
+	COVERAGE_WINDOW_START,
 	MAX_JOB_ATTEMPTS,
+	MONTH_COVERAGE_THRESHOLD,
 	articleCountsByAdapter,
 	claimJobs,
 	completeJob,
 	enqueueBackfill,
 	failJob,
+	monthsMissingCoverage,
 	requeueRetriableFailures
 } from '../queue.js';
 
@@ -164,6 +167,56 @@ describe('failJob', () => {
 		await failJob(executor, 'job-9', new Error('boom'));
 		const failSql = calls[0].sql;
 		assert.equal(/attempts\s*=/.test(failSql), false);
+	});
+});
+
+describe('monthsMissingCoverage', () => {
+	it('returns months from the SQL result in newest-first order', async () => {
+		const handler: QueryHandler = () => ({
+			rows: [
+				{ month_start: new Date('2025-12-01T00:00:00Z') },
+				{ month_start: new Date('2025-06-01T00:00:00Z') },
+				{ month_start: new Date('2024-01-01T00:00:00Z') }
+			],
+			rowCount: 3
+		});
+		const { executor } = makeExecutor(handler);
+		const months = await monthsMissingCoverage(executor, 'devto');
+		assert.equal(months.length, 3);
+		assert.equal(months[0].toISOString(), '2025-12-01T00:00:00.000Z');
+	});
+
+	it('parameterizes coverage window, platforms list, and threshold', async () => {
+		let capturedParams: unknown[] | null = null;
+		const handler: QueryHandler = (_sql, params) => {
+			capturedParams = params;
+			return { rows: [], rowCount: 0 };
+		};
+		const { executor } = makeExecutor(handler);
+		await monthsMissingCoverage(executor, 'rss', 7);
+		assert.equal((capturedParams![0] as Date).getTime(), COVERAGE_WINDOW_START.getTime());
+		// 'rss' adapter fans out to ['rss', 'substack'] in BACKFILL_PLATFORMS.
+		assert.deepEqual(capturedParams![1], ['rss', 'substack']);
+		assert.equal(capturedParams![2], 7);
+	});
+
+	it('returns an empty array for an unknown adapter', async () => {
+		const handler: QueryHandler = () => ({ rows: [{ month_start: new Date() }], rowCount: 1 });
+		const { executor, calls } = makeExecutor(handler);
+		const months = await monthsMissingCoverage(executor, 'no-such-adapter');
+		assert.deepEqual(months, []);
+		assert.equal(calls.length, 0, 'unknown adapter should short-circuit before the SQL call');
+	});
+
+	it('uses the default threshold when not supplied', async () => {
+		let capturedThreshold: unknown = null;
+		const handler: QueryHandler = (_sql, params) => {
+			capturedThreshold = params[2];
+			return { rows: [], rowCount: 0 };
+		};
+		const { executor } = makeExecutor(handler);
+		await monthsMissingCoverage(executor, 'github');
+		assert.equal(capturedThreshold, MONTH_COVERAGE_THRESHOLD);
 	});
 });
 

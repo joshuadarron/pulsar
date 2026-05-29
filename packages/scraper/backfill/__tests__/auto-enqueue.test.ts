@@ -13,9 +13,7 @@ mock.module('@pulsar/shared/config/env', {
 	}
 });
 
-const { maybeAutoEnqueue, FIRST_DEPLOY_THRESHOLD, FIRST_DEPLOY_FROM } = await import(
-	'../auto-enqueue.js'
-);
+const { enqueueMonthlyCoverage } = await import('../auto-enqueue.js');
 const envModule = (await import('@pulsar/shared/config/env')) as unknown as {
 	env: { backfill: { enabled: boolean } };
 };
@@ -38,69 +36,78 @@ function makeExecutor(handler: QueryHandler) {
 	return { executor, calls };
 }
 
-// Seed all known backfill adapters above the threshold; tests opt-in to making
-// a specific adapter sparse by overriding its count. This isolates each test
-// to exactly the adapter(s) it cares about, since articleCountsByAdapter
-// zero-fills unseen adapters and would otherwise mark them all as sparse.
-const ABOVE = String(FIRST_DEPLOY_THRESHOLD + 100);
-function platformRows(overrides: Record<string, string> = {}): FakeRow[] {
-	const base: Record<string, string> = {
-		arxiv: ABOVE,
-		devto: ABOVE,
-		github: ABOVE,
-		hackernews: ABOVE,
-		hashnode: ABOVE,
-		medium: ABOVE,
-		reddit: ABOVE,
-		rss: ABOVE
+// Returns an exec handler that says "this adapter has these missing months;
+// every other adapter is fully covered" so each test focuses on one adapter.
+// The platforms-list param is what we key off (BACKFILL_PLATFORMS maps the
+// adapter key to a list of platform strings; we look up by the first one).
+function handlerWithMissingMonths(missingByAdapter: Record<string, Date[]>): {
+	handler: QueryHandler;
+	inserts: Recorded[];
+} {
+	const inserts: Recorded[] = [];
+	const handler: QueryHandler = (sql, params) => {
+		if (/SELECT m.month_start/.test(sql)) {
+			const platforms = params[1] as string[];
+			const key = platforms[0];
+			const months = missingByAdapter[key] ?? [];
+			return { rows: months.map((d) => ({ month_start: d })), rowCount: months.length };
+		}
+		if (/INSERT INTO backfill_runs/.test(sql)) {
+			inserts.push({ sql, params });
+			return { rows: [{ id: `run-${inserts.length}` }], rowCount: 1 };
+		}
+		if (/INSERT INTO backfill_jobs/.test(sql)) {
+			return { rows: [{ id: `job-${inserts.length}` }], rowCount: 1 };
+		}
+		return { rows: [], rowCount: 0 };
 	};
-	const merged = { ...base, ...overrides };
-	return Object.entries(merged).map(([platform, count]) => ({ platform, count }));
+	return { handler, inserts };
 }
 
-describe('maybeAutoEnqueue', () => {
+describe('enqueueMonthlyCoverage', () => {
 	it('returns feature-flag-off when env.backfill.enabled is false', async () => {
 		envModule.env.backfill.enabled = false;
 		const handler: QueryHandler = () => ({ rows: [], rowCount: 0 });
 		const { executor, calls } = makeExecutor(handler);
-		const out = await maybeAutoEnqueue(executor);
+		const out = await enqueueMonthlyCoverage(executor);
 		assert.deepEqual(out, { enqueued: [], skipped: ['feature flag off'] });
 		assert.equal(calls.length, 0);
 		envModule.env.backfill.enabled = true;
 	});
 
-	it('enqueues adapters whose count is below FIRST_DEPLOY_THRESHOLD and no coverage exists', async () => {
+	it('enqueues the newest missing month per adapter, one per tick', async () => {
 		envModule.env.backfill.enabled = true;
-		const handler: QueryHandler = (sql) => {
-			if (/sourcePlatform/.test(sql)) {
-				return { rows: platformRows({ arxiv: '5' }), rowCount: 8 };
-			}
-			if (/SELECT id FROM backfill_runs/.test(sql)) {
-				return { rows: [], rowCount: 0 };
-			}
-			if (/INSERT INTO backfill_runs/.test(sql)) {
-				return { rows: [{ id: 'run-1' }], rowCount: 1 };
-			}
-			if (/INSERT INTO backfill_jobs/.test(sql)) {
-				return { rows: [{ id: 'job-1' }], rowCount: 1 };
-			}
-			return { rows: [], rowCount: 0 };
-		};
+		const { handler, inserts } = handlerWithMissingMonths({
+			devto: [
+				new Date('2024-03-01T00:00:00Z'),
+				new Date('2024-02-01T00:00:00Z')
+			]
+		});
 		const { executor } = makeExecutor(handler);
+		const out = await enqueueMonthlyCoverage(executor);
 
-		const out = await maybeAutoEnqueue(executor);
-		assert.deepEqual(out.enqueued, ['arxiv']);
-		assert.deepEqual(out.skipped, []);
+		assert.ok(
+			out.enqueued.some((s) => s.startsWith('devto@2024-03')),
+			'newest devto missing month should be enqueued'
+		);
+		// Only the first missing month is enqueued for devto (one per tick).
+		const devtoInserts = inserts.filter((i) => i.params[0] === 'devto');
+		assert.equal(devtoInserts.length, 1, 'one insert per adapter per tick');
+		const start = devtoInserts[0].params[1] as Date;
+		const end = devtoInserts[0].params[2] as Date;
+		assert.equal(start.toISOString(), '2024-03-01T00:00:00.000Z');
+		assert.equal(end.toISOString(), '2024-04-01T00:00:00.000Z');
 	});
 
 	it('passes the adapter key (not a display name) to backfill_jobs.source_name', async () => {
 		envModule.env.backfill.enabled = true;
 		let jobInsertParams: unknown[] | null = null;
 		const handler: QueryHandler = (sql, params) => {
-			if (/sourcePlatform/.test(sql)) {
-				return { rows: platformRows({ hackernews: '0' }), rowCount: 8 };
-			}
-			if (/SELECT id FROM backfill_runs/.test(sql)) {
+			if (/SELECT m.month_start/.test(sql)) {
+				const platforms = params[1] as string[];
+				if (platforms.includes('hackernews')) {
+					return { rows: [{ month_start: new Date('2025-01-01T00:00:00Z') }], rowCount: 1 };
+				}
 				return { rows: [], rowCount: 0 };
 			}
 			if (/INSERT INTO backfill_runs/.test(sql)) {
@@ -113,144 +120,31 @@ describe('maybeAutoEnqueue', () => {
 			return { rows: [], rowCount: 0 };
 		};
 		const { executor } = makeExecutor(handler);
-		const out = await maybeAutoEnqueue(executor);
-		assert.deepEqual(out.enqueued, ['hackernews']);
+		const out = await enqueueMonthlyCoverage(executor);
+		assert.ok(out.enqueued.some((s) => s.startsWith('hackernews@')));
 		assert.equal(
 			jobInsertParams![1],
 			'hackernews',
 			'job.source_name must be the adapter key, not a display name'
 		);
+		assert.equal(jobInsertParams![4], 'month-fill');
 	});
 
-	it('skips adapters with existing coverage row', async () => {
+	it('skips adapters with no missing months', async () => {
 		envModule.env.backfill.enabled = true;
 		const handler: QueryHandler = (sql) => {
-			if (/sourcePlatform/.test(sql)) {
-				return { rows: platformRows({ arxiv: '0' }), rowCount: 8 };
-			}
-			if (/SELECT id FROM backfill_runs/.test(sql)) {
-				return { rows: [{ id: 'existing-run' }], rowCount: 1 };
+			if (/SELECT m.month_start/.test(sql)) {
+				return { rows: [], rowCount: 0 };
 			}
 			return { rows: [], rowCount: 0 };
 		};
 		const { executor, calls } = makeExecutor(handler);
-
-		const out = await maybeAutoEnqueue(executor);
-		assert.deepEqual(out.enqueued, []);
-		assert.deepEqual(out.skipped, ['arxiv']);
+		const out = await enqueueMonthlyCoverage(executor);
+		assert.equal(out.enqueued.length, 0);
+		assert.ok(out.skipped.length >= 1, 'all adapters fully covered should be in skipped');
 		assert.equal(
 			calls.some((c) => /INSERT INTO backfill_runs/.test(c.sql)),
 			false
-		);
-	});
-
-	it('coverage check excludes stale complete-with-zero runs so a fixed strategy retries', async () => {
-		envModule.env.backfill.enabled = true;
-		let capturedCoverageSql: string | null = null;
-		const handler: QueryHandler = (sql) => {
-			if (/sourcePlatform/.test(sql)) {
-				return { rows: platformRows({ arxiv: '0' }), rowCount: 8 };
-			}
-			if (/SELECT id FROM backfill_runs/.test(sql)) {
-				capturedCoverageSql = sql;
-				return { rows: [], rowCount: 0 };
-			}
-			if (/INSERT INTO backfill_runs/.test(sql)) {
-				return { rows: [{ id: 'run-1' }], rowCount: 1 };
-			}
-			if (/INSERT INTO backfill_jobs/.test(sql)) {
-				return { rows: [{ id: 'job-1' }], rowCount: 1 };
-			}
-			return { rows: [], rowCount: 0 };
-		};
-		const { executor } = makeExecutor(handler);
-		await maybeAutoEnqueue(executor);
-		assert.ok(capturedCoverageSql, 'expected coverage check');
-		assert.match(
-			capturedCoverageSql!,
-			/articles_ingested = 0/,
-			'predicate must skip stale zero-ingested complete runs'
-		);
-		assert.match(
-			capturedCoverageSql!,
-			/completed_at < now\(\) - /,
-			'predicate must enforce a cooldown so fresh empty completes still block'
-		);
-	});
-
-	it('coverage check excludes failed runs so a failed first-deploy can be retried', async () => {
-		envModule.env.backfill.enabled = true;
-		let capturedCoverageSql: string | null = null;
-		const handler: QueryHandler = (sql) => {
-			if (/sourcePlatform/.test(sql)) {
-				return { rows: platformRows({ arxiv: '0' }), rowCount: 8 };
-			}
-			if (/SELECT id FROM backfill_runs/.test(sql)) {
-				capturedCoverageSql = sql;
-				return { rows: [], rowCount: 0 };
-			}
-			if (/INSERT INTO backfill_runs/.test(sql)) {
-				return { rows: [{ id: 'run-1' }], rowCount: 1 };
-			}
-			if (/INSERT INTO backfill_jobs/.test(sql)) {
-				return { rows: [{ id: 'job-1' }], rowCount: 1 };
-			}
-			return { rows: [], rowCount: 0 };
-		};
-		const { executor } = makeExecutor(handler);
-
-		const out = await maybeAutoEnqueue(executor);
-		assert.deepEqual(out.enqueued, ['arxiv']);
-		assert.ok(capturedCoverageSql, 'expected coverage check');
-		assert.match(capturedCoverageSql!, /status <> 'failed'/);
-	});
-
-	it('skips adapters at or above the threshold', async () => {
-		envModule.env.backfill.enabled = true;
-		const handler: QueryHandler = (sql) => {
-			if (/sourcePlatform/.test(sql)) {
-				return { rows: platformRows(), rowCount: 8 };
-			}
-			return { rows: [], rowCount: 0 };
-		};
-		const { executor, calls } = makeExecutor(handler);
-
-		const out = await maybeAutoEnqueue(executor);
-		assert.deepEqual(out.enqueued, []);
-		assert.deepEqual(out.skipped, []);
-		assert.equal(
-			calls.some((c) => /INSERT INTO backfill_runs/.test(c.sql)),
-			false
-		);
-	});
-
-	it('passes FIRST_DEPLOY_FROM as the window_start of the enqueued run', async () => {
-		envModule.env.backfill.enabled = true;
-		let capturedRunInsert: unknown[] | null = null;
-		const handler: QueryHandler = (sql, params) => {
-			if (/sourcePlatform/.test(sql)) {
-				return { rows: platformRows({ arxiv: '0' }), rowCount: 8 };
-			}
-			if (/SELECT id FROM backfill_runs/.test(sql)) {
-				return { rows: [], rowCount: 0 };
-			}
-			if (/INSERT INTO backfill_runs/.test(sql)) {
-				capturedRunInsert = params;
-				return { rows: [{ id: 'run-1' }], rowCount: 1 };
-			}
-			if (/INSERT INTO backfill_jobs/.test(sql)) {
-				return { rows: [{ id: 'job-1' }], rowCount: 1 };
-			}
-			return { rows: [], rowCount: 0 };
-		};
-		const { executor } = makeExecutor(handler);
-		await maybeAutoEnqueue(executor);
-
-		assert.ok(capturedRunInsert, 'expected backfill_runs insert');
-		assert.equal(
-			(capturedRunInsert![1] as Date).getTime(),
-			FIRST_DEPLOY_FROM.getTime(),
-			'window_start should equal FIRST_DEPLOY_FROM'
 		);
 	});
 });
