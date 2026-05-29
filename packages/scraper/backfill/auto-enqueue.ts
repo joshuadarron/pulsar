@@ -1,7 +1,14 @@
 import { env } from '@pulsar/shared/config/env';
 
 import type { DbExecutor } from '../dedup.js';
-import { COVERAGE_WINDOW_START, enqueueBackfill, monthsMissingCoverage } from './queue.js';
+import {
+	COVERAGE_WINDOW_START,
+	MAX_INFLIGHT_PER_ADAPTER,
+	enqueueBackfill,
+	inflightCount,
+	monthAttemptedRecently,
+	monthsMissingCoverage
+} from './queue.js';
 import { BACKFILL_PLATFORMS } from './source-platforms.js';
 
 /** Strategy name recorded on backfill_jobs for month-coverage enqueues. */
@@ -35,16 +42,38 @@ export async function enqueueMonthlyCoverage(executor: DbExecutor): Promise<Enqu
 	const skipped: string[] = [];
 
 	for (const adapter of Object.keys(BACKFILL_PLATFORMS)) {
+		const inflight = await inflightCount(executor, adapter);
+		if (inflight >= MAX_INFLIGHT_PER_ADAPTER) {
+			skipped.push(`${adapter} (in-flight=${inflight})`);
+			continue;
+		}
+
 		const missing = await monthsMissingCoverage(executor, adapter);
 		if (missing.length === 0) {
 			skipped.push(adapter);
 			continue;
 		}
-		const monthStart = missing[0];
-		const monthEnd = addOneMonth(monthStart);
+
+		// Walk newest-first; cooldown shields months that were attempted recently
+		// (whether they succeeded, failed, or completed empty). Pick the first
+		// eligible month and stop — one enqueue per adapter per tick.
+		let picked: Date | null = null;
+		for (const candidate of missing) {
+			const recent = await monthAttemptedRecently(executor, adapter, candidate);
+			if (!recent) {
+				picked = candidate;
+				break;
+			}
+		}
+		if (!picked) {
+			skipped.push(`${adapter} (all candidate months on cooldown)`);
+			continue;
+		}
+
+		const monthEnd = addOneMonth(picked);
 		try {
-			await enqueueBackfill(executor, adapter, monthStart, monthEnd, MONTH_FILL_STRATEGY);
-			enqueued.push(`${adapter}@${monthStart.toISOString().slice(0, 7)}`);
+			await enqueueBackfill(executor, adapter, picked, monthEnd, MONTH_FILL_STRATEGY);
+			enqueued.push(`${adapter}@${picked.toISOString().slice(0, 7)}`);
 		} catch (err) {
 			skipped.push(`${adapter} (enqueue failed: ${err instanceof Error ? err.message : err})`);
 		}

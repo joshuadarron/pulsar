@@ -266,6 +266,54 @@ export const COVERAGE_WINDOW_START = new Date('2022-12-01T00:00:00Z');
 export const MONTH_COVERAGE_THRESHOLD = 5;
 
 /**
+ * Per-adapter cap on month-fill jobs that can be queued or claimed at once.
+ * The auto-enqueue path checks this before adding work for an adapter so a
+ * burst of missing months does not flood the worker queue or burn Wayback
+ * rate limits.
+ */
+export const MAX_INFLIGHT_PER_ADAPTER = 1;
+
+/** Days an attempted month is shielded from re-enqueue. */
+export const MONTH_RETRY_COOLDOWN_DAYS = 7;
+
+/**
+ * Count of in-flight month-fill jobs for an adapter (queued or claimed).
+ * Used by `enqueueMonthlyCoverage` to enforce per-adapter concurrency.
+ */
+export async function inflightCount(executor: DbExecutor, adapter: string): Promise<number> {
+	const result = await executor.query<{ count: string }>(
+		`SELECT COUNT(*)::text AS count FROM backfill_jobs
+     WHERE source_name = $1
+       AND strategy = 'month-fill'
+       AND status IN ('queued', 'claimed')`,
+		[adapter]
+	);
+	return Number.parseInt(result.rows[0]?.count ?? '0', 10);
+}
+
+/**
+ * True if a `backfill_runs` row already exists for this `(adapter, monthStart)`
+ * created within the cooldown window. Prevents a tick from re-enqueuing a
+ * month that was just attempted, even if the previous attempt was empty.
+ */
+export async function monthAttemptedRecently(
+	executor: DbExecutor,
+	adapter: string,
+	monthStart: Date,
+	cooldownDays = MONTH_RETRY_COOLDOWN_DAYS
+): Promise<boolean> {
+	const result = await executor.query<{ id: string }>(
+		`SELECT id FROM backfill_runs
+     WHERE source_name = $1
+       AND window_start = $2
+       AND created_at > now() - ($3::text || ' days')::interval
+     LIMIT 1`,
+		[adapter, monthStart, String(cooldownDays)]
+	);
+	return (result.rowCount ?? 0) > 0;
+}
+
+/**
  * Months in `[COVERAGE_WINDOW_START, current month]` where the adapter has
  * fewer than `threshold` rows in `articles_raw`. Newest-first so the
  * auto-enqueue path prioritizes recent gaps over deep history.

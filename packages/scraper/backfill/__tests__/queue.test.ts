@@ -5,11 +5,14 @@ import {
 	COVERAGE_WINDOW_START,
 	MAX_JOB_ATTEMPTS,
 	MONTH_COVERAGE_THRESHOLD,
+	MONTH_RETRY_COOLDOWN_DAYS,
 	articleCountsByAdapter,
 	claimJobs,
 	completeJob,
 	enqueueBackfill,
 	failJob,
+	inflightCount,
+	monthAttemptedRecently,
 	monthsMissingCoverage,
 	requeueRetriableFailures
 } from '../queue.js';
@@ -217,6 +220,79 @@ describe('monthsMissingCoverage', () => {
 		const { executor } = makeExecutor(handler);
 		await monthsMissingCoverage(executor, 'github');
 		assert.equal(capturedThreshold, MONTH_COVERAGE_THRESHOLD);
+	});
+});
+
+describe('inflightCount', () => {
+	it('counts month-fill jobs in queued or claimed state for the adapter', async () => {
+		let capturedSql: string | null = null;
+		let capturedParams: unknown[] | null = null;
+		const handler: QueryHandler = (sql, params) => {
+			capturedSql = sql;
+			capturedParams = params;
+			return { rows: [{ count: '2' }], rowCount: 1 };
+		};
+		const { executor } = makeExecutor(handler);
+		const count = await inflightCount(executor, 'devto');
+		assert.equal(count, 2);
+		assert.match(capturedSql!, /SELECT COUNT\(\*\)/);
+		assert.match(capturedSql!, /strategy = 'month-fill'/);
+		assert.match(capturedSql!, /status IN \('queued', 'claimed'\)/);
+		assert.equal(capturedParams![0], 'devto');
+	});
+
+	it('returns 0 when the query returns no rows', async () => {
+		const handler: QueryHandler = () => ({ rows: [], rowCount: 0 });
+		const { executor } = makeExecutor(handler);
+		const count = await inflightCount(executor, 'devto');
+		assert.equal(count, 0);
+	});
+});
+
+describe('monthAttemptedRecently', () => {
+	it('returns true when a backfill_runs row exists in the cooldown window', async () => {
+		const handler: QueryHandler = () => ({ rows: [{ id: 'r1' }], rowCount: 1 });
+		const { executor } = makeExecutor(handler);
+		const recent = await monthAttemptedRecently(
+			executor,
+			'rss',
+			new Date('2024-01-01T00:00:00Z')
+		);
+		assert.equal(recent, true);
+	});
+
+	it('returns false when no row matches', async () => {
+		const handler: QueryHandler = () => ({ rows: [], rowCount: 0 });
+		const { executor } = makeExecutor(handler);
+		const recent = await monthAttemptedRecently(
+			executor,
+			'rss',
+			new Date('2024-01-01T00:00:00Z')
+		);
+		assert.equal(recent, false);
+	});
+
+	it('passes the cooldown days through as the third parameter', async () => {
+		let capturedParams: unknown[] | null = null;
+		const handler: QueryHandler = (_sql, params) => {
+			capturedParams = params;
+			return { rows: [], rowCount: 0 };
+		};
+		const { executor } = makeExecutor(handler);
+		await monthAttemptedRecently(executor, 'rss', new Date('2024-01-01T00:00:00Z'), 14);
+		assert.equal(capturedParams![0], 'rss');
+		assert.equal(capturedParams![2], '14');
+	});
+
+	it('uses the default cooldown when not supplied', async () => {
+		let capturedParams: unknown[] | null = null;
+		const handler: QueryHandler = (_sql, params) => {
+			capturedParams = params;
+			return { rows: [], rowCount: 0 };
+		};
+		const { executor } = makeExecutor(handler);
+		await monthAttemptedRecently(executor, 'rss', new Date('2024-01-01T00:00:00Z'));
+		assert.equal(capturedParams![2], String(MONTH_RETRY_COOLDOWN_DAYS));
 	});
 });
 

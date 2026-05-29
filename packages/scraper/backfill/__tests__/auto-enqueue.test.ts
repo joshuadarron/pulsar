@@ -130,6 +130,112 @@ describe('enqueueMonthlyCoverage', () => {
 		assert.equal(jobInsertParams![4], 'month-fill');
 	});
 
+	it('skips an adapter that already has a month-fill in flight', async () => {
+		envModule.env.backfill.enabled = true;
+		let monthsQueryCalled = false;
+		const handler: QueryHandler = (sql, params) => {
+			if (/SELECT COUNT\(\*\).*backfill_jobs/.test(sql)) {
+				// Inflight check: report 1 in-flight job for devto, 0 for everyone else.
+				return params[0] === 'devto'
+					? { rows: [{ count: '1' }], rowCount: 1 }
+					: { rows: [{ count: '0' }], rowCount: 1 };
+			}
+			if (/SELECT m.month_start/.test(sql)) {
+				monthsQueryCalled = monthsQueryCalled || (params[1] as string[]).includes('devto');
+				return { rows: [], rowCount: 0 };
+			}
+			return { rows: [], rowCount: 0 };
+		};
+		const { executor } = makeExecutor(handler);
+		const out = await enqueueMonthlyCoverage(executor);
+		assert.ok(
+			out.skipped.some((s) => s.startsWith('devto (in-flight=')),
+			'devto should be skipped due to in-flight cap'
+		);
+		assert.equal(monthsQueryCalled, false, 'monthsMissingCoverage should not be called for devto');
+	});
+
+	it('skips a month attempted within the cooldown window', async () => {
+		envModule.env.backfill.enabled = true;
+		const newest = new Date('2024-03-01T00:00:00Z');
+		const next = new Date('2024-02-01T00:00:00Z');
+		let attemptedRecentlyCalls = 0;
+		const inserts: Recorded[] = [];
+		const handler: QueryHandler = (sql, params) => {
+			if (/SELECT COUNT\(\*\).*backfill_jobs/.test(sql)) {
+				return { rows: [{ count: '0' }], rowCount: 1 };
+			}
+			if (/SELECT m.month_start/.test(sql)) {
+				const platforms = params[1] as string[];
+				if (platforms.includes('devto')) {
+					return {
+						rows: [{ month_start: newest }, { month_start: next }],
+						rowCount: 2
+					};
+				}
+				return { rows: [], rowCount: 0 };
+			}
+			if (/SELECT id FROM backfill_runs/.test(sql)) {
+				// Cooldown probe — say the NEWEST month is on cooldown, the next is not.
+				attemptedRecentlyCalls++;
+				const month = params[1] as Date;
+				const onCooldown = month.getTime() === newest.getTime();
+				return onCooldown ? { rows: [{ id: 'r1' }], rowCount: 1 } : { rows: [], rowCount: 0 };
+			}
+			if (/INSERT INTO backfill_runs/.test(sql)) {
+				inserts.push({ sql, params });
+				return { rows: [{ id: 'run-1' }], rowCount: 1 };
+			}
+			if (/INSERT INTO backfill_jobs/.test(sql)) {
+				return { rows: [{ id: 'job-1' }], rowCount: 1 };
+			}
+			return { rows: [], rowCount: 0 };
+		};
+		const { executor } = makeExecutor(handler);
+		const out = await enqueueMonthlyCoverage(executor);
+		assert.ok(
+			out.enqueued.some((s) => s.startsWith('devto@2024-02')),
+			'should fall through to next non-cooldown month'
+		);
+		assert.ok(attemptedRecentlyCalls >= 2, 'must probe both candidate months');
+		const devtoInsert = inserts.find((i) => i.params[0] === 'devto');
+		assert.equal((devtoInsert!.params[1] as Date).toISOString(), next.toISOString());
+	});
+
+	it('skips an adapter when all candidate months are on cooldown', async () => {
+		envModule.env.backfill.enabled = true;
+		const handler: QueryHandler = (sql, params) => {
+			if (/SELECT COUNT\(\*\).*backfill_jobs/.test(sql)) {
+				return { rows: [{ count: '0' }], rowCount: 1 };
+			}
+			if (/SELECT m.month_start/.test(sql)) {
+				const platforms = params[1] as string[];
+				if (platforms.includes('hashnode')) {
+					return {
+						rows: [{ month_start: new Date('2024-01-01T00:00:00Z') }],
+						rowCount: 1
+					};
+				}
+				return { rows: [], rowCount: 0 };
+			}
+			if (/SELECT id FROM backfill_runs/.test(sql)) {
+				return { rows: [{ id: 'r1' }], rowCount: 1 }; // always on cooldown
+			}
+			return { rows: [], rowCount: 0 };
+		};
+		const { executor, calls } = makeExecutor(handler);
+		const out = await enqueueMonthlyCoverage(executor);
+		assert.ok(
+			out.skipped.some((s) => s.startsWith('hashnode (all candidate months on cooldown)')),
+			'should report cooldown skip for hashnode'
+		);
+		assert.equal(
+			calls.some((c) => /INSERT INTO backfill_runs/.test(c.sql) && c.params[0] === 'hashnode'),
+			false,
+			'no hashnode enqueue when all candidates on cooldown'
+		);
+	});
+
 	it('skips adapters with no missing months', async () => {
 		envModule.env.backfill.enabled = true;
 		const handler: QueryHandler = (sql) => {
