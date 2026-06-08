@@ -1550,7 +1550,7 @@ async function runContentArticles(
 				'drafts',
 				'Articles Ready',
 				`${result.articleCount} article package(s) generated.`,
-				'/drafts',
+				'/articles',
 				reportId
 			]
 		);
