@@ -6,7 +6,8 @@
 export function extractJson<T = Record<string, unknown>>(raw: string): T {
 	// Try direct parse first
 	try {
-		return JSON.parse(raw);
+		const direct = JSON.parse(raw);
+		return unwrapTextEnvelope<T>(direct);
 	} catch {
 		// ignore
 	}
@@ -40,15 +41,44 @@ export function extractJson<T = Record<string, unknown>>(raw: string): T {
 	throw new SyntaxError(`Could not extract JSON from response: ${raw.slice(0, 100)}...`);
 }
 
+/**
+ * Some agents wrap their structured response in a single-key `{"text": "..."}`
+ * envelope where the inner string is itself a serialized JSON object. When
+ * that happens, the outer parse succeeds but the consumer ends up with prose
+ * fields whose value is a JSON literal. Detect that exact shape and unwrap.
+ *
+ * Anything else (object with multiple keys, primitive, array, or inner string
+ * that is not parseable JSON) is returned unchanged.
+ */
+function unwrapTextEnvelope<T>(value: unknown): T {
+	if (
+		value &&
+		typeof value === 'object' &&
+		!Array.isArray(value) &&
+		Object.keys(value as Record<string, unknown>).length === 1 &&
+		typeof (value as Record<string, unknown>).text === 'string'
+	) {
+		const inner = ((value as Record<string, unknown>).text as string).trim();
+		if (inner.startsWith('{') || inner.startsWith('[')) {
+			try {
+				return JSON.parse(inner) as T;
+			} catch {
+				// fall through and return the outer value
+			}
+		}
+	}
+	return value as T;
+}
+
 /** Try JSON.parse, then with trailing-comma cleanup, then with single-quote normalization. */
 function tryParseVariants<T>(str: string): T | undefined {
 	try {
-		return JSON.parse(str);
+		return unwrapTextEnvelope<T>(JSON.parse(str));
 	} catch {
 		/* ignore */
 	}
 	try {
-		return JSON.parse(cleanJson(str));
+		return unwrapTextEnvelope<T>(JSON.parse(cleanJson(str)));
 	} catch {
 		/* ignore */
 	}
@@ -56,12 +86,12 @@ function tryParseVariants<T>(str: string): T | undefined {
 	const normalized = normalizePythonDict(str);
 	if (normalized !== str) {
 		try {
-			return JSON.parse(normalized);
+			return unwrapTextEnvelope<T>(JSON.parse(normalized));
 		} catch {
 			/* ignore */
 		}
 		try {
-			return JSON.parse(cleanJson(normalized));
+			return unwrapTextEnvelope<T>(JSON.parse(cleanJson(normalized)));
 		} catch {
 			/* ignore */
 		}

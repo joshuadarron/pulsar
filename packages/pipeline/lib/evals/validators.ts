@@ -193,6 +193,37 @@ export const TREND_REPORT_SUITE: ValidatorSuite = {
 			}
 		},
 		{
+			name: 'prose_fields_clean',
+			description: 'prose section text does not start with a JSON envelope character',
+			check: (out) => {
+				const data = out as Partial<ReportData>;
+				const sections = data?.sections;
+				if (!sections) return { passed: false, detail: 'sections missing' };
+				const proseFields: Array<{ label: string; value: unknown }> = [
+					{ label: 'executiveSummary.text', value: sections.executiveSummary?.text },
+					{ label: 'marketSnapshot.text', value: sections.marketSnapshot?.text },
+					{ label: 'developerSignals.text', value: sections.developerSignals?.text },
+					{ label: 'signalInterpretation.text', value: sections.signalInterpretation?.text }
+				];
+				const narrative = sections.signalInterpretation?.narrative;
+				if (Array.isArray(narrative)) {
+					narrative.forEach((para, i) => {
+						proseFields.push({ label: `signalInterpretation.narrative[${i}]`, value: para });
+					});
+				}
+				const leaks = proseFields
+					.filter(({ value }) => typeof value === 'string')
+					.filter(({ value }) => {
+						const trimmed = (value as string).trimStart();
+						return trimmed.startsWith('{') || trimmed.startsWith('[');
+					})
+					.map(({ label }) => label);
+				return leaks.length === 0
+					? { passed: true }
+					: { passed: false, detail: `JSON envelope leak in: ${leaks.join(', ')}` };
+			}
+		},
+		{
 			name: 'supporting_resources_present',
 			description: 'sections.supportingResources.resources is an array (up to 10 entries)',
 			check: (out) => {
