@@ -356,6 +356,80 @@ function computeEmergingEntities(
 		});
 }
 
+/**
+ * The entity whose mention count moved the most week-over-week. Used to
+ * anchor the trend report on a delta that actually shifts as new data lands,
+ * rather than on the largest absolute number in a frozen historical window.
+ *
+ * Restricted to entities with at least `MIN_MENTIONS_FOR_WOW` mentions in
+ * both snapshots so noise from zero-base divisions is excluded.
+ */
+interface WowLead {
+	name: string;
+	type: string;
+	currentMentions: number;
+	priorMentions: number;
+	deltaPct: number;
+}
+
+const MIN_MENTIONS_FOR_WOW = 20;
+
+function computeWowLead(
+	current: GraphSnapshot | null,
+	weekAgo: GraphSnapshot | null
+): WowLead | null {
+	if (!current || !weekAgo) return null;
+	const priorByName = new Map(weekAgo.entity_importance.map((e) => [e.name, e]));
+	let best: WowLead | null = null;
+	for (const entity of current.entity_importance) {
+		const prior = priorByName.get(entity.name);
+		if (!prior) continue;
+		if (
+			entity.mention_count < MIN_MENTIONS_FOR_WOW ||
+			prior.mention_count < MIN_MENTIONS_FOR_WOW
+		) {
+			continue;
+		}
+		const deltaPct = ((entity.mention_count - prior.mention_count) / prior.mention_count) * 100;
+		if (!best || Math.abs(deltaPct) > Math.abs(best.deltaPct)) {
+			best = {
+				name: entity.name,
+				type: entity.type,
+				currentMentions: entity.mention_count,
+				priorMentions: prior.mention_count,
+				deltaPct
+			};
+		}
+	}
+	return best;
+}
+
+/**
+ * Lead sentence from the executive summary of the four most recent prior
+ * reports (excluding this run). The agent uses these to avoid repeating the
+ * same lead week-over-week when the underlying delta has not materially
+ * changed.
+ */
+async function fetchPriorLeads(currentRunId: string): Promise<string[]> {
+	const result = await query<{ text: string | null }>(
+		`SELECT report_data->'sections'->'executiveSummary'->>'text' AS text
+		 FROM reports
+		 WHERE run_id <> $1
+		 ORDER BY created_at DESC
+		 LIMIT 4`,
+		[currentRunId]
+	);
+	const leads: string[] = [];
+	for (const row of result.rows) {
+		const text = (row.text ?? '').trim();
+		if (!text) continue;
+		const firstSentenceEnd = text.search(/[.!?](\s|$)/);
+		const lead = firstSentenceEnd > 0 ? text.slice(0, firstSentenceEnd + 1) : text.slice(0, 240);
+		leads.push(lead.trim());
+	}
+	return leads;
+}
+
 // ---------------------------------------------------------------------------
 // Pipeline token tracking (for cancellation)
 // ---------------------------------------------------------------------------
@@ -832,6 +906,8 @@ async function runTrendReport(
 	const topClusters = (snapshots.current?.topic_clusters ?? []).slice(0, 10);
 	const topEntities = (snapshots.current?.entity_importance ?? []).slice(0, 20);
 	const emergingEntities = computeEmergingEntities(snapshots.current, snapshots.weekAgo);
+	const wowLead = computeWowLead(snapshots.current, snapshots.weekAgo);
+	const priorLeads = await fetchPriorLeads(runId);
 
 	// Phase 3: enrich the top 20 entities with historical context. Soft-fails
 	// to plain entities if the analytics fetcher throws, so the report can
@@ -887,7 +963,8 @@ async function runTrendReport(
 			entityImportance: enrichedEntities,
 			sourceDistribution,
 			topicClusters: topClusters,
-			rocketrideContext
+			wowLead,
+			priorLeads
 		}
 	);
 	const signalsResponse = await runSection(
@@ -897,9 +974,9 @@ async function runTrendReport(
 		sectionPrompts,
 		systemPrompt,
 		{
-			...signalsInputs,
+			topDiscussions: signalsInputs.topDiscussions,
 			emergingEntities,
-			rocketrideContext
+			wowLead
 		}
 	);
 
@@ -917,8 +994,7 @@ async function runTrendReport(
 		systemPrompt,
 		{
 			marketSnapshot: marketResponse.text,
-			developerSignals: signalsResponse.text,
-			rocketrideContext
+			developerSignals: signalsResponse.text
 		}
 	);
 

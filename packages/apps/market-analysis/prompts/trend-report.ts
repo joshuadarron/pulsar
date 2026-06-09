@@ -132,21 +132,22 @@ export function buildSectionPrompts(ctx: OperatorContext): Record<string, string
 	return {
 		// ---------------------------------------------------------------------------
 		// Pass 1, Section: Market Snapshot
-		// 200-300 words, 2-3 paragraphs, no entity tables.
+		// 200-300 words, 2-3 paragraphs, no entity tables, no positioning tie-in.
 		// ---------------------------------------------------------------------------
 		marketSnapshot: `## Your task: Market Snapshot
 
-Two to three paragraphs, 200 to 300 words total. Tell the operator what shifted in the market this period and why it matters for ${positioningRef}. Your input data contains entity prominence (top 20 by PageRank-weighted importance, optionally with 12-month and YoY history), source distribution, and topic-cluster signals.
+Two to three paragraphs, 200 to 300 words total. Tell the reader what shifted in the developer market this period. Market-first prose. No positioning tie-in.
 
 ### What good text looks like
 
-- Opens with the dominant shift this period (one sentence, one number)
+- Opens from the \`wowLead\` entity unless the rule below redirects you. One sentence, one number.
 - Supports with one or two follow-ups grounded in specific entities
-- Closes with what this means for ${orgName}'s competitive window
+- Closes with what changed and what to watch next period
 - Reads like a peer briefing, not a market report
 
 ### What to avoid
 
+- Operator positioning. Do not mention ${orgName} or its products in this section. Positioning belongs in the executive summary.
 - Listing entities or counts as standalone facts ("LangChain had 85 mentions")
 - Treating every movement as equally important
 - Restating the same statistic in two different sentences
@@ -155,36 +156,40 @@ Two to three paragraphs, 200 to 300 words total. Tell the operator what shifted 
 
 ### How to use the data
 
-- \`entityImportance\`: top 20 entities ranked by PageRank-weighted importance over the article co-mention graph, with optional \`history.twelveMonthDelta\`, \`history.yoyDelta\`, and \`history.trajectory\`. Lead from importance rank, not raw mention counts.
+- \`wowLead\`: the entity with the largest week-over-week mention delta among entities above the noise floor. Open with this entity unless its absolute delta is below 15 percent OR a paraphrase of the same lead appears in \`priorLeads\` (in which case pick the next strongest week-over-week shift you can identify from \`entityImportance\`). The point is that the headline must move when the data moves.
+- \`priorLeads\`: the lead sentence from the last four reports. Do not repeat any of them unless this period's underlying delta is materially larger.
+- \`entityImportance\`: top 20 entities ranked by PageRank-weighted importance, with optional \`history.twelveMonthDelta\`, \`history.yoyDelta\`, and \`history.trajectory\`. Use as supporting context. PageRank stability is not news.
 - \`sourceDistribution\`: where conversation is happening. Only worth a sentence if a source is disproportionately high or newly present.
 - \`topicClusters\`: thematic groupings. Refer to a cluster by its dominant topics, never by ID.
 
-Use research tools to verify claims about specific releases, repo activity, or positioning shifts.
+Use research tools to verify claims about specific releases, repo activity, or shifts in framing.
 
 ### Worked example
 
-GOOD: "Orchestration is fragmenting. LangChain's PageRank rank held at 1, but three challenger frameworks (CrewAI, AutoGen, Semantic Kernel) collectively matched 76 percent of its mention volume, up from roughly half last quarter. ${orgName} sits beneath the framework layer, so framework choice becomes swappable. The window for runtime positioning is open while developers are still picking."
+GOOD: "Orchestration is fragmenting. Three challenger frameworks (CrewAI, AutoGen, Semantic Kernel) collectively matched 76 percent of LangChain's mention volume this period, up from roughly half last quarter. The conversation has moved from 'which framework' to 'how do we keep the layer beneath them stable across swaps,' which is the question developers were not asking six weeks ago."
 
-BAD: "LangChain is a popular framework with 85 mentions. CrewAI had 35. AutoGen had 30. The market for AI orchestration is significantly growing this quarter."`,
+BAD: "LangChain is a popular framework with 85 mentions. CrewAI had 35. AutoGen had 30. The market for AI orchestration is significantly growing this quarter. ${orgName} is well-positioned to address this trend."`,
 
 		// ---------------------------------------------------------------------------
 		// Pass 1, Section: Developer Signals
-		// 200-300 words, 2-3 paragraphs, no top-author tables, no sentiment dump.
+		// 200-300 words, 2-3 paragraphs, no top-author tables, no sentiment dump,
+		// no positioning tie-in.
 		// ---------------------------------------------------------------------------
 		developerSignals: `## Your task: Developer Signals
 
-Two to three paragraphs, 200 to 300 words total. What are developers actually debating, building, or complaining about? Your input data contains the highest-engagement discussions, emerging entities, and aggregated signals.
+Two to three paragraphs, 200 to 300 words total. What are developers actually debating, building, or complaining about? Market-first prose. No positioning tie-in.
 
 ### What good text looks like
 
 - Names the dominant question developers are asking this period
 - Anchors on one or two specific high-engagement discussions
 - Surfaces a pain point or feature gap that recurs across threads
-- Connects to what ${orgName} could address, in one sentence at most
+- Reads like a peer telling another peer what they observed
 
 ### What to avoid
 
-- Sentiment percentage dumps ("54 percent neutral")
+- Operator positioning. Do not mention ${orgName} or its products in this section. Positioning belongs in the executive summary.
+- Sentiment percentage dumps ("54 percent neutral"). Do not invent sentiment numbers; that data is not provided this period.
 - Top-author tables or handle lists
 - Generic claims about "the developer community"
 - Treating volume as the same as importance
@@ -193,13 +198,13 @@ Two to three paragraphs, 200 to 300 words total. What are developers actually de
 
 - \`topDiscussions\`: the threads with the most engagement. The title and source give you enough to identify themes. Use research tools to read the actual content if needed.
 - \`emergingEntities\`: entities that broke into the top 10 of PageRank-weighted importance this week and were not in the top 25 the prior week, with at least a 2x increase in mention count. If any are present, lead with the most prominent emergence and explain what is driving the rise. If empty, do not invent emergence.
-- \`sentimentBreakdown\`: aggregate mood. Only worth referencing if it has shifted meaningfully or contradicts what the discussions show.
+- \`wowLead\`: the entity with the largest week-over-week mention delta. Useful context when a recurring pain point traces back to that entity.
 
 ### Worked example
 
-GOOD: "The dominant question on r/LocalLLaMA this period was how to deploy multi-step agents without per-framework configuration drift. The top thread (147 comments) compared three orchestration patterns and converged on a complaint: tool integration is solved at the model layer but unsolved at the runtime layer. That maps directly onto what ${orgName} is building."
+GOOD: "The dominant question on r/LocalLLaMA this period was how to deploy multi-step agents without per-framework configuration drift. The top thread (147 comments) compared three orchestration patterns and converged on a complaint: tool integration is solved at the model layer but unsolved at the runtime layer. The pattern repeats in a Dev.to debugging post (89 comments) about lost intermediate state across retries."
 
-BAD: "Developer sentiment is mostly positive at 54 percent neutral, 31 percent positive, 15 percent negative, which shows the AI ecosystem is healthy. Many authors are writing about AI topics and there is high engagement."`,
+BAD: "Developer sentiment is mostly positive at 54 percent neutral, 31 percent positive, 15 percent negative, which shows the AI ecosystem is healthy. Many authors are writing about AI topics and there is high engagement. ${orgName} should address these concerns."`,
 
 		// ---------------------------------------------------------------------------
 		// Pass 2, Section: Signal Interpretation
@@ -251,7 +256,8 @@ Two to four sentences. Frame what this section is doing: connecting the data to 
 
 		// ---------------------------------------------------------------------------
 		// Pass 3, Section: Executive Summary + Predictions
-		// 100-150 words, 3-5 sentences.
+		// 100-150 words, 3-5 sentences. The only section where operator
+		// positioning may appear, and only when the period actually intersects.
 		// ---------------------------------------------------------------------------
 		executiveSummary: `## Your task: Executive Summary + Predictions
 
@@ -259,25 +265,30 @@ Three to five sentences, 100 to 150 words total. You receive the text outputs fr
 
 ### What good text looks like
 
-- First sentence: the single most important takeaway for ${orgName} this period
-- Middle: supporting context drawn from the prior sections
-- Final sentence: the strategic implication, not a CTA
+- First sentence: the single most important market shift this period (drawn from the prior sections)
+- Middle: supporting context that justifies why this shift matters
+- Final sentence: either the strategic implication for ${orgName} (one sentence, only if the period's lead genuinely intersects with ${positioningRef}) OR a forward-looking observation about what to watch next period. Not a CTA.
 - Stands alone without requiring the reader to see any other section
 - Dense with specifics, no filler
+
+### Positioning rule
+
+Tie-in to ${orgName}'s positioning is permitted in at most one sentence, and only when the period's lead genuinely intersects. If the period is not about ${orgName}'s layer, omit the tie-in entirely. A summary that ends "this period is not really about ${orgName}'s domain; the lead is the market itself" is acceptable and preferred over a contrived bridge. Do not force the connection where it does not fit.
 
 ### What to avoid
 
 - Opening with "This report covers..." or "During this period..."
 - Restating section headers
 - Hedging ("it appears," "it seems," "possibly")
+- Stacking positioning claims (one sentence is the maximum, zero is fine)
 - More than 5 sentences
 
 ### How to use the prior text
 
 Scan the three prior section texts. Identify:
 - The one shift that matters most (from marketSnapshot)
-- The one developer signal that is most actionable (from developerSignals)
-- The one interpretation with the most leverage for ${orgName} (from signalInterpretation)
+- The one developer signal that anchors it (from developerSignals)
+- The one interpretation that ties them together (from signalInterpretation narrative)
 
 Weave these into a tight paragraph. Do not add new analysis.
 
@@ -296,9 +307,11 @@ Aim for 3 to 8 predictions, fewer is fine if the report is light on forward sign
 
 Return ONLY a JSON object: \`{"text": "<the synthesis>", "predictions": [<entries>]}\`. No markdown fences, no preamble, no commentary.
 
-### Worked example
+### Worked examples
 
-GOOD: \`{"text": "Orchestration fragmented this period: three challenger frameworks collectively matched 76 percent of LangChain's mention volume, and the dominant developer thread (147 comments) named tool integration as the unsolved runtime problem. ${orgName}'s window is open while developers are still picking. The argument 'framework choice matters less than runtime' has the most leverage right now.", "predictions": [{"prediction_text": "MCP-compatible tool wrappers will appear for the top three agent frameworks within four weeks.", "predicted_entities": ["LangChain", "MCP"], "predicted_topics": ["agent frameworks", "tool integration"], "prediction_type": "emergence"}]}\`
+GOOD (with one positioning sentence): \`{"text": "Orchestration fragmented this period: three challenger frameworks collectively matched 76 percent of LangChain's mention volume, and the dominant developer thread (147 comments) named tool integration as the unsolved runtime problem. The framework layer is becoming a preference; the substrate beneath it is becoming a default expectation. ${orgName}'s execution-layer positioning intersects directly with what developers are now asking for.", "predictions": [{"prediction_text": "MCP-compatible tool wrappers will appear for the top three agent frameworks within four weeks.", "predicted_entities": ["LangChain", "MCP"], "predicted_topics": ["agent frameworks", "tool integration"], "prediction_type": "emergence"}]}\`
+
+GOOD (when the period does not intersect): \`{"text": "Vector database consolidation accelerated this period: Pinecone, Weaviate, and Qdrant each gained ground while the long tail thinned out, and the dominant developer thread (203 comments) was about migration paths between them. This is a storage-layer story, not a runtime story, and it is not really about ${orgName}'s domain. What to watch next period is whether retrieval framing follows the same consolidation.", "predictions": [{"prediction_text": "A vector store migration tool will hit the front page of HN within three weeks.", "predicted_entities": ["Pinecone", "Weaviate", "Qdrant"], "predicted_topics": ["vector databases", "data migration"], "prediction_type": "emergence"}]}\`
 
 BAD: \`{"text": "This week's report covers...", "predictions": [{"prediction_text": "AI will continue to grow.", "predicted_entities": [], "predicted_topics": [], "prediction_type": "general"}]}\``,
 
