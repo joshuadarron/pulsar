@@ -177,14 +177,15 @@ describe('buildSectionPrompts', () => {
 		assert.match(prompts.signalInterpretation, /Do not write CTAs/i);
 	});
 
-	it('signalInterpretation prompt declares the {signal, meaning, implication} contract', () => {
+	it('signalInterpretation prompt declares the narrative prose contract', () => {
 		const prompts = buildSectionPrompts(makeStubContext());
 		const body = prompts.signalInterpretation;
 
-		assert.match(body, /"signal":/);
-		assert.match(body, /"meaning":/);
-		assert.match(body, /"implication":/);
-		assert.match(body, /3 to 7/);
+		assert.match(body, /"narrative":/);
+		assert.match(body, /2 to 3/);
+		assert.match(body, /prose paragraph/i);
+		// No labeled triples in the new contract.
+		assert.doesNotMatch(body, /"signal":/);
 	});
 
 	it('signalInterpretation prompt forbids padding to a target count', () => {

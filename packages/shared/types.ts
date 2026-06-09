@@ -161,8 +161,16 @@ export interface SignalInterpretation {
 export interface SignalInterpretationSection {
 	/** Intro paragraph framing what this section is. */
 	text: string;
-	/** 3-7 items, picked by the LLM based on signal strength. */
-	interpretations: SignalInterpretation[];
+	/**
+	 * Prose narrative form (current). 2-3 paragraphs picking the most
+	 * load-bearing signals from prior sections and explaining them in prose.
+	 */
+	narrative?: string[];
+	/**
+	 * Legacy triple-format interpretations. Kept optional for backward
+	 * compatibility with reports persisted before the prose schema landed.
+	 */
+	interpretations?: SignalInterpretation[];
 	research?: ResearchCitation[];
 }
 

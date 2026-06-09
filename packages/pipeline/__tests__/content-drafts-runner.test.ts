@@ -257,7 +257,7 @@ describe('orchestrateContentDrafts', () => {
 			assert.equal(h.pipelineCalls.length, 0, 'no pipeline calls when skipped');
 			assert.equal(h.inserted.length, 0, 'no DB inserts when skipped');
 
-			const skipLog = h.logs.find((l) => l.message.includes('No interpretations'));
+			const skipLog = h.logs.find((l) => l.message.includes('No signal interpretation content'));
 			assert.ok(skipLog, 'expected a skip log');
 		});
 

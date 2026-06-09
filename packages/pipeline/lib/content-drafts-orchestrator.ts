@@ -211,9 +211,10 @@ export async function orchestrateContentDrafts(
 	const { runId, reportId, reportData } = args;
 	const { loadOperator, loadVoice, invokePipeline, insertDraft, log } = deps;
 
-	const interpretations = reportData.sections.signalInterpretation.interpretations;
-	if (!interpretations || interpretations.length === 0) {
-		await log(runId, 'info', 'content-drafts', 'No interpretations to draft from. Skipping.');
+	const interpretations = reportData.sections.signalInterpretation.interpretations ?? [];
+	const narrative = reportData.sections.signalInterpretation.narrative ?? [];
+	if (interpretations.length === 0 && narrative.length === 0) {
+		await log(runId, 'info', 'content-drafts', 'No signal interpretation content to draft from. Skipping.');
 		return { angleCount: 0, draftCount: 0, skipped: 'no-interpretations' };
 	}
 

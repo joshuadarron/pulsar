@@ -451,9 +451,10 @@ export async function orchestrateArticles(
 	} = deps;
 	const now = deps.now ?? (() => new Date());
 
-	const interpretations = reportData.sections.signalInterpretation.interpretations;
-	if (!interpretations || interpretations.length === 0) {
-		await log(runId, 'info', 'articles', 'No interpretations to draft from. Skipping.');
+	const interpretations = reportData.sections.signalInterpretation.interpretations ?? [];
+	const narrative = reportData.sections.signalInterpretation.narrative ?? [];
+	if (interpretations.length === 0 && narrative.length === 0) {
+		await log(runId, 'info', 'articles', 'No signal interpretation content to draft from. Skipping.');
 		return { articleCount: 0, skipped: 'no-interpretations' };
 	}
 

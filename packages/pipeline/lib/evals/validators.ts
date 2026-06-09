@@ -165,19 +165,31 @@ export const TREND_REPORT_SUITE: ValidatorSuite = {
 		{
 			name: 'signal_interpretation_present',
 			description:
-				'sections.signalInterpretation.text non-empty and has 3-7 interpretation entries',
+				'sections.signalInterpretation.text non-empty and either narrative (2-3) or interpretations (3-7) present',
 			check: (out) => {
 				const data = out as Partial<ReportData>;
 				const section = data?.sections?.signalInterpretation;
 				if (!section) return { passed: false, detail: 'signalInterpretation section missing' };
 				if (!nonEmptyString(section.text))
 					return { passed: false, detail: 'signalInterpretation.text empty or missing' };
-				if (!Array.isArray(section.interpretations))
-					return { passed: false, detail: 'signalInterpretation.interpretations not an array' };
-				const count = section.interpretations.length;
-				if (count < 3 || count > 7)
-					return { passed: false, detail: `expected 3-7 interpretations, got ${count}` };
-				return { passed: true, detail: `${count} interpretations` };
+				if (Array.isArray(section.narrative) && section.narrative.length > 0) {
+					const count = section.narrative.length;
+					if (count < 2 || count > 3)
+						return { passed: false, detail: `expected 2-3 narrative paragraphs, got ${count}` };
+					if (section.narrative.some((p) => !nonEmptyString(p)))
+						return { passed: false, detail: 'one or more narrative paragraphs empty' };
+					return { passed: true, detail: `${count} narrative paragraphs` };
+				}
+				if (Array.isArray(section.interpretations)) {
+					const count = section.interpretations.length;
+					if (count < 3 || count > 7)
+						return { passed: false, detail: `expected 3-7 interpretations, got ${count}` };
+					return { passed: true, detail: `${count} interpretations (legacy shape)` };
+				}
+				return {
+					passed: false,
+					detail: 'signalInterpretation missing both narrative and interpretations'
+				};
 			}
 		},
 		{

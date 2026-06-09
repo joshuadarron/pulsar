@@ -477,7 +477,9 @@ interface SectionResponse {
 	research?: ResearchCitation[];
 	/** Only emitted by the executiveSummary pass. */
 	predictions?: ExtractedPrediction[];
-	/** Only emitted by the signalInterpretation pass. */
+	/** Only emitted by the signalInterpretation pass (prose form, current). */
+	narrative?: string[];
+	/** Only emitted by the signalInterpretation pass (legacy triple form). */
 	interpretations?: SignalInterpretation[];
 	/** Only emitted by the supportingResources pass. */
 	resources?: SupportingResource[];
@@ -528,6 +530,9 @@ async function runSection(
 				...(Array.isArray(obj.research) ? { research: obj.research as ResearchCitation[] } : {}),
 				...(Array.isArray(obj.predictions)
 					? { predictions: obj.predictions as ExtractedPrediction[] }
+					: {}),
+				...(Array.isArray(obj.narrative)
+					? { narrative: (obj.narrative as unknown[]).filter((p): p is string => typeof p === 'string') }
 					: {}),
 				...(Array.isArray(obj.interpretations)
 					? { interpretations: obj.interpretations as SignalInterpretation[] }
@@ -805,9 +810,29 @@ async function gatherEntityCentrality(): Promise<EntityCentralitySeries> {
 	const currentEntities = Array.isArray(currentSnapshot.entity_importance)
 		? currentSnapshot.entity_importance
 		: [];
+	const priorSnapshot = snapshots[1];
+	const priorEntities =
+		priorSnapshot && Array.isArray(priorSnapshot.entity_importance)
+			? priorSnapshot.entity_importance
+			: [];
+	const priorMentionsByName = new Map(priorEntities.map((e) => [e.name, e.mention_count ?? 0]));
 
+	// Prefer entities by month-over-month mention delta so the chart legend
+	// matches the entities the prose actually discusses. Fall back to raw
+	// pagerank when there is no prior period or no entity moved at all.
+	const rankByDelta = (a: typeof currentEntities[number], b: typeof currentEntities[number]) => {
+		const aDelta = (a.mention_count ?? 0) - (priorMentionsByName.get(a.name) ?? 0);
+		const bDelta = (b.mention_count ?? 0) - (priorMentionsByName.get(b.name) ?? 0);
+		if (bDelta !== aDelta) return bDelta - aDelta;
+		return (b.pagerank_score ?? 0) - (a.pagerank_score ?? 0);
+	};
+	const rankByPagerank = (a: typeof currentEntities[number], b: typeof currentEntities[number]) =>
+		(b.pagerank_score ?? 0) - (a.pagerank_score ?? 0);
+
+	const haveDeltaSignal = priorEntities.length > 0;
+	const ranker = haveDeltaSignal ? rankByDelta : rankByPagerank;
 	const topEntityNames = [...currentEntities]
-		.sort((a, b) => (b.pagerank_score ?? 0) - (a.pagerank_score ?? 0))
+		.sort(ranker)
 		.slice(0, ENTITY_CENTRALITY_TOP)
 		.map((e) => e.name);
 
@@ -1092,7 +1117,11 @@ async function runTrendReport(
 			},
 			signalInterpretation: {
 				text: interpretationResponse.text,
-				interpretations: interpretationResponse.interpretations ?? [],
+				...(interpretationResponse.narrative?.length
+					? { narrative: interpretationResponse.narrative }
+					: interpretationResponse.interpretations?.length
+						? { interpretations: interpretationResponse.interpretations }
+						: { narrative: [] }),
 				...(interpretationResponse.research?.length
 					? { research: interpretationResponse.research }
 					: {})

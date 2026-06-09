@@ -487,22 +487,35 @@ ${formatHardRules(ctx)}`;
 export function buildArticlePickerUserPrompt(args: {
 	signalInterpretation: {
 		text: string;
-		interpretations: Array<{ signal: string; meaning: string; implication: string }>;
+		narrative?: string[];
+		interpretations?: Array<{ signal: string; meaning: string; implication: string }>;
 	};
 	executiveSummary: string;
 	marketSnapshot: string;
 	developerSignals: string;
 }): string {
-	const interpretationsBlock = args.signalInterpretation.interpretations
-		.map((entry, idx) => {
-			return [
-				`Interpretation ${idx + 1}:`,
-				`  signal: ${entry.signal}`,
-				`  meaning: ${entry.meaning}`,
-				`  implication: ${entry.implication}`
-			].join('\n');
-		})
-		.join('\n\n');
+	const narrative = args.signalInterpretation.narrative ?? [];
+	const interpretations = args.signalInterpretation.interpretations ?? [];
+
+	let signalsBlock: string;
+	if (narrative.length > 0) {
+		signalsBlock = narrative
+			.map((paragraph, idx) => `Narrative ${idx + 1}:\n${paragraph}`)
+			.join('\n\n');
+	} else if (interpretations.length > 0) {
+		signalsBlock = interpretations
+			.map((entry, idx) =>
+				[
+					`Interpretation ${idx + 1}:`,
+					`  signal: ${entry.signal}`,
+					`  meaning: ${entry.meaning}`,
+					`  implication: ${entry.implication}`
+				].join('\n')
+			)
+			.join('\n\n');
+	} else {
+		signalsBlock = '(no interpretations were emitted)';
+	}
 
 	return `## Report context
 
@@ -522,11 +535,11 @@ ${args.developerSignals}
 
 ${args.signalInterpretation.text}
 
-${interpretationsBlock || '(no interpretations were emitted)'}
+${signalsBlock}
 
 ## Your task
 
-Pick 1 to N high-signal opportunities from the interpretations above. For each, emit a full article spec following the rules in your system instructions. Return only the JSON object specified in your system instructions.`;
+Pick 1 to N high-signal opportunities from the signal interpretation above. For each, emit a full article spec following the rules in your system instructions. Return only the JSON object specified in your system instructions.`;
 }
 
 // ---------------------------------------------------------------------------

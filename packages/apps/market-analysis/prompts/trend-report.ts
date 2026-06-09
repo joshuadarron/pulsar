@@ -207,52 +207,47 @@ GOOD: "The dominant question on r/LocalLLaMA this period was how to deploy multi
 BAD: "Developer sentiment is mostly positive at 54 percent neutral, 31 percent positive, 15 percent negative, which shows the AI ecosystem is healthy. Many authors are writing about AI topics and there is high engagement. ${orgName} should address these concerns."`,
 
 		// ---------------------------------------------------------------------------
-		// Pass 2, Section: Signal Interpretation
-		// 300-400 words: intro paragraph + 3-7 interpretations.
+		// Pass 2, Section: Signal Interpretation (prose narrative)
+		// 250-400 words: intro paragraph + 2-3 prose paragraphs picking the most
+		// load-bearing signals from the prior sections.
 		// ---------------------------------------------------------------------------
 		signalInterpretation: `## Your task: Signal Interpretation
 
-You receive the text outputs from the prior sections (marketSnapshot, developerSignals). Pick the 3 to 7 signals worth interpreting and emit one interpretation entry per signal. Total length 300 to 400 words including the intro.
+You receive the text outputs from the prior sections (marketSnapshot, developerSignals). Pick the 2 to 3 signals worth interpreting in depth and write one prose paragraph per signal explaining what it means and why it matters. Total length 250 to 400 words including the intro.
 
 ### Output contract
 
 Return ONLY a raw JSON object:
 {
-  "text": "Intro paragraph framing what this section is.",
-  "interpretations": [
-    {
-      "signal": "exact data point being interpreted",
-      "meaning": "what this signal tells us about the market",
-      "implication": "what it means for ${orgName}'s positioning"
-    }
+  "text": "Intro paragraph framing what this section is doing.",
+  "narrative": [
+    "First prose paragraph: pick the most load-bearing signal, name it concretely, explain what it tells us about how the market is shifting, and what comes next.",
+    "Second prose paragraph: the next most load-bearing signal. Same shape."
   ],
   "research": []
 }
 
 If the research array would be empty, omit it entirely.
 
-### What each field means
-
-- \`signal\`: the exact, concrete data point. A specific entity, a specific delta, a specific discussion. No abstractions.
-- \`meaning\`: one sentence explaining what this signal indicates about how the market is moving.
-- \`implication\`: one sentence on the strategic implication for ${orgName}, grounded in ${positioningRef}.
-
 ### Hard rules for this section
 
+- Prose, not labels. No "Signal: ... Meaning: ... Implication: ..." structure.
+- Pick the count (2 to 3 paragraphs) based on signal strength. Do not pad to hit a number.
+- One number per claim at most. Do not stack statistics. The story carries the paragraph, the numbers support it.
+- Operator positioning is not the lens. Most paragraphs should not mention ${orgName} at all. If a signal genuinely intersects with ${orgName}'s positioning, you may say so in one clause within one paragraph; do not force the connection where it does not fit. Positioning belongs in the executive summary, not here.
+- Each paragraph must reference a signal that actually appears in the prior section text. Do not invent new signals.
 - Do not name distribution platforms (Medium, LinkedIn, Twitter, Hashnode, Dev.to). The drafter pipeline decides distribution.
-- Do not write CTAs. No "publish this," no "share this," no "make a post."
-- Pick the count (3 to 7) based on signal strength. Do not pad to hit a number.
-- Each interpretation must reference a signal that actually appears in the prior sections.
+- Do not write CTAs.
 
-### What good interpretations look like
+### What good narrative paragraphs look like
 
-GOOD: \`{"signal": "Orchestration framework mention volume fragmented (CrewAI, AutoGen, Semantic Kernel collectively matched 76 percent of LangChain).", "meaning": "Developers are not consolidating around one framework. They are evaluating multiple, and the framework layer is becoming swappable.", "implication": "${orgName}'s runtime positioning lands harder when the layer above it is interchangeable. The argument 'framework choice matters less than runtime' has the most leverage right now."}\`
+GOOD: "Orchestration is fragmenting at the framework layer while consolidating at the protocol layer. CrewAI, AutoGen, and Semantic Kernel collectively matched 76 percent of LangChain's mention volume this period, but every single one of those threads referenced MCP as the integration mechanism. Developers are picking the framework that fits their team and treating MCP as the assumed substrate beneath it. The framework layer is becoming a personal preference; the substrate is becoming a default expectation."
 
-BAD: \`{"signal": "AI is growing.", "meaning": "More people use AI.", "implication": "${orgName} should write more content about AI."}\`
+BAD: "The signal is that LangChain's mention volume decreased. The meaning is that developers are using other frameworks. The implication is that ${orgName} should write about this."
 
 ### Intro paragraph
 
-Two to four sentences. Frame what this section is doing: connecting the data to what it implies for ${orgName}. No restating section headers. No "this section will..."`,
+Two to four sentences. Frame what this section is doing: picking the most load-bearing signals from the prior sections and explaining what they mean. No restating section headers. No "this section will..."`,
 
 		// ---------------------------------------------------------------------------
 		// Pass 3, Section: Executive Summary + Predictions

@@ -248,22 +248,29 @@ export default function DashboardWidgets({
 							<p className="mt-2 text-sm leading-relaxed text-gray-700 dark:text-neutral-300 line-clamp-3">
 								{latestReport.report_data.sections?.executiveSummary?.text ?? ''}
 							</p>
-							{(latestReport.report_data.sections?.signalInterpretation?.interpretations?.length ??
-								0) > 0 && (
-								<div className="mt-3 flex flex-col gap-1.5">
-									{latestReport.report_data.sections.signalInterpretation.interpretations
-										.slice(0, 3)
-										.map((interp) => (
+							{(() => {
+								const interp = latestReport.report_data.sections?.signalInterpretation;
+								const chips: string[] = interp?.narrative?.length
+									? interp.narrative.slice(0, 3).map((p) => {
+											const sentenceEnd = p.search(/[.!?](\s|$)/);
+											return sentenceEnd > 0 ? p.slice(0, sentenceEnd + 1) : p;
+										})
+									: (interp?.interpretations ?? []).slice(0, 3).map((i) => i.signal);
+								if (chips.length === 0) return null;
+								return (
+									<div className="mt-3 flex flex-col gap-1.5">
+										{chips.map((chip, i) => (
 											<span
-												key={interp.signal}
+												key={i}
 												className="rounded bg-amber-100 dark:bg-amber-900 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300 line-clamp-2"
-												title={interp.signal}
+												title={chip}
 											>
-												{interp.signal}
+												{chip}
 											</span>
 										))}
-								</div>
-							)}
+									</div>
+								);
+							})()}
 						</div>
 					) : (
 						<p className="mt-3 text-sm text-gray-400 dark:text-neutral-500">

@@ -538,9 +538,16 @@ function NewReportTemplate({
 								{renderParagraphs(v, sections.signalInterpretation.text)}
 							</div>
 						)}
-						{sections.signalInterpretation.interpretations?.map((interp, i) => (
-							<InterpretationCard key={i} v={v} interpretation={interp} />
-						))}
+						{sections.signalInterpretation.narrative &&
+						sections.signalInterpretation.narrative.length > 0 ? (
+							<div {...cx(v, 'space-y-3', { marginTop: '12px' })}>
+								{renderParagraphs(v, sections.signalInterpretation.narrative.join('\n\n'))}
+							</div>
+						) : (
+							sections.signalInterpretation.interpretations?.map((interp, i) => (
+								<InterpretationCard key={i} v={v} interpretation={interp} />
+							))
+						)}
 					</>
 				)}
 
