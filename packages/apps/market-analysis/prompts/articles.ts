@@ -192,7 +192,7 @@ const ARTICLE_STRUCTURE_RULES: string = [
 	'  4. Worked example or concrete demonstration. Use real systems where possible. Synthetic examples must be labeled as illustrative.',
 	'  5. Honest limit section (optional). When the argument is strong, acknowledge what the argument does not cover.',
 	'  6. What to do recommendations. Three concrete actions the reader can take. Numbered or bulleted.',
-	'  7. Runtime reveal section. Name the operator product (RocketRide) explicitly only in a closing section. Throughout the rest of the post refer to "the AI runtime I work on" or "the open-source AI runtime I build on". Link the repo in the reveal section and pivot immediately to why the lesson is runtime-agnostic so the post does not read as a bait-and-switch.',
+	'  7. Operator reveal section, when warranted. Include a closing reveal section that names the operator product only when the article\'s argument genuinely intersects with the operator\'s positioning. When the argument is pure developer content that does not lean on operator positioning, omit the reveal entirely and let the piece stand on its own merits. When you do include a reveal, throughout the rest of the post refer to the operator product as "the AI runtime I work on" or "the open-source AI runtime I build on"; name the operator product only in the closing reveal section, link the repo, and pivot immediately to why the lesson is runtime-agnostic so the post does not read as a bait-and-switch. Across a run of three article specs, aim for at most one with a reveal; the other two should stand alone.',
 	'  8. Cross-references. Where the argument connects to other posts, link to them inline with anchor text that explains what the reader will find on the other end. Avoid generic "read more" links.',
 	'',
 	'Length target: 1500 to 2500 words for argumentative or positioning pieces. 1800 to 2500 words for narrative pieces. Up to 4000 words for technical tutorials with code.',
@@ -342,11 +342,17 @@ function formatOperatorIdentity(ctx: OperatorContext): string {
 		.join('\n');
 }
 
+const PUBLISHED_ARTICLES_DEDUP_WINDOW = 8;
+
 function formatPublishedArticles(state: SeriesState): string {
 	if (state.publishedArticles.length === 0) {
 		return '(no prior articles published in this series yet)';
 	}
-	return state.publishedArticles
+	// The dedup signal that matters for the picker is "did we already cover this
+	// angle in the last few weeks", not the full history of the series. Trim to
+	// the most recent N so the prompt stays focused as the series grows.
+	const recent = state.publishedArticles.slice(-PUBLISHED_ARTICLES_DEDUP_WINDOW);
+	return recent
 		.map((ref, idx) => `${idx + 1}. [${ref.slug}] ${ref.title} - angle: ${ref.angle}`)
 		.join('\n');
 }
@@ -402,6 +408,8 @@ You read the completed market trend report (executive summary, market snapshot, 
 
 Volume is the enemy. Prefer fewer well-shaped article specs over many weak ones. If no interpretations rise to the bar, emit \`{"articles": []}\`.
 
+Each article spec must derive from a distinct upstream signal: when the trend report provides \`signalInterpretation.narrative\`, each spec must derive from a different narrative paragraph; in the legacy shape, each spec must derive from a different interpretation entry. Do not emit two specs that hinge on the same upstream signal, even when the signal is rich enough to support two angles.
+
 ## Voice profile (used to gauge angle fit, not for writing)
 
 ${formatVoiceProfile(voice)}
@@ -452,6 +460,10 @@ Pick from the published articles list below ONLY when the new article makes an a
 ### Published articles in this series
 
 ${publishedList}
+
+## Angle deduplication
+
+For each candidate article, compare its proposed angle to the \`angle:\` field of every entry in the published articles list above. If a candidate angle paraphrases or covers the same ground as a recent published angle, drop the candidate. Look for semantic overlap, not just literal string match: "the runtime is the execution layer" and "what sits beneath the framework matters more than the framework" are the same angle. Returning fewer specs (or zero) is the right answer when the current period's signals would force you to repeat. Do not pad to hit a count.
 
 ## Output contract
 
