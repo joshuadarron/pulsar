@@ -406,6 +406,26 @@ function resolveCrossRefs(candidates: string[], state: SeriesState): PublishedAr
 	return out;
 }
 
+/**
+ * Merge operator-curated past articles (from `.context/past-articles.md`)
+ * into the series state at load time. Operator entries win on slug
+ * conflict because they carry curated URLs and angles. The merge is
+ * in-memory only - persistence excludes operator slugs so the DB row
+ * stays the pipeline-generated history.
+ */
+function mergeOperatorPastArticles(
+	state: SeriesState,
+	pastArticles: PublishedArticleRef[]
+): SeriesState {
+	if (pastArticles.length === 0) return state;
+	const operatorSlugs = new Set(pastArticles.map((p) => p.slug));
+	const dbFiltered = state.publishedArticles.filter((p) => !operatorSlugs.has(p.slug));
+	return {
+		...state,
+		publishedArticles: [...dbFiltered, ...pastArticles]
+	};
+}
+
 function nextSeriesState(args: {
 	prev: SeriesState;
 	family: MetaphorFamily;
@@ -465,7 +485,9 @@ export async function orchestrateArticles(
 
 	const operatorContext = loadOperator();
 	const voice = loadVoice(['long-form']);
-	let state = await loadSeriesState();
+	const operatorPastArticles = operatorContext.pastArticles ?? [];
+	const operatorSlugs = new Set(operatorPastArticles.map((p) => p.slug));
+	let state = mergeOperatorPastArticles(await loadSeriesState(), operatorPastArticles);
 
 	// --- Pass 1: picker ---
 	await log(runId, 'info', 'articles', 'Pass 1: picking article specs...');
@@ -576,7 +598,14 @@ export async function orchestrateArticles(
 	}
 
 	if (articleCount > 0) {
-		await saveSeriesState(state);
+		// Persist only the pipeline-generated subset of publishedArticles.
+		// Operator-curated entries live in `.context/past-articles.md` and are
+		// re-merged on the next run, so storing them in the DB would create
+		// duplicate / drifting state.
+		await saveSeriesState({
+			...state,
+			publishedArticles: state.publishedArticles.filter((p) => !operatorSlugs.has(p.slug))
+		});
 	}
 
 	return { articleCount, skipped: null };
