@@ -140,6 +140,8 @@ export type PublishedArticleRef = {
 	slug: string;
 	title: string;
 	angle: string;
+	/** Optional URL for operator-curated entries from `.context/past-articles.md`. */
+	url?: string;
 };
 
 export type SeriesState = {
@@ -353,7 +355,10 @@ function formatPublishedArticles(state: SeriesState): string {
 	// the most recent N so the prompt stays focused as the series grows.
 	const recent = state.publishedArticles.slice(-PUBLISHED_ARTICLES_DEDUP_WINDOW);
 	return recent
-		.map((ref, idx) => `${idx + 1}. [${ref.slug}] ${ref.title} - angle: ${ref.angle}`)
+		.map((ref, idx) => {
+			const linkPart = ref.url ? ` (${ref.url})` : '';
+			return `${idx + 1}. [${ref.slug}]${linkPart} ${ref.title} - angle: ${ref.angle}`;
+		})
 		.join('\n');
 }
 
@@ -622,7 +627,10 @@ export function buildArticleWriterUserPrompt(args: {
 		args.crossRefs.length === 0
 			? '(no cross-references)'
 			: args.crossRefs
-					.map((ref) => `- [${ref.slug}] ${ref.title} - argument: ${ref.angle}`)
+					.map((ref) => {
+						const linkPart = ref.url ? ` (${ref.url})` : '';
+						return `- [${ref.slug}]${linkPart} ${ref.title} - argument: ${ref.angle}`;
+					})
 					.join('\n');
 
 	return `## Article spec
