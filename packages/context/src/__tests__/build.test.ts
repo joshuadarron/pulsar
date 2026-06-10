@@ -48,7 +48,8 @@ function makeOperator(): OperatorContext {
 		glossary: {},
 		trackedEntities: { entities: [], keywords: [], technologies: [] },
 		authorIdentity: '',
-		anchorPhrase: ''
+		anchorPhrase: '',
+		pastArticles: []
 	};
 }
 

@@ -60,6 +60,7 @@ function makeOperator(overrides: Partial<OperatorContext> = {}): OperatorContext
 		trackedEntities: { entities: [], keywords: [], technologies: [] },
 		authorIdentity: '',
 		anchorPhrase: '',
+		pastArticles: [],
 		...overrides
 	};
 }

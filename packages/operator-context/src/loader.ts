@@ -8,6 +8,7 @@ import {
 	type OperatorContext,
 	OperatorContextNotConfiguredError,
 	type OperatorDomain,
+	type PastArticleRef,
 	type TrackedEntities
 } from './types.js';
 
@@ -182,6 +183,29 @@ function loadGlossary(contextDir: string): Record<string, string> {
 	return out;
 }
 
+function loadPastArticles(contextDir: string): PastArticleRef[] {
+	const pastPath = path.join(contextDir, 'past-articles.md');
+	if (!existsSync(pastPath)) return [];
+	const raw = readFileSync(pastPath, 'utf8');
+	const { frontmatter } = parseFrontmatter(raw);
+
+	const entries = frontmatter.articles;
+	if (!Array.isArray(entries)) return [];
+
+	const out: PastArticleRef[] = [];
+	for (const entry of entries) {
+		if (!entry || typeof entry !== 'object') continue;
+		const record = entry as Record<string, unknown>;
+		const slug = asString(record.slug).trim();
+		const title = asString(record.title).trim();
+		const angle = asString(record.angle).trim();
+		if (!slug || !title || !angle) continue;
+		const url = asString(record.url).trim();
+		out.push(url ? { slug, title, angle, url } : { slug, title, angle });
+	}
+	return out;
+}
+
 function loadTrackedEntities(contextDir: string): TrackedEntities {
 	const entitiesPath = path.join(contextDir, 'tracked-entities.md');
 	if (!existsSync(entitiesPath)) {
@@ -213,6 +237,7 @@ export function loadOperatorContext(): OperatorContext {
 		...profile,
 		hardRules: loadHardRules(contextDir),
 		glossary: loadGlossary(contextDir),
-		trackedEntities: loadTrackedEntities(contextDir)
+		trackedEntities: loadTrackedEntities(contextDir),
+		pastArticles: loadPastArticles(contextDir)
 	};
 }
