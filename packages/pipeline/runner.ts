@@ -412,7 +412,7 @@ async function fetchPriorLeads(currentRunId: string): Promise<string[]> {
 		`SELECT report_data->'sections'->'executiveSummary'->>'text' AS text
 		 FROM reports
 		 WHERE run_id <> $1
-		 ORDER BY created_at DESC
+		 ORDER BY generated_at DESC
 		 LIMIT 4`,
 		[currentRunId]
 	);
