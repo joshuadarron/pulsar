@@ -384,10 +384,7 @@ function computeWowLead(
 	for (const entity of current.entity_importance) {
 		const prior = priorByName.get(entity.name);
 		if (!prior) continue;
-		if (
-			entity.mention_count < MIN_MENTIONS_FOR_WOW ||
-			prior.mention_count < MIN_MENTIONS_FOR_WOW
-		) {
+		if (entity.mention_count < MIN_MENTIONS_FOR_WOW || prior.mention_count < MIN_MENTIONS_FOR_WOW) {
 			continue;
 		}
 		const deltaPct = ((entity.mention_count - prior.mention_count) / prior.mention_count) * 100;
@@ -532,7 +529,11 @@ async function runSection(
 					? { predictions: obj.predictions as ExtractedPrediction[] }
 					: {}),
 				...(Array.isArray(obj.narrative)
-					? { narrative: (obj.narrative as unknown[]).filter((p): p is string => typeof p === 'string') }
+					? {
+							narrative: (obj.narrative as unknown[]).filter(
+								(p): p is string => typeof p === 'string'
+							)
+						}
 					: {}),
 				...(Array.isArray(obj.interpretations)
 					? { interpretations: obj.interpretations as SignalInterpretation[] }
@@ -820,14 +821,19 @@ async function gatherEntityCentrality(): Promise<EntityCentralitySeries> {
 	// Prefer entities by month-over-month mention delta so the chart legend
 	// matches the entities the prose actually discusses. Fall back to raw
 	// pagerank when there is no prior period or no entity moved at all.
-	const rankByDelta = (a: typeof currentEntities[number], b: typeof currentEntities[number]) => {
+	const rankByDelta = (
+		a: (typeof currentEntities)[number],
+		b: (typeof currentEntities)[number]
+	) => {
 		const aDelta = (a.mention_count ?? 0) - (priorMentionsByName.get(a.name) ?? 0);
 		const bDelta = (b.mention_count ?? 0) - (priorMentionsByName.get(b.name) ?? 0);
 		if (bDelta !== aDelta) return bDelta - aDelta;
 		return (b.pagerank_score ?? 0) - (a.pagerank_score ?? 0);
 	};
-	const rankByPagerank = (a: typeof currentEntities[number], b: typeof currentEntities[number]) =>
-		(b.pagerank_score ?? 0) - (a.pagerank_score ?? 0);
+	const rankByPagerank = (
+		a: (typeof currentEntities)[number],
+		b: (typeof currentEntities)[number]
+	) => (b.pagerank_score ?? 0) - (a.pagerank_score ?? 0);
 
 	const haveDeltaSignal = priorEntities.length > 0;
 	const ranker = haveDeltaSignal ? rankByDelta : rankByPagerank;
