@@ -25,19 +25,19 @@
 
 import {
 	type ArticleSpec,
+	MEDIUM_PUBLICATIONS,
+	METAPHOR_FAMILIES,
+	type MediumPublication,
+	type MetaphorFamily,
+	type PublishedArticleRef,
+	type SeriesState,
 	buildArticleAnnotatorSystemPrompt,
 	buildArticleAnnotatorUserPrompt,
 	buildArticlePickerSystemPrompt,
 	buildArticlePickerUserPrompt,
 	buildArticleWriterSystemPrompt,
 	buildArticleWriterUserPrompt,
-	MEDIUM_PUBLICATIONS,
-	type MediumPublication,
-	METAPHOR_FAMILIES,
-	type MetaphorFamily,
-	type PublishedArticleRef,
-	pushRecentMetaphorFamily,
-	type SeriesState
+	pushRecentMetaphorFamily
 } from '@pulsar/app-market-analysis/prompts/articles';
 import type { OperatorContext } from '@pulsar/context';
 import type { ReportData } from '@pulsar/shared/types';
@@ -454,7 +454,12 @@ export async function orchestrateArticles(
 	const interpretations = reportData.sections.signalInterpretation.interpretations ?? [];
 	const narrative = reportData.sections.signalInterpretation.narrative ?? [];
 	if (interpretations.length === 0 && narrative.length === 0) {
-		await log(runId, 'info', 'articles', 'No signal interpretation content to draft from. Skipping.');
+		await log(
+			runId,
+			'info',
+			'articles',
+			'No signal interpretation content to draft from. Skipping.'
+		);
 		return { articleCount: 0, skipped: 'no-interpretations' };
 	}
 
