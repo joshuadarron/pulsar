@@ -1,7 +1,7 @@
-import Link from 'next/link';
-import { query } from '@pulsar/shared/db/postgres';
 import DashboardWidgets from '@/components/DashboardWidgets';
+import { query } from '@pulsar/shared/db/postgres';
 import type { ReportData } from '@pulsar/shared/types';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 

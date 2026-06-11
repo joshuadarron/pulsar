@@ -1,8 +1,8 @@
-import nodemailer from 'nodemailer';
 import { env } from '@pulsar/shared/config/env';
 import { query } from '@pulsar/shared/db/postgres';
+import type { EvaluationSummary, ReportData } from '@pulsar/shared/types';
+import nodemailer from 'nodemailer';
 import { renderReportEmail } from './lib/render-email.js';
-import type { ReportData, EvaluationSummary } from '@pulsar/shared/types';
 
 export async function sendReportEmail(
 	reportId: string,

@@ -1,7 +1,7 @@
 'use client';
 
-import { signIn } from 'next-auth/react';
 import PulsarLogo from '@/components/PulsarLogo';
+import { signIn } from 'next-auth/react';
 
 export default function LoginPage() {
 	return (

@@ -1,6 +1,6 @@
+import { query } from '@pulsar/shared/db/postgres';
 import Link from 'next/link';
 import React from 'react';
-import { query } from '@pulsar/shared/db/postgres';
 
 /**
  * Articles list page. Server component. Fetches reports that have at least

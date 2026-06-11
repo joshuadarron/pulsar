@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
 import { getSession } from '@pulsar/shared/db/neo4j';
+import { NextResponse } from 'next/server';
 
 export async function GET() {
 	const session = getSession();

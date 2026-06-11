@@ -1,5 +1,5 @@
-import { type NextRequest, NextResponse } from 'next/server';
 import { query } from '@pulsar/shared/db/postgres';
+import { type NextRequest, NextResponse } from 'next/server';
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
 	const { id } = await params;

@@ -214,7 +214,12 @@ export async function orchestrateContentDrafts(
 	const interpretations = reportData.sections.signalInterpretation.interpretations ?? [];
 	const narrative = reportData.sections.signalInterpretation.narrative ?? [];
 	if (interpretations.length === 0 && narrative.length === 0) {
-		await log(runId, 'info', 'content-drafts', 'No signal interpretation content to draft from. Skipping.');
+		await log(
+			runId,
+			'info',
+			'content-drafts',
+			'No signal interpretation content to draft from. Skipping.'
+		);
 		return { angleCount: 0, draftCount: 0, skipped: 'no-interpretations' };
 	}
 

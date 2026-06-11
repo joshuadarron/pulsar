@@ -1,5 +1,5 @@
-import { type NextRequest, NextResponse } from 'next/server';
 import { query } from '@pulsar/shared/db/postgres';
+import { type NextRequest, NextResponse } from 'next/server';
 
 /** Returns list of disabled source names. All sources are enabled by default. */
 export async function GET() {

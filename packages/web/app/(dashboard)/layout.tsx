@@ -1,8 +1,8 @@
 'use client';
 
-import { SessionProvider } from 'next-auth/react';
-import Sidebar from '@/components/Sidebar';
 import NotificationToast from '@/components/NotificationToast';
+import Sidebar from '@/components/Sidebar';
+import { SessionProvider } from 'next-auth/react';
 
 export default function DashboardLayout({
 	children

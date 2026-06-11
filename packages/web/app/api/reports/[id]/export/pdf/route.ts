@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
-import { createElement } from 'react';
+import ReportTemplate from '@/components/report/ReportTemplate';
 import { query } from '@pulsar/shared/db/postgres';
 import type { ReportData } from '@pulsar/shared/types';
-import ReportTemplate from '@/components/report/ReportTemplate';
+import { NextResponse } from 'next/server';
+import { createElement } from 'react';
 
 export const dynamic = 'force-dynamic';
 

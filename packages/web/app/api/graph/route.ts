@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
 import { query } from '@pulsar/shared/db/postgres';
 import type { GraphSnapshotCluster, GraphSnapshotEntity } from '@pulsar/shared/types';
+import { NextResponse } from 'next/server';
 
 // Renders the latest `graph_snapshots` row (Louvain + PageRank output) as a
 // force-graph payload. The old node-type-filtered view (Topic / Entity /

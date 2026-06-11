@@ -1,5 +1,5 @@
 import { getSession } from '@pulsar/shared/db/neo4j';
-import type { ScrapedItem, EntityMention } from '@pulsar/shared/types';
+import type { EntityMention, ScrapedItem } from '@pulsar/shared/types';
 
 export async function writeArticleToGraph(
 	item: ScrapedItem,

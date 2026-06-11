@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import PulsarLogo from '@/components/PulsarLogo';
+import Link from 'next/link';
 
 export default function AuthErrorPage() {
 	return (

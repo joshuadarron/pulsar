@@ -1,5 +1,5 @@
-import { type NextRequest, NextResponse } from 'next/server';
 import { query } from '@pulsar/shared/db/postgres';
+import { type NextRequest, NextResponse } from 'next/server';
 
 const SORTABLE_COLUMNS = new Set([
 	'started_at',

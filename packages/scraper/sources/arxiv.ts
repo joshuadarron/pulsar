@@ -1,6 +1,6 @@
-import type { SourceAdapter, ScrapedItem } from './types';
-import { arxivCategories } from '@pulsar/shared/config/sources';
 import { env } from '@pulsar/shared/config/env';
+import { arxivCategories } from '@pulsar/shared/config/sources';
+import type { ScrapedItem, SourceAdapter } from './types';
 
 export const arxiv: SourceAdapter = async () => {
 	const max = env.scraper.maxItemsPerSource;

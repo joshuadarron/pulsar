@@ -1,7 +1,7 @@
+import type { EvaluationSummary, ReportData } from '@pulsar/shared/types';
+import ReportTemplate from '@pulsar/web/report-template';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import ReportTemplate from '@pulsar/web/report-template';
-import type { ReportData, EvaluationSummary } from '@pulsar/shared/types';
 
 export function renderReportEmail(
 	data: ReportData,

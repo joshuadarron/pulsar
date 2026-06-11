@@ -1,6 +1,6 @@
-import { type NextRequest, NextResponse } from 'next/server';
-import { query } from '@pulsar/shared/db/postgres';
 import activeProcesses from '@/lib/active-processes';
+import { query } from '@pulsar/shared/db/postgres';
+import { type NextRequest, NextResponse } from 'next/server';
 
 export async function GET() {
 	const result = await query<{ run_type: string; id: string }>(

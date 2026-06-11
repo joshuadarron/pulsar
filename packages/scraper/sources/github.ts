@@ -1,6 +1,6 @@
-import type { SourceAdapter, ScrapedItem } from './types';
-import { githubSearchQueries } from '@pulsar/shared/config/sources';
 import { env } from '@pulsar/shared/config/env';
+import { githubSearchQueries } from '@pulsar/shared/config/sources';
+import type { ScrapedItem, SourceAdapter } from './types';
 
 interface GHRepo {
 	html_url: string;

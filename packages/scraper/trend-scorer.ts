@@ -1,5 +1,5 @@
-import { getSession } from '@pulsar/shared/db/neo4j';
 import { env } from '@pulsar/shared/config/env';
+import { getSession } from '@pulsar/shared/db/neo4j';
 
 export async function updateTrendScores(): Promise<void> {
 	const session = getSession();

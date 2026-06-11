@@ -1,13 +1,13 @@
-import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 
 dotenv.config({ path: path.resolve(fileURLToPath(import.meta.url), '../../../.env') });
 
-import { runRetrospectiveGrading } from './lib/evals/retrospective.js';
-import { disconnectClient } from './lib/rocketride.js';
 import { closeDriver } from '@pulsar/shared/db/neo4j';
 import pool from '@pulsar/shared/db/postgres';
+import { runRetrospectiveGrading } from './lib/evals/retrospective.js';
+import { disconnectClient } from './lib/rocketride.js';
 
 async function main() {
 	try {

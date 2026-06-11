@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
 import { query } from '@pulsar/shared/db/postgres';
+import { NextResponse } from 'next/server';
 
 interface SummaryRow {
 	id: string;

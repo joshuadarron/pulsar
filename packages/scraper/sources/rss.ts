@@ -1,7 +1,7 @@
-import RSSParser from 'rss-parser';
-import type { SourceAdapter, ScrapedItem } from './types';
-import { rssSources, substackPublications, aiLabFeeds } from '@pulsar/shared/config/sources';
 import { env } from '@pulsar/shared/config/env';
+import { aiLabFeeds, rssSources, substackPublications } from '@pulsar/shared/config/sources';
+import RSSParser from 'rss-parser';
+import type { ScrapedItem, SourceAdapter } from './types';
 
 const parser = new RSSParser();
 

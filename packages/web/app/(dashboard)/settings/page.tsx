@@ -1,16 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useTheme } from '@/components/ThemeProvider';
 import {
-	redditSubreddits,
-	rssSources,
-	substackPublications,
-	mediumTags,
 	arxivCategories,
 	githubSearchQueries,
-	hashnodeTag
+	hashnodeTag,
+	mediumTags,
+	redditSubreddits,
+	rssSources,
+	substackPublications
 } from '@pulsar/shared/config/sources';
-import { useTheme } from '@/components/ThemeProvider';
+import { useEffect, useState } from 'react';
 
 interface Subscriber {
 	id: string;

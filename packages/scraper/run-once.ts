@@ -1,12 +1,12 @@
-import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
 
 dotenv.config({ path: path.resolve(fileURLToPath(import.meta.url), '../../../.env') });
 
-import { scrape } from './index.js';
 import { closeDriver } from '@pulsar/shared/db/neo4j';
 import pool from '@pulsar/shared/db/postgres';
+import { scrape } from './index.js';
 
 const args = process.argv.slice(2);
 let sourceFilter: string | undefined;

@@ -1,7 +1,7 @@
-import { notFound } from 'next/navigation';
-import { query } from '@pulsar/shared/db/postgres';
 import ReportView from '@/components/report/ReportView';
+import { query } from '@pulsar/shared/db/postgres';
 import type { ReportData } from '@pulsar/shared/types';
+import { notFound } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
