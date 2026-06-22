@@ -73,9 +73,11 @@ The monorepo layout, app contract, and per-package READMEs live under [`packages
 
 A scheduled run pulls from eight sources (Hacker News, Reddit, GitHub, arXiv, Hashnode, Dev.to, Medium, RSS), enriches and dedupes everything in Postgres, projects the graph into Neo4j, and hands a structured slice to the AI layer.
 
-The trend report is a four-pass pipeline: market snapshot, developer signals, signal interpretations, then an executive summary stitched on top. The output is a single JSONB document that drives the dashboard, the daily email, and an on-demand PDF render.
+The trend report is a four-pass pipeline. Pass 1 writes Market Snapshot and Developer Signals, leading from the entity with the largest week-over-week mention delta and using the previous four reports' lead sentences to avoid repeating headlines. Pass 2 writes Signal Interpretation as 2 to 3 prose paragraphs (the legacy `signal/meaning/implication` triple shape still renders for historical reports). Pass 3 writes the executive summary, with operator-positioning tie-in capped at one sentence and omitted when the period does not intersect. Pass 4 ranks Supporting Resources from the research links collected across the prior passes. The output is a single JSONB document that drives the dashboard, the daily email, and an on-demand PDF render.
 
 The content drafter is two-pass. Pass 1 reads the finished report and picks one or more angles, each annotated with the platforms it should target. Pass 2 fans out across the chosen `(angle, platform)` pairs and writes a draft per pair: Hashnode, Medium, Dev.to, Hacker News, LinkedIn, Twitter, Discord. Operator voice samples are loaded only for the platforms the picker selected.
+
+The article-package pipeline is three-pass and runs alongside the content drafter when the report yields signal-rich material. The picker reads the trend report's Signal Interpretation, dedupes proposed angles against the last 8 published articles, requires each spec to derive from a distinct upstream signal, and assigns a metaphor family and Medium publication per spec. The writer renders the body in markdown using the operator's long-form voice samples. The annotator produces pull quotes, image prompts, and publication targets. The operator reveal section in each article is optional: a piece includes it only when the argument genuinely intersects with operator positioning, so most articles stand as pure developer content.
 
 ## Adoption
 
