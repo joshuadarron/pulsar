@@ -16,6 +16,7 @@
 		"@pulsar/app-market-analysis": "workspace:*",
 		"@pulsar/context": "workspace:*",
 		"@pulsar/shared": "workspace:*",
+		"@pulsar/view-model": "workspace:*",
 		"@auth/core": "^0.37.0",
 		"neo4j-driver": "^5.27.0",
 		"next": "^15.1.0",

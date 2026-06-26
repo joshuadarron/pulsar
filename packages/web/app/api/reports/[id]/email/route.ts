@@ -1,9 +1,14 @@
-import ReportTemplate from '@/components/report/ReportTemplate';
+import { buildReportView } from '@pulsar/app-market-analysis/views/reportView';
 import { env } from '@pulsar/shared/config/env';
 import { query } from '@pulsar/shared/db/postgres';
 import type { ReportData } from '@pulsar/shared/types';
 import { NextResponse } from 'next/server';
-import { createElement } from 'react';
+import {
+	buildPulsarEmailDocument,
+	buildPulsarEmailFooter,
+	buildPulsarEmailHeader
+} from '@/lib/viewModel/chrome';
+import { renderViewModelEmail } from '@/lib/viewModel/render-email';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,38 +24,24 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 		return NextResponse.json({ error: 'Report not found' }, { status: 404 });
 	}
 
-	const reportData = result.rows[0].report_data;
-	const generatedAt = result.rows[0].generated_at;
+	const { report_data, generated_at } = result.rows[0];
 	const reportUrl = `${env.nextauth.url}/reports/${id}`;
 	const pdfUrl = `${env.nextauth.url}/api/reports/${id}/export/pdf`;
 
-	// Dynamic import avoids Next.js static-analysis block on react-dom/server in route handlers
-	const { renderToStaticMarkup } = await import('react-dom/server');
+	const vm = buildReportView(report_data, { reportId: id, generatedAt: generated_at });
+	const chromeOpts = {
+		title: vm.title ?? 'Market Analysis Report',
+		generatedAt: generated_at,
+		reportUrl,
+		pdfUrl
+	};
 
-	const body = renderToStaticMarkup(
-		createElement(ReportTemplate, {
-			data: reportData,
-			variant: 'email',
-			reportId: id,
-			generatedAt,
-			reportUrl,
-			pdfUrl
-		})
-	);
+	const body = renderViewModelEmail(vm, {
+		header: buildPulsarEmailHeader(chromeOpts),
+		footer: buildPulsarEmailFooter(chromeOpts)
+	});
 
-	const html = `<!DOCTYPE html>
-<html>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; color: #1a1a1a; background: #f9fafb;">
-	<div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
-		${body}
-	</div>
-	<p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 24px;">
-		Pulsar — Automated Market Intelligence
-	</p>
-</body>
-</html>`;
-
-	return new NextResponse(html, {
+	return new NextResponse(buildPulsarEmailDocument(body), {
 		headers: { 'Content-Type': 'text/html; charset=utf-8' }
 	});
 }

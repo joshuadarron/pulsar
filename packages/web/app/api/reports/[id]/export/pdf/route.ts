@@ -1,8 +1,9 @@
-import ReportTemplate from '@/components/report/ReportTemplate';
+import { buildReportView } from '@pulsar/app-market-analysis/views/reportView';
 import { query } from '@pulsar/shared/db/postgres';
 import type { ReportData } from '@pulsar/shared/types';
 import { NextResponse } from 'next/server';
-import { createElement } from 'react';
+import { buildPulsarEmailHeader } from '@/lib/viewModel/chrome';
+import { renderViewModelPdf } from '@/lib/viewModel/render-pdf';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,48 +20,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 	}
 
 	const { report_data, generated_at } = result.rows[0];
+	const vm = buildReportView(report_data, { reportId: id, generatedAt: generated_at });
+	const header = buildPulsarEmailHeader({
+		title: vm.title ?? 'Market Analysis Report',
+		generatedAt: generated_at
+	});
 
 	try {
-		const { renderToStaticMarkup } = await import('react-dom/server');
-
-		const body = renderToStaticMarkup(
-			createElement(ReportTemplate, {
-				data: report_data,
-				variant: 'email',
-				reportId: id,
-				generatedAt: generated_at
-			})
-		);
-
-		const fullHtml = `<!DOCTYPE html>
-<html><head>
-  <meta charset="utf-8">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-           color: #111827; background: #fff; max-width: 800px; margin: 0 auto; padding: 2rem; line-height: 1.6; }
-    .no-print { display: none !important; }
-  </style>
-</head><body>${body}</body></html>`;
-
-		const puppeteer = await import('puppeteer');
-		const browser = await puppeteer.default.launch({
-			headless: true,
-			args: ['--no-sandbox', '--disable-setuid-sandbox']
-		});
-
-		const page = await browser.newPage();
-		await page.setContent(fullHtml, { waitUntil: 'load' });
-
-		const pdf = await page.pdf({
-			format: 'A4',
-			printBackground: true,
-			margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' }
-		});
-
-		await browser.close();
-
-		return new NextResponse(Buffer.from(pdf), {
+		const pdf = await renderViewModelPdf(vm, { header });
+		return new NextResponse(new Uint8Array(pdf), {
 			headers: {
 				'Content-Type': 'application/pdf',
 				'Content-Disposition': `attachment; filename="pulsar-report-${id}.pdf"`

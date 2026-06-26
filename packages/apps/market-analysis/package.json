@@ -12,6 +12,8 @@
 		"./prompts/content-recommendations": "./prompts/content-recommendations.ts",
 		"./pipelines": "./pipelines/index.ts",
 		"./templates": "./templates/index.ts",
+		"./views": "./views/index.ts",
+		"./views/reportView": "./views/reportView.ts",
 		"./ui/drafts": "./ui/drafts/index.tsx",
 		"./ui/drafts/[reportId]": "./ui/drafts/[reportId]/index.ts",
 		"./ui/articles": "./ui/articles/index.tsx",
@@ -23,6 +25,7 @@
 	"dependencies": {
 		"@pulsar/context": "workspace:*",
 		"@pulsar/shared": "workspace:*",
+		"@pulsar/view-model": "workspace:*",
 		"@pulsar/voice": "workspace:*",
 		"next": "^15.1.0"
 	},

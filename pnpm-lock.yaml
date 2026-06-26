@@ -26,6 +26,9 @@ importers:
       '@pulsar/shared':
         specifier: workspace:*
         version: link:../../shared
+      '@pulsar/view-model':
+        specifier: workspace:*
+        version: link:../../view-model
       '@pulsar/voice':
         specifier: workspace:*
         version: link:../../voice
@@ -238,6 +241,15 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/view-model:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.17
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   packages/voice:
     dependencies:
       js-yaml:
@@ -271,6 +283,9 @@ importers:
       '@pulsar/shared':
         specifier: workspace:*
         version: link:../shared
+      '@pulsar/view-model':
+        specifier: workspace:*
+        version: link:../view-model
       neo4j-driver:
         specifier: ^5.27.0
         version: 5.28.3
