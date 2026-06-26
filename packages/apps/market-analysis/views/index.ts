@@ -8,6 +8,8 @@ export {
 } from './draftsView.js';
 export type { DraftGroup } from './draftsView.js';
 
+export { DRAFTS_VIEWER_VIEW_ID, buildDraftsViewerView } from './draftsViewerView.js';
+
 export {
 	ARTICLES_LIST_VIEW_ID,
 	ARTICLES_VIEWER_VIEW_ID,

@@ -53,6 +53,12 @@ export const appConfig: AppConfig = {
 			route: '/drafts'
 		},
 		{
+			id: 'market-analysis.drafts.viewer',
+			title: 'Drafts for report',
+			route: '/drafts/:reportId',
+			parameterized: true
+		},
+		{
 			id: 'market-analysis.articles.list',
 			title: 'Articles',
 			route: '/articles'
@@ -94,6 +100,12 @@ export const appConfig: AppConfig = {
 			id: 'drafts.list',
 			description: 'List draft groups across recent reports.',
 			path: '/api/v1/views/market-analysis.drafts.list'
+		},
+		{
+			id: 'drafts.viewer',
+			description:
+				'Fetch the per-recommendation draft set for one report, with platform tabs and filled prompts.',
+			path: '/api/v1/views/market-analysis.drafts.viewer/:reportId'
 		},
 		{
 			id: 'articles.list',

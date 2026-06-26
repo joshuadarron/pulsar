@@ -4,7 +4,9 @@
 	"private": true,
 	"type": "module",
 	"exports": {
-		"./report-template": "./components/report/ReportTemplate.tsx"
+		"./viewModel/render-email": "./lib/viewModel/render-email.ts",
+		"./viewModel/render-pdf": "./lib/viewModel/render-pdf.ts",
+		"./viewModel/chrome": "./lib/viewModel/chrome.ts"
 	},
 	"scripts": {
 		"dev": "next dev",

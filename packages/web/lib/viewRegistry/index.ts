@@ -7,6 +7,7 @@ import {
 	buildArticlesViewerView,
 	buildDashboardView,
 	buildDraftsListView,
+	buildDraftsViewerView,
 	buildExploreView,
 	buildFeedView,
 	buildNotificationsView,
@@ -54,6 +55,12 @@ const REGISTRY: Record<string, Resolver> = {
 	'market-analysis.explore': async () => ({ ok: true, vm: await buildExploreView() }),
 	'market-analysis.notifications': async () => ({ ok: true, vm: await buildNotificationsView() }),
 	'market-analysis.drafts.list': async () => ({ ok: true, vm: await buildDraftsListView() }),
+	'market-analysis.drafts.viewer': async (reportId) => {
+		if (!reportId) return { ok: false, status: 400, error: 'Missing report id.' };
+		const vm = await buildDraftsViewerView(reportId);
+		if (!vm) return { ok: false, status: 404, error: 'Report not found.' };
+		return { ok: true, vm };
+	},
 	'market-analysis.articles.list': async () => ({ ok: true, vm: await buildArticlesListView() }),
 	'market-analysis.articles.viewer': async (reportId) => {
 		if (!reportId) return { ok: false, status: 400, error: 'Missing report id.' };

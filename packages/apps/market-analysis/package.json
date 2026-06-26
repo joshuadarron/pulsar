@@ -15,15 +15,12 @@
 		"./views": "./views/index.ts",
 		"./views/reportView": "./views/reportView.ts",
 		"./views/draftsView": "./views/draftsView.ts",
+		"./views/draftsViewerView": "./views/draftsViewerView.ts",
 		"./views/articlesView": "./views/articlesView.ts",
 		"./views/notificationsView": "./views/notificationsView.ts",
 		"./views/feedView": "./views/feedView.ts",
 		"./views/exploreView": "./views/exploreView.ts",
-		"./views/dashboardView": "./views/dashboardView.ts",
-		"./ui/drafts": "./ui/drafts/index.tsx",
-		"./ui/drafts/[reportId]": "./ui/drafts/[reportId]/index.ts",
-		"./ui/articles": "./ui/articles/index.tsx",
-		"./ui/articles/[reportId]": "./ui/articles/[reportId]/index.ts"
+		"./views/dashboardView": "./views/dashboardView.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit"
@@ -32,15 +29,10 @@
 		"@pulsar/context": "workspace:*",
 		"@pulsar/shared": "workspace:*",
 		"@pulsar/view-model": "workspace:*",
-		"@pulsar/voice": "workspace:*",
-		"next": "^15.1.0"
+		"@pulsar/voice": "workspace:*"
 	},
 	"devDependencies": {
 		"@types/node": "^22.10.0",
-		"@types/react": "^19.0.0",
-		"@types/react-dom": "^19.0.0",
-		"react": "^19.0.0",
-		"react-dom": "^19.0.0",
 		"tsx": "^4.19.2",
 		"typescript": "^5.7.2"
 	}
