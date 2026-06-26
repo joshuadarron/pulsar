@@ -521,9 +521,10 @@ export interface EvaluationSummary {
 // App framework
 //
 // Each app under `packages/apps/<name>/` exports an `AppConfig` from its
-// `app.config.ts`. The config declares the app's name, its scheduling
-// requirements, what kind of output it produces, what shape it expects
-// from `.context/` and `.voice/`, and which render mode the UI should use.
+// `app.config.ts`. The config declares the app's identity, scheduling,
+// expected `.context/` and `.voice/` fields, and the headless surface the
+// shell consumes (views and endpoints). Apps export no React; the shell
+// renders each view's ViewModel with its own primitives.
 // ---------------------------------------------------------------------------
 
 export interface AppScheduleEntry {
@@ -538,14 +539,49 @@ export interface AppSchedule {
 
 export type AppOutputType = 'report' | 'brief' | 'draft';
 
+/** Legacy hint about presentation style. Kept for backward compatibility; the shell now decides rendering. */
 export type AppRenderMode = 'technical' | 'newsletter';
+
+/**
+ * A view declared by an app. The shell calls the corresponding view builder
+ * (exposed via the app's `views/` exports) to obtain a ViewModel and renders
+ * it with shell-side primitives.
+ */
+export interface AppViewDescriptor {
+	/** Stable identifier; matches the `view` field on the ViewModel returned by the builder. */
+	id: string;
+	/** Human-readable title surfaced in nav and breadcrumbs. */
+	title: string;
+	/** Subpath suggested for the shell route; the shell may override. */
+	route?: string;
+	/** True when the view expects a route parameter (e.g. `:id`). */
+	parameterized?: boolean;
+}
+
+/**
+ * A read endpoint declared by an app. The shell may expose these directly
+ * over HTTP or call them in-process.
+ */
+export interface AppEndpointDescriptor {
+	/** Stable identifier; resolves to a function in the app's `api/` exports. */
+	id: string;
+	/** Human-readable description. */
+	description?: string;
+	/** Suggested HTTP path for the shell route. */
+	path?: string;
+}
 
 export interface AppConfig {
 	name: string;
 	description: string;
 	schedule: AppSchedule;
 	outputType: AppOutputType;
+	/** @deprecated The shell decides rendering. Kept for backward compatibility. */
 	renderMode: AppRenderMode;
 	expectedContext: string[];
 	expectedVoiceFormats: string[];
+	/** Views declared by the app. The shell renders each ViewModel with its own primitives. */
+	views?: AppViewDescriptor[];
+	/** Read endpoints declared by the app. */
+	endpoints?: AppEndpointDescriptor[];
 }

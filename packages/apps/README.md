@@ -8,10 +8,12 @@ core (scheduler, scraper, analysis, content drafter).
 ## The contract
 
 > An app is a self-contained domain workflow built on Pulsar. It owns its
-> pipelines, prompts, output schema, and UI surface. It declares what it
-> expects from `.context/` and `.voice/`. It does not reach across to other
-> apps. The Pulsar core (scheduler, scraper, analysis, content drafter) is
-> shared.
+> pipelines, prompts, output schemas, and **headless surface** (typed
+> view-models plus read endpoints). It declares what it expects from
+> `.context/` and `.voice/`. It does not reach across to other apps and it
+> ships no React. The shell (Pulsar's reference web app, the RocketRide
+> shell, or any future host) consumes the headless surface and renders
+> view-models with its own primitives.
 
 ## What an app exports
 
@@ -20,16 +22,21 @@ An app exports the following surface:
 - **Pipelines and their schedules.** A list of pipeline definitions (the
   `.pipe` files the runner sends to the operator's pipeline engine) along
   with default schedule expressions.
-- **UI routes and components.** React components and route segments that the
-  Next.js web package re-exports into its router via thin shims. The app
-  owns the rendering; the web package owns the URL.
+- **View-models.** Pure-TS builders under `views/` that take raw data and
+  return a typed `ViewModel` (a tree of shell-renderable blocks from
+  `@pulsar/view-model`). Each view declares an `id`, `title`, and optional
+  `route` in `app.config.ts#views`. The shell maps the id to the builder
+  and renders the result.
+- **Read endpoints.** Pure-TS functions under `api/` that the shell calls
+  in-process or over HTTP (`/api/v1/views/<viewId>`). Each endpoint
+  declares an `id` and optional `path` in `app.config.ts#endpoints`.
 - **A config schema.** A declaration of which `.context/` fields the app
   expects to find (for example, `positioning`, `audience`, `groundingUrls`,
   `trackedEntities`, `allowedGitHubLogins`). The app fails fast at startup
   if a required field is missing.
-- **An output renderer.** A typed renderer for whatever artifact the app
-  produces (report, brief, draft set), used by the UI, the email path, and
-  the PDF export path.
+- **Output templates.** String-based templates for non-block outputs the
+  app produces (markdown post bodies, email subject lines, prompt
+  scaffolds). The app does not render React; the shell does.
 
 ## Directory layout
 
@@ -40,31 +47,41 @@ packages/apps/<app-name>/
   pipelines/         .pipe files (templated, tracked in git)
   prompts/           system prompts and section prompts (templates)
   schemas/           output JSON schemas
-  ui/                app-specific React components and routes
-  app.config.ts      name, description, schedule defaults, renderMode
+  templates/         markdown / email / prompt fill templates
+  views/             pure-TS view-model builders (no React)
+  api/               read endpoints the shell calls
+  app.config.ts      identity, schedule defaults, declared views and endpoints
   package.json
   README.md
 ```
 
 `app.config.ts` is the single place an app declares its identity, schedule
-defaults, expected `.context/` fields, and `renderMode` (`technical` or
-`newsletter`). The Pulsar core reads this file to decide when to run the
-app's pipelines and how to render its output.
+defaults, expected `.context/` fields, and the headless surface (`views`
+and `endpoints`). The Pulsar core reads this file to decide when to run
+the app's pipelines and which views the shell should expose. The legacy
+`renderMode` field is still present for backward compatibility but the
+shell now decides rendering on its own.
 
 ## Adding a new app
 
 1. Copy the skeleton from an existing app under `packages/apps/`.
 2. Rename the package in `package.json` to `@pulsar/app-<name>`.
 3. Update `app.config.ts` with the new app's name, description, schedule
-   defaults, expected context fields, and render mode.
+   defaults, expected context fields, declared `views`, and declared
+   `endpoints`.
 4. Replace the prompts and pipelines with the new domain workflow.
-5. Add the new app's UI routes (if any) and wire them into the web package
-   via re-export shims under `packages/web/app/(dashboard)/`.
-6. Add the workspace entry. `packages/apps/*` is already covered by
+5. Add view builders under `views/` that return `@pulsar/view-model`
+   `ViewModel` trees. Export each builder via `package.json#exports`.
+6. Wire each declared view into the shell. For the Pulsar reference web
+   package, that means adding a thin loader under
+   `packages/web/app/(dashboard)/` that calls the builder and passes the
+   result to the generic `Renderer`. For the RocketRide shell, the
+   `/api/v1/views/<viewId>` endpoint surfaces the same view-model JSON.
+7. Add the workspace entry. `packages/apps/*` is already covered by
    `pnpm-workspace.yaml`, so a fresh `pnpm install` picks it up.
-7. Add a `README.md` documenting the app's pipelines, expected context
-   fields, expected voice formats, and integration points with the Pulsar
-   core.
+8. Add a `README.md` documenting the app's pipelines, expected context
+   fields, expected voice formats, declared views, and integration points
+   with the Pulsar core.
 
 ## Operator config and voice loaders
 
