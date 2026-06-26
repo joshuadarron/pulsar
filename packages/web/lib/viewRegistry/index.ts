@@ -5,7 +5,11 @@
 import {
 	buildArticlesListView,
 	buildArticlesViewerView,
+	buildDashboardView,
 	buildDraftsListView,
+	buildExploreView,
+	buildFeedView,
+	buildNotificationsView,
 	buildReportView
 } from '@pulsar/app-market-analysis/views';
 import { query } from '@pulsar/shared/db/postgres';
@@ -16,7 +20,10 @@ export type ViewResolution =
 	| { ok: true; vm: ViewModel }
 	| { ok: false; status: 404 | 400; error: string };
 
-type Resolver = (param: string | undefined) => Promise<ViewResolution>;
+type Resolver = (
+	param: string | undefined,
+	searchParams?: URLSearchParams
+) => Promise<ViewResolution>;
 
 const REGISTRY: Record<string, Resolver> = {
 	'market-analysis.report': async (id) => {
@@ -32,6 +39,20 @@ const REGISTRY: Record<string, Resolver> = {
 		});
 		return { ok: true, vm };
 	},
+	'market-analysis.dashboard': async () => ({ ok: true, vm: await buildDashboardView() }),
+	'market-analysis.feed': async (_, searchParams) => ({
+		ok: true,
+		vm: await buildFeedView({
+			source: searchParams?.get('source') ?? undefined,
+			sentiment: searchParams?.get('sentiment') ?? undefined,
+			contentType: searchParams?.get('contentType') ?? undefined,
+			q: searchParams?.get('q') ?? undefined,
+			page: Number.parseInt(searchParams?.get('page') ?? '1', 10) || 1,
+			perPage: Number.parseInt(searchParams?.get('perPage') ?? '20', 10) || 20
+		})
+	}),
+	'market-analysis.explore': async () => ({ ok: true, vm: await buildExploreView() }),
+	'market-analysis.notifications': async () => ({ ok: true, vm: await buildNotificationsView() }),
 	'market-analysis.drafts.list': async () => ({ ok: true, vm: await buildDraftsListView() }),
 	'market-analysis.articles.list': async () => ({ ok: true, vm: await buildArticlesListView() }),
 	'market-analysis.articles.viewer': async (reportId) => {
@@ -46,8 +67,12 @@ export function listRegisteredViews(): string[] {
 	return Object.keys(REGISTRY);
 }
 
-export async function resolveView(viewId: string, param?: string): Promise<ViewResolution> {
+export async function resolveView(
+	viewId: string,
+	param?: string,
+	searchParams?: URLSearchParams
+): Promise<ViewResolution> {
 	const resolver = REGISTRY[viewId];
 	if (!resolver) return { ok: false, status: 404, error: `Unknown view: ${viewId}` };
-	return resolver(param);
+	return resolver(param, searchParams);
 }

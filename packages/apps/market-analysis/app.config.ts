@@ -22,10 +22,30 @@ export const appConfig: AppConfig = {
 	expectedVoiceFormats: ['long-form', 'linkedin', 'reddit', 'discord', 'twitter'],
 	views: [
 		{
+			id: 'market-analysis.dashboard',
+			title: 'Dashboard',
+			route: '/'
+		},
+		{
 			id: 'market-analysis.report',
 			title: 'Market Analysis Report',
 			route: '/reports/:id',
 			parameterized: true
+		},
+		{
+			id: 'market-analysis.feed',
+			title: 'Article Feed',
+			route: '/feed'
+		},
+		{
+			id: 'market-analysis.explore',
+			title: 'Graph Explorer',
+			route: '/explore'
+		},
+		{
+			id: 'market-analysis.notifications',
+			title: 'Notifications',
+			route: '/notifications'
 		},
 		{
 			id: 'market-analysis.drafts.list',
@@ -46,9 +66,29 @@ export const appConfig: AppConfig = {
 	],
 	endpoints: [
 		{
+			id: 'dashboard',
+			description: 'Pulsar dashboard with KPIs, recent runs, and distribution charts.',
+			path: '/api/v1/views/market-analysis.dashboard'
+		},
+		{
 			id: 'report.get',
 			description: 'Fetch a single report as a renderable view-model.',
 			path: '/api/v1/views/market-analysis.report/:id'
+		},
+		{
+			id: 'feed',
+			description: 'Paginated, filterable article feed.',
+			path: '/api/v1/views/market-analysis.feed?source=&sentiment=&q=&page=&perPage='
+		},
+		{
+			id: 'explore',
+			description: 'Latest Louvain clusters and PageRank entity importance as a graph.',
+			path: '/api/v1/views/market-analysis.explore'
+		},
+		{
+			id: 'notifications',
+			description: 'Recent pipeline and content notifications.',
+			path: '/api/v1/views/market-analysis.notifications'
 		},
 		{
 			id: 'drafts.list',

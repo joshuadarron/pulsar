@@ -8,6 +8,7 @@ import type {
 	DividerBlock,
 	EmptyStateBlock,
 	GraphBlock,
+	GraphNode,
 	HeadingBlock,
 	KpiGridBlock,
 	LinkBlock,
@@ -23,10 +24,41 @@ import type {
 	Tone,
 	ViewModel
 } from '@pulsar/view-model';
-import { useState } from 'react';
+import dynamic from 'next/dynamic';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { type LineSeries, renderLineSvg } from '../../lib/charts/line-svg';
 import { type PieSlice, renderPieSvg } from '../../lib/charts/pie-svg';
 import { renderMarkdownEmail } from '../../lib/viewModel/markdown';
+
+// biome-ignore lint/suspicious/noExplicitAny: react-force-graph-2d ships without first-class TS types
+const ForceGraph2D = dynamic(() => import('react-force-graph-2d') as any, { ssr: false }) as any;
+
+const GRAPH_GROUP_COLORS = [
+	'#6366f1',
+	'#ec4899',
+	'#10b981',
+	'#f59e0b',
+	'#06b6d4',
+	'#a855f7',
+	'#ef4444',
+	'#14b8a6',
+	'#f97316',
+	'#84cc16',
+	'#8b5cf6',
+	'#d946ef'
+];
+const ENTITY_GROUP_COLOR = '#facc15';
+const FALLBACK_GROUP_COLOR = '#9ca3af';
+
+function colorForGroup(group: string | undefined): string {
+	if (!group) return FALLBACK_GROUP_COLOR;
+	if (group === 'entity') return ENTITY_GROUP_COLOR;
+	let hash = 0;
+	for (let i = 0; i < group.length; i++) hash = (hash * 31 + group.charCodeAt(i)) | 0;
+	const idx =
+		((hash % GRAPH_GROUP_COLORS.length) + GRAPH_GROUP_COLORS.length) % GRAPH_GROUP_COLORS.length;
+	return GRAPH_GROUP_COLORS[idx];
+}
 
 const TONE_CLASSES: Record<Tone, string> = {
 	neutral: 'bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-200',
@@ -422,9 +454,96 @@ function Tabs({ block }: { block: TabsBlock }) {
 }
 
 function Graph({ block }: { block: GraphBlock }) {
+	const containerRef = useRef<HTMLDivElement>(null);
+	const [width, setWidth] = useState(600);
+	const [selected, setSelected] = useState<GraphNode | null>(null);
+
+	useEffect(() => {
+		if (!containerRef.current) return;
+		const observer = new ResizeObserver((entries) => {
+			for (const entry of entries) setWidth(entry.contentRect.width);
+		});
+		observer.observe(containerRef.current);
+		setWidth(containerRef.current.clientWidth);
+		return () => observer.disconnect();
+	}, []);
+
+	const height = block.height ?? 600;
+
+	const nodeCanvasObject = useCallback(
+		(node: GraphNode & { x?: number; y?: number }, ctx: CanvasRenderingContext2D) => {
+			const radius = 3 + Math.min(12, Math.sqrt(Math.max(1, node.size ?? 1)));
+			ctx.beginPath();
+			ctx.arc(node.x ?? 0, node.y ?? 0, radius, 0, 2 * Math.PI);
+			ctx.fillStyle = colorForGroup(node.group);
+			ctx.fill();
+			if (radius > 6) {
+				ctx.font = '3px sans-serif';
+				ctx.textAlign = 'center';
+				ctx.fillStyle =
+					typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+						? '#d4d4d4'
+						: '#1f2937';
+				ctx.fillText(node.label.slice(0, 30), node.x ?? 0, (node.y ?? 0) + radius + 4);
+			}
+		},
+		[]
+	);
+
+	if (block.nodes.length === 0) {
+		return (
+			<div className="rounded-md bg-gray-50 dark:bg-neutral-800/50 p-6 text-sm text-gray-600 dark:text-neutral-400">
+				Graph has no nodes yet.
+			</div>
+		);
+	}
+
 	return (
-		<div className="rounded-md bg-gray-50 dark:bg-neutral-800/50 p-4 text-sm text-gray-600 dark:text-neutral-400">
-			Graph with {block.nodes.length} nodes and {block.links.length} links.
+		<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+			<div
+				ref={containerRef}
+				className="lg:col-span-2 overflow-hidden rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900"
+				style={{ height }}
+			>
+				<ForceGraph2D
+					graphData={{ nodes: block.nodes, links: block.links }}
+					nodeId="id"
+					nodeCanvasObject={nodeCanvasObject}
+					onNodeClick={(n: GraphNode) => setSelected(n)}
+					linkWidth={(link: { weight?: number }) => Math.sqrt(link.weight ?? 1)}
+					linkColor={() =>
+						typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+							? '#404040'
+							: '#e5e7eb'
+					}
+					width={width}
+					height={height}
+				/>
+			</div>
+			<div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5 text-sm">
+				<h3 className="text-xs font-semibold uppercase text-gray-500 dark:text-neutral-400">
+					Node details
+				</h3>
+				{selected ? (
+					<div className="mt-3 space-y-1.5">
+						<p className="text-base font-medium text-gray-900 dark:text-neutral-100">
+							{selected.label}
+						</p>
+						{selected.group && (
+							<p className="text-gray-500 dark:text-neutral-400">Group: {selected.group}</p>
+						)}
+						{selected.size !== undefined && (
+							<p className="text-gray-500 dark:text-neutral-400">Score: {selected.size}</p>
+						)}
+					</div>
+				) : (
+					<p className="mt-3 text-gray-400 dark:text-neutral-500">Click a node to see details.</p>
+				)}
+				<div className="mt-6 text-xs text-gray-500 dark:text-neutral-400 space-y-1">
+					<p>{block.nodes.length} nodes</p>
+					<p>{block.links.length} edges</p>
+				</div>
+			</div>
 		</div>
 	);
 }

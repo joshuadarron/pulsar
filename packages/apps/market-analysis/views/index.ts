@@ -17,3 +17,17 @@ export {
 	buildArticlesViewerViewFromArticles
 } from './articlesView.js';
 export type { ArticleGroup, ArticleFileSet } from './articlesView.js';
+
+export {
+	NOTIFICATIONS_VIEW_ID,
+	buildNotificationsView,
+	buildNotificationsViewFromRows
+} from './notificationsView.js';
+export type { Notification } from './notificationsView.js';
+
+export { FEED_VIEW_ID, buildFeedView, buildFeedViewFromRows } from './feedView.js';
+export type { FeedFilters } from './feedView.js';
+
+export { EXPLORE_VIEW_ID, buildExploreView } from './exploreView.js';
+
+export { DASHBOARD_VIEW_ID, buildDashboardView } from './dashboardView.js';
