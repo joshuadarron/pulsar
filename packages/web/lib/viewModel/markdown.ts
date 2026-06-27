@@ -2,7 +2,8 @@
 // Handles paragraphs, bold, italics, inline code, links, ordered and
 // unordered lists. No code fences, blockquotes, tables, or headings.
 // Block-level structure in reports comes from view-model blocks, not
-// from markdown.
+// from markdown. Color values mirror the light-mode token palette in
+// app/globals.css (email has no dark mode).
 
 export function escapeHtml(input: string): string {
 	return input
@@ -18,16 +19,16 @@ function renderInline(text: string): string {
 	out = out.replace(
 		/`([^`]+)`/g,
 		(_m, code) =>
-			`<code style="background:#f3f4f6;padding:1px 5px;border-radius:4px;font-family:ui-monospace,Menlo,monospace;font-size:13px;">${code}</code>`
+			`<code style="background:#e8e7e1;padding:1px 5px;border-radius:4px;font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace;font-size:13px;color:#0a0a0a;">${code}</code>`
 	);
 	out = out.replace(
 		/\[([^\]]+)\]\(([^)]+)\)/g,
 		(_m, label, href) =>
-			`<a href="${href}" style="color:#4f46e5;text-decoration:underline;">${label}</a>`
+			`<a href="${href}" style="color:#7c3aed;text-decoration:underline;">${label}</a>`
 	);
 	out = out.replace(
 		/\*\*([^*]+)\*\*/g,
-		'<strong style="color:#111827;font-weight:600;">$1</strong>'
+		'<strong style="color:#0a0a0a;font-weight:600;">$1</strong>'
 	);
 	out = out.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
 	return out;
@@ -42,7 +43,7 @@ export function renderMarkdownEmail(input: string): string {
 	function flushPara() {
 		if (para.length === 0) return;
 		out.push(
-			`<p style="line-height:1.7;font-size:14px;color:#374151;margin:0 0 12px;">${renderInline(para.join(' '))}</p>`
+			`<p style="line-height:1.7;font-size:14px;color:rgba(10,10,10,0.85);margin:0 0 12px;">${renderInline(para.join(' '))}</p>`
 		);
 		para = [];
 	}
@@ -65,7 +66,7 @@ export function renderMarkdownEmail(input: string): string {
 				listKind = 'ol';
 			}
 			out.push(
-				`<li style="margin-bottom:6px;line-height:1.6;font-size:14px;color:#374151;">${renderInline(ol[1])}</li>`
+				`<li style="margin-bottom:6px;line-height:1.6;font-size:14px;color:rgba(10,10,10,0.85);">${renderInline(ol[1])}</li>`
 			);
 			continue;
 		}
@@ -77,7 +78,7 @@ export function renderMarkdownEmail(input: string): string {
 				listKind = 'ul';
 			}
 			out.push(
-				`<li style="margin-bottom:6px;line-height:1.6;font-size:14px;color:#374151;">${renderInline(ul[1])}</li>`
+				`<li style="margin-bottom:6px;line-height:1.6;font-size:14px;color:rgba(10,10,10,0.85);">${renderInline(ul[1])}</li>`
 			);
 			continue;
 		}

@@ -28,11 +28,11 @@ import { type PieSlice, renderPieSvg } from '../charts/pie-svg.js';
 import { escapeHtml, renderMarkdownEmail } from './markdown.js';
 
 const TONE_COLORS: Record<Tone, { bg: string; fg: string }> = {
-	neutral: { bg: '#f3f4f6', fg: '#374151' },
-	positive: { bg: '#dcfce7', fg: '#166534' },
-	negative: { bg: '#fee2e2', fg: '#991b1b' },
-	warn: { bg: '#fef3c7', fg: '#92400e' },
-	info: { bg: '#e0e7ff', fg: '#3730a3' }
+	neutral: { bg: '#e8e7e1', fg: 'rgba(10,10,10,0.55)' },
+	positive: { bg: 'rgba(5,150,105,0.12)', fg: '#059669' },
+	negative: { bg: 'rgba(185,28,28,0.12)', fg: '#b91c1c' },
+	warn: { bg: 'rgba(180,83,9,0.12)', fg: '#b45309' },
+	info: { bg: 'rgba(124,58,237,0.10)', fg: '#7c3aed' }
 };
 
 export type RenderViewModelEmailOptions = {
@@ -56,8 +56,8 @@ export function renderViewModelEmail(
 	return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>${escapeHtml(vm.title ?? vm.view)}</title></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#1a1a1a;background:#f9fafb;">
-<div style="background:white;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+<body style="font-family:'Instrument Sans','Instrument Sans Variable',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#0a0a0a;background:#f0efe9;">
+<div style="background:#e8e7e1;border:1px solid rgba(0,0,0,0.08);border-radius:12px;overflow:hidden;">
 ${inner}
 </div>
 </body>
@@ -103,10 +103,10 @@ export function renderBlock(block: Block): string {
 
 function renderSection(block: SectionBlock): string {
 	const titleHtml = block.title
-		? `<h2 style="font-size:18px;font-weight:600;color:#111827;margin:0 0 12px;">${escapeHtml(block.title)}</h2>`
+		? `<h2 style="font-size:18px;font-weight:600;color:#0a0a0a;margin:0 0 12px;">${escapeHtml(block.title)}</h2>`
 		: '';
 	const subtitleHtml = block.subtitle
-		? `<p style="font-size:13px;color:#6b7280;margin:-8px 0 12px;">${escapeHtml(block.subtitle)}</p>`
+		? `<p style="font-size:13px;color:rgba(10,10,10,0.42);margin:-8px 0 12px;">${escapeHtml(block.subtitle)}</p>`
 		: '';
 	const children = block.blocks.map(renderBlock).join('\n');
 	return `<section style="padding:0 24px 24px;">${titleHtml}${subtitleHtml}${children}</section>`;
@@ -115,11 +115,11 @@ function renderSection(block: SectionBlock): string {
 function renderHeading(block: HeadingBlock): string {
 	const sizes: Record<HeadingBlock['level'], number> = { 1: 24, 2: 18, 3: 16, 4: 14 };
 	const size = sizes[block.level];
-	return `<h${block.level} style="font-size:${size}px;font-weight:600;color:#111827;margin:16px 0 8px;">${escapeHtml(block.text)}</h${block.level}>`;
+	return `<h${block.level} style="font-size:${size}px;font-weight:600;color:#0a0a0a;margin:16px 0 8px;">${escapeHtml(block.text)}</h${block.level}>`;
 }
 
 function renderText(block: TextBlock): string {
-	const colors = { normal: '#374151', muted: '#6b7280', strong: '#111827' };
+	const colors = { normal: 'rgba(10,10,10,0.85)', muted: 'rgba(10,10,10,0.42)', strong: '#0a0a0a' };
 	const weight = block.emphasis === 'strong' ? 600 : 400;
 	return `<p style="line-height:1.7;font-size:14px;color:${colors[block.emphasis ?? 'normal']};font-weight:${weight};margin:0 0 12px;">${escapeHtml(block.body)}</p>`;
 }
@@ -132,16 +132,16 @@ function renderCard(block: CardBlock): string {
 	const tone = TONE_COLORS[block.tone ?? 'neutral'];
 	const valueHtml =
 		block.value !== undefined
-			? `<div style="font-size:24px;font-weight:700;color:#111827;margin:4px 0;">${escapeHtml(String(block.value))}</div>`
+			? `<div style="font-size:24px;font-weight:700;color:#0a0a0a;margin:4px 0;">${escapeHtml(String(block.value))}</div>`
 			: '';
 	const trendHtml = block.trend
 		? `<div style="font-size:12px;color:${TONE_COLORS[block.trend.tone ?? 'neutral'].fg};">${escapeHtml(block.trend.deltaLabel)}</div>`
 		: '';
 	const footerHtml = block.footer
-		? `<div style="font-size:12px;color:#6b7280;margin-top:6px;">${escapeHtml(block.footer)}</div>`
+		? `<div style="font-size:12px;color:rgba(10,10,10,0.42);margin-top:6px;">${escapeHtml(block.footer)}</div>`
 		: '';
-	const inner = `<div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(block.title)}</div>${valueHtml}${trendHtml}${footerHtml}`;
-	const wrapper = `<div style="border:1px solid #e5e7eb;background:${tone.bg};border-radius:8px;padding:16px;">${inner}</div>`;
+	const inner = `<div style="font-size:12px;color:rgba(10,10,10,0.42);text-transform:uppercase;letter-spacing:0.05em;">${escapeHtml(block.title)}</div>${valueHtml}${trendHtml}${footerHtml}`;
+	const wrapper = `<div style="border:1px solid rgba(0,0,0,0.08);background:${tone.bg};border-radius:8px;padding:16px;">${inner}</div>`;
 	if (block.href) {
 		return `<a href="${block.href}" style="display:block;text-decoration:none;color:inherit;">${wrapper}</a>`;
 	}
@@ -161,12 +161,12 @@ function renderKpiGrid(block: KpiGridBlock): string {
 
 function renderTable(block: TableBlock): string {
 	if (block.rows.length === 0) {
-		return `<p style="font-size:13px;color:#6b7280;font-style:italic;">${escapeHtml(block.emptyText ?? 'No data.')}</p>`;
+		return `<p style="font-size:13px;color:rgba(10,10,10,0.42);font-style:italic;">${escapeHtml(block.emptyText ?? 'No data.')}</p>`;
 	}
 	const head = block.columns
 		.map(
 			(c) =>
-				`<th style="padding:8px 12px;text-align:${c.align ?? 'left'};font-weight:600;font-size:12px;color:#374151;background:#f9fafb;border-bottom:1px solid #e5e7eb;">${escapeHtml(c.label)}</th>`
+				`<th style="padding:8px 12px;text-align:${c.align ?? 'left'};font-weight:600;font-size:12px;color:rgba(10,10,10,0.85);background:#f0efe9;border-bottom:1px solid rgba(0,0,0,0.08);">${escapeHtml(c.label)}</th>`
 		)
 		.join('');
 	const body = block.rows
@@ -174,13 +174,13 @@ function renderTable(block: TableBlock): string {
 			const cells = block.columns
 				.map((c) => {
 					const cell = row.cells[c.key];
-					return `<td style="padding:8px 12px;text-align:${c.align ?? 'left'};font-size:13px;color:#374151;border-bottom:1px solid #f3f4f6;">${renderTableCell(cell)}</td>`;
+					return `<td style="padding:8px 12px;text-align:${c.align ?? 'left'};font-size:13px;color:rgba(10,10,10,0.85);border-bottom:1px solid #e8e7e1;">${renderTableCell(cell)}</td>`;
 				})
 				.join('');
 			return `<tr>${cells}</tr>`;
 		})
 		.join('');
-	return `<table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;margin:0 0 12px;"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+	return `<table style="width:100%;border-collapse:collapse;border:1px solid rgba(0,0,0,0.08);border-radius:6px;overflow:hidden;margin:0 0 12px;"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
 function renderTableCell(cell: TableBlock['rows'][number]['cells'][string] | undefined): string {
@@ -191,7 +191,7 @@ function renderTableCell(cell: TableBlock['rows'][number]['cells'][string] | und
 		case 'number':
 			return escapeHtml(formatNumber(cell.value, cell.format));
 		case 'link':
-			return `<a href="${cell.href}" style="color:#4f46e5;text-decoration:underline;">${escapeHtml(cell.label)}</a>`;
+			return `<a href="${cell.href}" style="color:#7c3aed;text-decoration:underline;">${escapeHtml(cell.label)}</a>`;
 		case 'badge': {
 			const tone = TONE_COLORS[cell.tone ?? 'neutral'];
 			return `<span style="display:inline-block;padding:2px 8px;border-radius:9999px;background:${tone.bg};color:${tone.fg};font-size:11px;font-weight:500;">${escapeHtml(cell.label)}</span>`;
@@ -229,7 +229,7 @@ function renderChart(block: ChartBlock): string {
 			legendPosition: 'right'
 		});
 		const title = block.title
-			? `<div style="font-size:13px;color:#6b7280;text-align:center;margin-bottom:6px;">${escapeHtml(block.title)}</div>`
+			? `<div style="font-size:13px;color:rgba(10,10,10,0.42);text-align:center;margin-bottom:6px;">${escapeHtml(block.title)}</div>`
 			: '';
 		return `<div style="margin:0 0 16px;text-align:center;">${title}${svg}</div>`;
 	}
@@ -246,11 +246,11 @@ function renderChart(block: ChartBlock): string {
 			xAxisLabel: block.xAxis?.label
 		});
 		const title = block.title
-			? `<div style="font-size:13px;color:#6b7280;text-align:center;margin-bottom:6px;">${escapeHtml(block.title)}</div>`
+			? `<div style="font-size:13px;color:rgba(10,10,10,0.42);text-align:center;margin-bottom:6px;">${escapeHtml(block.title)}</div>`
 			: '';
 		return `<div style="padding:0 24px 24px;"><div style="margin:0 auto;max-width:720px;text-align:center;">${title}${svg}</div></div>`;
 	}
-	return `<div style="padding:16px;background:#fef3c7;color:#92400e;font-size:13px;border-radius:6px;">Chart kind '${block.chartKind}' not supported in email renderer.</div>`;
+	return `<div style="padding:16px;background:rgba(180,83,9,0.12);color:#b45309;font-size:13px;border-radius:6px;">Chart kind '${block.chartKind}' not supported in email renderer.</div>`;
 }
 
 function parsePct(label: string): number {
@@ -263,13 +263,13 @@ function renderList(block: ListBlock): string {
 	const items = block.items
 		.map((it) => {
 			const primary = it.href
-				? `<a href="${it.href}" style="color:#4f46e5;text-decoration:underline;font-weight:600;font-size:14px;">${escapeHtml(it.primary)}</a>`
-				: `<span style="font-weight:600;color:#111827;">${escapeHtml(it.primary)}</span>`;
+				? `<a href="${it.href}" style="color:#7c3aed;text-decoration:underline;font-weight:600;font-size:14px;">${escapeHtml(it.primary)}</a>`
+				: `<span style="font-weight:600;color:#0a0a0a;">${escapeHtml(it.primary)}</span>`;
 			const secondary = it.secondary
-				? `<div style="color:#6b7280;font-size:13px;margin-top:2px;">${escapeHtml(it.secondary)}</div>`
+				? `<div style="color:rgba(10,10,10,0.42);font-size:13px;margin-top:2px;">${escapeHtml(it.secondary)}</div>`
 				: '';
 			const ts = it.timestamp
-				? `<div style="color:#9ca3af;font-size:11px;margin-top:2px;">${escapeHtml(it.timestamp)}</div>`
+				? `<div style="color:rgba(10,10,10,0.30);font-size:11px;margin-top:2px;">${escapeHtml(it.timestamp)}</div>`
 				: '';
 			const badgeHtml = it.badge
 				? ` <span style="display:inline-block;padding:2px 8px;border-radius:9999px;background:${TONE_COLORS[it.badge.tone ?? 'neutral'].bg};color:${TONE_COLORS[it.badge.tone ?? 'neutral'].fg};font-size:11px;font-weight:500;">${escapeHtml(it.badge.label)}</span>`
@@ -291,19 +291,19 @@ function renderTabs(block: TabsBlock): string {
 	const panes = block.panes
 		.map(
 			(pane) =>
-				`<div style="margin:0 0 16px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6366f1;margin:0 0 8px;">${escapeHtml(pane.label)}</div>${pane.blocks.map(renderBlock).join('\n')}</div>`
+				`<div style="margin:0 0 16px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#7c3aed;margin:0 0 8px;">${escapeHtml(pane.label)}</div>${pane.blocks.map(renderBlock).join('\n')}</div>`
 		)
 		.join('');
 	return panes;
 }
 
 function renderGraph(_block: GraphBlock): string {
-	return '<div style="padding:16px;background:#f3f4f6;color:#6b7280;font-size:13px;border-radius:6px;text-align:center;">Interactive graph not available in this view.</div>';
+	return '<div style="padding:16px;background:#e8e7e1;color:rgba(10,10,10,0.42);font-size:13px;border-radius:6px;text-align:center;">Interactive graph not available in this view.</div>';
 }
 
 function renderLink(block: LinkBlock): string {
 	const targetAttr = block.external ? ' target="_blank" rel="noopener noreferrer"' : '';
-	return `<a href="${block.href}"${targetAttr} style="color:#4f46e5;text-decoration:underline;">${escapeHtml(block.label)}</a>`;
+	return `<a href="${block.href}"${targetAttr} style="color:#7c3aed;text-decoration:underline;">${escapeHtml(block.label)}</a>`;
 }
 
 function renderBadge(block: BadgeBlock): string {
@@ -312,15 +312,15 @@ function renderBadge(block: BadgeBlock): string {
 }
 
 function renderDivider(_block: DividerBlock): string {
-	return '<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">';
+	return '<hr style="border:none;border-top:1px solid rgba(0,0,0,0.08);margin:24px 0;">';
 }
 
 function renderEmptyState(block: EmptyStateBlock): string {
 	const body = block.body
-		? `<div style="font-size:14px;color:#6b7280;margin-top:6px;">${escapeHtml(block.body)}</div>`
+		? `<div style="font-size:14px;color:rgba(10,10,10,0.42);margin-top:6px;">${escapeHtml(block.body)}</div>`
 		: '';
 	const cta = block.cta ? `<div style="margin-top:12px;">${renderLink(block.cta)}</div>` : '';
-	return `<div style="padding:32px 24px;text-align:center;color:#9ca3af;"><div style="font-weight:600;font-size:15px;color:#374151;">${escapeHtml(block.title)}</div>${body}${cta}</div>`;
+	return `<div style="padding:32px 24px;text-align:center;color:rgba(10,10,10,0.30);"><div style="font-weight:600;font-size:15px;color:rgba(10,10,10,0.85);">${escapeHtml(block.title)}</div>${body}${cta}</div>`;
 }
 
 function renderRawHtml(block: RawHtmlBlock): string {
