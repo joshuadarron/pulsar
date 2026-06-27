@@ -25,10 +25,10 @@ interface PipeGroup {
 }
 
 const OP_BADGE: Record<string, string> = {
-	begin: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-	enter: 'bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-neutral-300',
-	leave: 'bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-neutral-300',
-	end: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+	begin: 'bg-info/15 text-info border border-info/30',
+	enter: 'bg-bg-alt text-text-sec border border-border',
+	leave: 'bg-bg-alt text-text-sec border border-border',
+	end: 'bg-success/15 text-success border border-success/30'
 };
 
 export default function PipelineTraces({ runId }: { runId: string }) {
@@ -92,12 +92,10 @@ export default function PipelineTraces({ runId }: { runId: string }) {
 	}
 
 	return (
-		<div className="mt-4 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
+		<div className="mt-4 rounded-lg border border-border bg-surface p-5">
 			<div className="flex items-center justify-between">
-				<h2 className="text-sm font-semibold uppercase text-gray-500 dark:text-neutral-400">
-					Pipeline Traces
-				</h2>
-				<span className="text-xs text-gray-400 dark:text-neutral-500">
+				<h2 className="text-sm font-semibold uppercase text-text-muted">Pipeline Traces</h2>
+				<span className="text-xs text-text-dim">
 					{traces.length} ops across {groups.size} pipes
 				</span>
 			</div>
@@ -110,64 +108,48 @@ export default function PipelineTraces({ runId }: { runId: string }) {
 						return typeof full?.trace?.error === 'string';
 					});
 					return (
-						<div
-							key={key}
-							className="rounded-lg border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-950"
-						>
+						<div key={key} className="rounded-lg border border-border bg-bg">
 							<button
 								type="button"
 								onClick={() => toggleGroup(key)}
 								className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs"
 							>
 								<span className="flex items-center gap-2">
-									<span className="font-mono text-gray-500 dark:text-neutral-500">
-										{isOpen ? '▾' : '▸'}
-									</span>
-									<span className="font-semibold text-gray-800 dark:text-neutral-200">
-										{g.pipeline}
-									</span>
-									<span className="text-gray-500 dark:text-neutral-500">pipe {g.pipeId}</span>
+									<span className="font-mono text-text-muted">{isOpen ? '▾' : '▸'}</span>
+									<span className="font-semibold text-text-pri">{g.pipeline}</span>
+									<span className="text-text-muted">pipe {g.pipeId}</span>
 									{errored && (
-										<span className="rounded-full bg-red-100 dark:bg-red-900 px-2 py-0.5 text-red-700 dark:text-red-300">
+										<span className="rounded-full bg-danger/15 text-danger px-2 py-0.5 border border-danger/30">
 											error
 										</span>
 									)}
 								</span>
-								<span className="text-gray-400 dark:text-neutral-500">{g.rows.length} ops</span>
+								<span className="text-text-dim">{g.rows.length} ops</span>
 							</button>
 							{isOpen && (
-								<div className="border-t border-gray-200 dark:border-neutral-800 p-2 font-mono text-xs">
+								<div className="border-t border-border p-2 font-mono text-xs">
 									{g.rows.map((r) => {
 										const full = details.get(r.id);
 										const isExpanded = openRows.has(r.id);
 										return (
-											<div
-												key={r.id}
-												className="border-b border-gray-100 dark:border-neutral-800 last:border-b-0"
-											>
+											<div key={r.id} className="border-b border-border last:border-b-0">
 												<button
 													type="button"
 													onClick={() => toggleRow(r.id)}
 													className="flex w-full items-center gap-2 py-1 text-left hover:bg-gray-100 dark:hover:bg-neutral-900"
 												>
-													<span className="text-gray-400 dark:text-neutral-600">
-														{isExpanded ? '▾' : '▸'}
-													</span>
-													<span className="text-gray-400 dark:text-neutral-600">
+													<span className="text-text-dim">{isExpanded ? '▾' : '▸'}</span>
+													<span className="text-text-dim">
 														{new Date(r.occurred_at).toLocaleTimeString()}
 													</span>
 													<span
-														className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${OP_BADGE[r.op] ?? 'bg-gray-100 dark:bg-neutral-800'}`}
+														className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${OP_BADGE[r.op] ?? 'bg-bg-alt'}`}
 													>
 														{r.op}
 													</span>
-													<span className="text-gray-600 dark:text-neutral-400">
-														{r.component ?? 'unknown'}
-													</span>
+													<span className="text-text-sec">{r.component ?? 'unknown'}</span>
 													{r.rr_seq !== null && (
-														<span className="ml-auto text-gray-400 dark:text-neutral-600">
-															seq {r.rr_seq}
-														</span>
+														<span className="ml-auto text-text-dim">seq {r.rr_seq}</span>
 													)}
 												</button>
 												{isExpanded && (
@@ -182,7 +164,7 @@ export default function PipelineTraces({ runId }: { runId: string }) {
 																)}
 															</>
 														) : (
-															<span className="text-gray-400 dark:text-neutral-500">Loading…</span>
+															<span className="text-text-dim">Loading…</span>
 														)}
 													</div>
 												)}
@@ -201,9 +183,9 @@ export default function PipelineTraces({ runId }: { runId: string }) {
 
 function JsonBlock({ label, value }: { label: string; value: unknown }) {
 	return (
-		<details className="rounded bg-white dark:bg-neutral-900 p-2 ring-1 ring-gray-200 dark:ring-neutral-800">
-			<summary className="cursor-pointer text-gray-500 dark:text-neutral-500">{label}</summary>
-			<pre className="mt-2 max-h-[300px] overflow-auto whitespace-pre-wrap break-all text-gray-700 dark:text-neutral-300">
+		<details className="rounded bg-surface p-2 ring-1 ring-gray-200 dark:ring-neutral-800">
+			<summary className="cursor-pointer text-text-muted">{label}</summary>
+			<pre className="mt-2 max-h-[300px] overflow-auto whitespace-pre-wrap break-all text-text-pri">
 				{JSON.stringify(value, null, 2)}
 			</pre>
 		</details>

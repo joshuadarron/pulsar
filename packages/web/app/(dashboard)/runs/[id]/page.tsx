@@ -44,16 +44,16 @@ function formatDuration(startedAt: string, completedAt: string | null): string {
 
 const LEVEL_STYLES: Record<string, string> = {
 	info: 'text-blue-600 dark:text-blue-400',
-	warn: 'text-yellow-600 dark:text-yellow-400',
-	error: 'text-red-600 dark:text-red-400',
-	success: 'text-green-600 dark:text-green-400'
+	warn: 'text-warning',
+	error: 'text-danger',
+	success: 'text-success'
 };
 
 const STATUS_BADGE: Record<string, string> = {
-	running: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
-	complete: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-	failed: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
-	cancelled: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
+	running: 'bg-warning/15 text-warning border border-warning/30',
+	complete: 'bg-success/15 text-success border border-success/30',
+	failed: 'bg-danger/15 text-danger border border-danger/30',
+	cancelled: 'bg-warning/15 text-warning border border-warning/30'
 };
 
 export default function RunDetailPage() {
@@ -116,13 +116,13 @@ export default function RunDetailPage() {
 	if (loading) {
 		return (
 			<div className="flex items-center justify-center py-20">
-				<div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 dark:border-neutral-600 border-t-indigo-600" />
+				<div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-accent" />
 			</div>
 		);
 	}
 
 	if (!run) {
-		return <p className="py-20 text-center text-gray-400 dark:text-neutral-500">Run not found.</p>;
+		return <p className="py-20 text-center text-text-dim">Run not found.</p>;
 	}
 
 	// Stage timeline derives from Pulsar-side logs only — RR stages are too
@@ -163,24 +163,24 @@ export default function RunDetailPage() {
 	return (
 		<div>
 			{/* Header */}
-			<div className="flex items-center gap-2 text-sm text-gray-400 dark:text-neutral-500">
+			<div className="flex items-center gap-2 text-sm text-text-dim">
 				<Link href="/runs" className="hover:text-gray-600 dark:hover:text-neutral-300">
 					Run History
 				</Link>
 				<span>/</span>
-				<span className="text-gray-700 dark:text-neutral-300">{run.id.slice(0, 8)}</span>
+				<span className="text-text-pri">{run.id.slice(0, 8)}</span>
 			</div>
 
 			<div className="mt-4 flex items-center justify-between">
 				<div className="flex items-center gap-3">
-					<h1 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">
+					<h1 className="text-2xl font-bold text-text-pri">
 						{run.run_type === 'scrape' ? 'Scrape' : 'Pipeline'} Run
 					</h1>
 					<span
 						className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${STATUS_BADGE[run.status] || ''}`}
 					>
 						{run.status === 'running' && (
-							<span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-yellow-500" />
+							<span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-warning" />
 						)}
 						{run.status}
 					</span>
@@ -193,13 +193,13 @@ export default function RunDetailPage() {
 							setCancelling(false);
 						}}
 						disabled={cancelling}
-						className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+						className="rounded-lg bg-danger px-4 py-1.5 text-sm font-medium text-white transition hover:bg-danger/90 disabled:opacity-50"
 					>
 						{cancelling ? 'Cancelling...' : 'Cancel Run'}
 					</button>
 				)}
 			</div>
-			<p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">
+			<p className="mt-1 text-sm text-text-muted">
 				Triggered {run.trigger} on {new Date(run.started_at).toLocaleString()}
 			</p>
 
@@ -213,10 +213,8 @@ export default function RunDetailPage() {
 
 			{/* Stage Timeline */}
 			{stages.length > 0 && (
-				<div className="mt-6 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
-					<h2 className="text-sm font-semibold uppercase text-gray-500 dark:text-neutral-400">
-						Stages
-					</h2>
+				<div className="mt-6 rounded-lg border border-border bg-surface p-5">
+					<h2 className="text-sm font-semibold uppercase text-text-muted">Stages</h2>
 					<div className="mt-3 flex flex-wrap gap-2">
 						{stages.map((stage) => {
 							const s = stageStatus(stage);
@@ -225,19 +223,19 @@ export default function RunDetailPage() {
 									key={stage}
 									className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
 										s === 'success'
-											? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+											? 'bg-success/15 text-success border border-success/30'
 											: s === 'error'
-												? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-												: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+												? 'bg-danger/15 text-danger border border-danger/30'
+												: 'bg-warning/15 text-warning border border-warning/30'
 									}`}
 								>
 									<span
 										className={`h-1.5 w-1.5 rounded-full ${
 											s === 'success'
-												? 'bg-green-500'
+												? 'bg-success'
 												: s === 'error'
-													? 'bg-red-500'
-													: 'bg-yellow-500 animate-pulse'
+													? 'bg-danger'
+													: 'bg-warning animate-pulse'
 										}`}
 									/>
 									{stage}
@@ -249,13 +247,11 @@ export default function RunDetailPage() {
 			)}
 
 			{/* Live Logs */}
-			<div className="mt-4 rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
+			<div className="mt-4 rounded-lg border border-border bg-surface p-5">
 				<div className="flex items-center justify-between gap-3">
 					<div className="flex items-center gap-3">
-						<h2 className="text-sm font-semibold uppercase text-gray-500 dark:text-neutral-400">
-							Logs
-						</h2>
-						<div className="flex items-center gap-1 rounded-md bg-gray-100 dark:bg-neutral-800 p-0.5 text-xs">
+						<h2 className="text-sm font-semibold uppercase text-text-muted">Logs</h2>
+						<div className="flex items-center gap-1 rounded-md bg-bg-alt p-0.5 text-xs">
 							{(['all', 'pulsar', 'rocketride'] as const).map((opt) => (
 								<button
 									type="button"
@@ -263,8 +259,8 @@ export default function RunDetailPage() {
 									onClick={() => setSourceFilter(opt)}
 									className={`rounded px-2 py-0.5 capitalize transition ${
 										sourceFilter === opt
-											? 'bg-white dark:bg-neutral-700 text-gray-900 dark:text-neutral-100 shadow-sm'
-											: 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200'
+											? 'bg-surface text-text-pri shadow-sm'
+											: 'text-text-muted hover:text-gray-700 dark:hover:text-neutral-200'
 									}`}
 								>
 									{opt === 'rocketride' ? `RocketRide${rrLogCount ? ` (${rrLogCount})` : ''}` : opt}
@@ -274,8 +270,8 @@ export default function RunDetailPage() {
 					</div>
 					<div className="flex items-center gap-3">
 						{run.status === 'running' && (
-							<span className="flex items-center gap-1.5 text-xs text-yellow-600 dark:text-yellow-400">
-								<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-500" />
+							<span className="flex items-center gap-1.5 text-xs text-warning">
+								<span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warning" />
 								Live
 							</span>
 						)}
@@ -283,13 +279,13 @@ export default function RunDetailPage() {
 							type="button"
 							onClick={copyLogsToClipboard}
 							disabled={filteredLogs.length === 0}
-							className="rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-1.5 text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
+							className="rounded-md border border-border bg-surface p-1.5 text-text-pri hover:bg-gray-50 dark:hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
 							title={logsCopied ? 'Copied' : 'Copy visible log lines to clipboard'}
 							aria-label={logsCopied ? 'Copied' : 'Copy visible log lines to clipboard'}
 						>
 							{logsCopied ? (
 								<svg
-									className="h-4 w-4 text-green-600 dark:text-green-400"
+									className="h-4 w-4 text-success"
 									fill="none"
 									viewBox="0 0 24 24"
 									stroke="currentColor"
@@ -319,10 +315,10 @@ export default function RunDetailPage() {
 				</div>
 				<div
 					ref={logPaneRef}
-					className="mt-3 max-h-[70vh] overflow-y-auto rounded-lg bg-gray-50 dark:bg-neutral-950 p-4 font-mono text-xs"
+					className="mt-3 max-h-[70vh] overflow-y-auto rounded-lg bg-bg p-4 font-mono text-xs"
 				>
 					{filteredLogs.length === 0 ? (
-						<p className="text-gray-400 dark:text-neutral-500">No log entries yet.</p>
+						<p className="text-text-dim">No log entries yet.</p>
 					) : (
 						filteredLogs.map((log) => {
 							const isRr = (log.source ?? 'pulsar') === 'rocketride';
@@ -330,10 +326,10 @@ export default function RunDetailPage() {
 								<div
 									key={log.id}
 									className={`flex gap-3 py-0.5 ${
-										isRr ? 'border-l-2 border-indigo-300 dark:border-indigo-600 pl-2 -ml-2' : ''
+										isRr ? 'border-l-2 border-accent/40 pl-2 -ml-2' : ''
 									}`}
 								>
-									<span className="flex-shrink-0 text-gray-400 dark:text-neutral-600">
+									<span className="flex-shrink-0 text-text-dim">
 										{new Date(log.logged_at).toLocaleTimeString()}
 									</span>
 									<span
@@ -343,14 +339,12 @@ export default function RunDetailPage() {
 									</span>
 									<span
 										className={`flex-shrink-0 w-40 truncate ${
-											isRr
-												? 'text-indigo-600 dark:text-indigo-400'
-												: 'text-gray-500 dark:text-neutral-500'
+											isRr ? 'text-accent' : 'text-text-muted'
 										}`}
 									>
 										[{log.stage}]
 									</span>
-									<span className="text-gray-800 dark:text-neutral-200">{log.message}</span>
+									<span className="text-text-pri">{log.message}</span>
 								</div>
 							);
 						})
@@ -360,11 +354,9 @@ export default function RunDetailPage() {
 
 			{/* Error Log */}
 			{run.error_log && (
-				<div className="mt-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 p-5">
-					<h2 className="text-sm font-semibold text-red-700 dark:text-red-300">Error Log</h2>
-					<pre className="mt-2 whitespace-pre-wrap text-xs text-red-600 dark:text-red-400">
-						{run.error_log}
-					</pre>
+				<div className="mt-4 rounded-lg border border-danger/30 bg-danger/10 p-5">
+					<h2 className="text-sm font-semibold text-danger">Error Log</h2>
+					<pre className="mt-2 whitespace-pre-wrap text-xs text-danger">{run.error_log}</pre>
 				</div>
 			)}
 
@@ -377,9 +369,9 @@ export default function RunDetailPage() {
 const STAT_ICONS: Record<string, { path: string; accent: string; bg: string; ring: string }> = {
 	Duration: {
 		path: 'M12 6v6l4 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z',
-		accent: 'text-indigo-600 dark:text-indigo-400',
-		bg: 'bg-indigo-50 dark:bg-indigo-950',
-		ring: 'ring-indigo-500/20 dark:ring-indigo-400/20'
+		accent: 'text-accent',
+		bg: 'bg-accent-soft',
+		ring: 'ring-accent/20'
 	},
 	Status: {
 		path: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
@@ -395,8 +387,8 @@ const STAT_ICONS: Record<string, { path: string; accent: string; bg: string; rin
 	},
 	'New Articles': {
 		path: 'M12 4v16m8-8H4',
-		accent: 'text-green-600 dark:text-green-400',
-		bg: 'bg-green-50 dark:bg-green-950',
+		accent: 'text-success',
+		bg: 'bg-success/10',
 		ring: 'ring-green-500/20 dark:ring-green-400/20'
 	}
 };
@@ -404,7 +396,7 @@ const STAT_ICONS: Record<string, { path: string; accent: string; bg: string; rin
 function StatTile({ label, value, live }: { label: string; value: string; live?: boolean }) {
 	const icon = STAT_ICONS[label] || STAT_ICONS.Duration;
 	return (
-		<div className="flex flex-col justify-between overflow-hidden rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5">
+		<div className="flex flex-col justify-between overflow-hidden rounded-xl border border-border bg-surface p-5">
 			<div className="flex items-center gap-3">
 				<div
 					className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${icon.bg} ring-1 ${icon.ring}`}
@@ -419,15 +411,11 @@ function StatTile({ label, value, live }: { label: string; value: string; live?:
 						<path strokeLinecap="round" strokeLinejoin="round" d={icon.path} />
 					</svg>
 				</div>
-				<p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-neutral-500">
-					{label}
-				</p>
+				<p className="text-xs font-medium uppercase tracking-wide text-text-dim">{label}</p>
 			</div>
 			<div className="mt-3 flex items-baseline gap-2">
-				<span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-neutral-100">
-					{value}
-				</span>
-				{live && <span className="h-2 w-2 animate-pulse rounded-full bg-yellow-500" />}
+				<span className="text-3xl font-bold tabular-nums text-text-pri">{value}</span>
+				{live && <span className="h-2 w-2 animate-pulse rounded-full bg-warning" />}
 			</div>
 		</div>
 	);

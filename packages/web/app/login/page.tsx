@@ -5,7 +5,7 @@ import { signIn } from 'next-auth/react';
 
 export default function LoginPage() {
 	return (
-		<div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500">
+		<div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-accent via-accent to-accent-hover">
 			<div className="w-full max-w-md rounded-2xl bg-white p-10 shadow-2xl">
 				<div className="mb-10 flex flex-col items-center text-center">
 					<PulsarLogo className="h-16 w-16 text-purple-700" />

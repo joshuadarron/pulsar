@@ -50,7 +50,7 @@ function LiveDuration({
 		<span className="tabular-nums">
 			{display}
 			{status === 'running' && (
-				<span className="ml-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-500" />
+				<span className="ml-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-warning" />
 			)}
 		</span>
 	);
@@ -240,16 +240,14 @@ export default function RunsPage() {
 		<div>
 			<div className="flex items-center justify-between">
 				<div>
-					<h1 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">Run History</h1>
-					<p className="mt-1 text-gray-500 dark:text-neutral-400">
-						All scrape and pipeline run logs
-					</p>
+					<h1 className="text-2xl font-bold text-text-pri">Run History</h1>
+					<p className="mt-1 text-text-muted">All scrape and pipeline run logs</p>
 				</div>
 				<div className="flex gap-3">
 					<button
 						onClick={() => trigger('scrape')}
 						disabled={triggering !== null || 'scrape' in runningTypes}
-						className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+						className="rounded-lg bg-info px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
 					>
 						{triggering === 'scrape'
 							? 'Triggering...'
@@ -272,20 +270,20 @@ export default function RunsPage() {
 			</div>
 			{message && (
 				<p
-					className={`mt-2 text-sm ${message.includes('already') ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}
+					className={`mt-2 text-sm ${message.includes('already') ? 'text-warning' : 'text-success'}`}
 				>
 					{message}
 				</p>
 			)}
 
-			<div className="mt-6 overflow-hidden rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900">
+			<div className="mt-6 overflow-hidden rounded-lg border border-border bg-surface">
 				<table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
-					<thead className="bg-gray-50 dark:bg-neutral-800">
+					<thead className="bg-bg-alt">
 						<tr>
 							<SortHeader label="Type" sortKey="run_type" sorts={sorts} onSort={handleSort} />
 							<SortHeader label="Trigger" sortKey="trigger" sorts={sorts} onSort={handleSort} />
 							<SortHeader label="Started" sortKey="started_at" sorts={sorts} onSort={handleSort} />
-							<th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400">
+							<th className="px-4 py-3 text-left text-xs font-medium uppercase text-text-muted">
 								Duration
 							</th>
 							<SortHeader label="Status" sortKey="status" sorts={sorts} onSort={handleSort} />
@@ -301,10 +299,7 @@ export default function RunsPage() {
 					<tbody className="divide-y divide-gray-200 dark:divide-neutral-700">
 						{runs.length === 0 ? (
 							<tr>
-								<td
-									colSpan={7}
-									className="px-4 py-8 text-center text-gray-400 dark:text-neutral-500"
-								>
+								<td colSpan={7} className="px-4 py-8 text-center text-text-dim">
 									No runs yet.
 								</td>
 							</tr>
@@ -319,20 +314,18 @@ export default function RunsPage() {
 										<span
 											className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
 												run.run_type === 'scrape'
-													? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-													: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300'
+													? 'bg-info/15 text-info border border-info/30'
+													: 'bg-accent-soft text-accent border border-accent/30'
 											}`}
 										>
 											{run.run_type}
 										</span>
 									</td>
-									<td className="px-4 py-4 text-sm text-gray-600 dark:text-neutral-400 capitalize">
-										{run.trigger}
-									</td>
-									<td className="px-4 py-4 text-sm text-gray-600 dark:text-neutral-400">
+									<td className="px-4 py-4 text-sm text-text-sec capitalize">{run.trigger}</td>
+									<td className="px-4 py-4 text-sm text-text-sec">
 										{new Date(run.started_at).toLocaleString()}
 									</td>
-									<td className="px-4 py-4 text-sm text-gray-600 dark:text-neutral-400">
+									<td className="px-4 py-4 text-sm text-text-sec">
 										<LiveDuration
 											startedAt={run.started_at}
 											completedAt={run.completed_at}
@@ -343,26 +336,22 @@ export default function RunsPage() {
 										<span
 											className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
 												run.status === 'complete'
-													? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+													? 'bg-success/15 text-success border border-success/30'
 													: run.status === 'failed'
-														? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+														? 'bg-danger/15 text-danger border border-danger/30'
 														: run.status === 'cancelled'
-															? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
-															: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+															? 'bg-warning/15 text-warning border border-warning/30'
+															: 'bg-warning/15 text-warning border border-warning/30'
 											}`}
 										>
 											{run.status === 'running' && (
-												<span className="mr-1.5 h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-500" />
+												<span className="mr-1.5 h-1.5 w-1.5 animate-pulse rounded-full bg-warning" />
 											)}
 											{run.status}
 										</span>
 									</td>
-									<td className="px-4 py-4 text-sm text-gray-600 dark:text-neutral-400">
-										{run.articles_scraped}
-									</td>
-									<td className="px-4 py-4 text-sm text-gray-600 dark:text-neutral-400">
-										{run.articles_new}
-									</td>
+									<td className="px-4 py-4 text-sm text-text-sec">{run.articles_scraped}</td>
+									<td className="px-4 py-4 text-sm text-text-sec">{run.articles_new}</td>
 								</tr>
 							))
 						)}
@@ -373,11 +362,11 @@ export default function RunsPage() {
 			{/* Pagination + rows-per-page */}
 			<div className="mt-4 flex items-center justify-between">
 				<div className="flex items-center gap-3">
-					<label className="text-sm text-gray-500 dark:text-neutral-400">Rows</label>
+					<label className="text-sm text-text-muted">Rows</label>
 					<select
 						value={pageSize}
 						onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-						className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 py-1.5 text-sm text-gray-700 dark:text-neutral-300 focus:border-indigo-500 focus:outline-none"
+						className="rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-text-pri focus:border-accent focus:outline-none"
 					>
 						{ROW_OPTIONS.map((n) => (
 							<option key={n} value={n}>
@@ -386,7 +375,7 @@ export default function RunsPage() {
 						))}
 					</select>
 					{total > 0 && (
-						<p className="text-sm text-gray-500 dark:text-neutral-400">
+						<p className="text-sm text-text-muted">
 							Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total}
 						</p>
 					)}
@@ -396,17 +385,17 @@ export default function RunsPage() {
 						<button
 							onClick={() => setPage((p) => Math.max(1, p - 1))}
 							disabled={page === 1}
-							className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-neutral-300 transition hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:opacity-40"
+							className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text-pri transition hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:opacity-40"
 						>
 							Previous
 						</button>
-						<span className="text-sm text-gray-600 dark:text-neutral-400 tabular-nums">
+						<span className="text-sm text-text-sec tabular-nums">
 							{page} / {totalPages}
 						</span>
 						<button
 							onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
 							disabled={page === totalPages}
-							className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-neutral-300 transition hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:opacity-40"
+							className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text-pri transition hover:bg-gray-50 dark:hover:bg-neutral-800 disabled:opacity-40"
 						>
 							Next
 						</button>
@@ -436,7 +425,7 @@ function SortHeader({
 		<th
 			onClick={(e) => onSort(sortKey, e.shiftKey || e.metaKey || e.ctrlKey)}
 			title="Click to sort. Shift-click (or ⌘/Ctrl-click) to add as a secondary sort."
-			className="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200 transition"
+			className="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase text-text-muted hover:text-gray-700 dark:hover:text-neutral-200 transition"
 		>
 			<span className="inline-flex items-center gap-1">
 				{label}
@@ -448,7 +437,7 @@ function SortHeader({
 					{order === 'asc' ? <path d="M6 4L2 8h8L6 4z" /> : <path d="M6 8L2 4h8L6 8z" />}
 				</svg>
 				{showRank && (
-					<span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900 px-1 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
+					<span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-soft px-1 text-[10px] font-semibold text-accent">
 						{idx + 1}
 					</span>
 				)}

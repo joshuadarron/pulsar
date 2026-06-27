@@ -35,21 +35,17 @@ export default function NotificationToast() {
 			{toasts.map((toast) => (
 				<div
 					key={toast.id}
-					className="animate-in slide-in-from-right rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-4 shadow-lg"
+					className="animate-in slide-in-from-right rounded-lg border border-border bg-surface p-4 shadow-lg"
 				>
 					<div className="flex items-start justify-between gap-2">
 						<div className="min-w-0 flex-1">
-							<p className="text-sm font-semibold text-gray-900 dark:text-neutral-100">
-								{toast.title}
-							</p>
-							<p className="mt-1 text-xs text-gray-500 dark:text-neutral-400 line-clamp-2">
-								{toast.message}
-							</p>
+							<p className="text-sm font-semibold text-text-pri">{toast.title}</p>
+							<p className="mt-1 text-xs text-text-muted line-clamp-2">{toast.message}</p>
 							{toast.link && (
 								<Link
 									href={toast.link}
 									onClick={() => dismiss(toast.id)}
-									className="mt-2 inline-block text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+									className="mt-2 inline-block text-xs font-medium text-accent hover:underline"
 								>
 									View details
 								</Link>

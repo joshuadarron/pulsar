@@ -146,17 +146,17 @@ export default function SettingsPage() {
 
 	return (
 		<div>
-			<h1 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">Settings</h1>
-			<p className="mt-1 text-gray-500 dark:text-neutral-400">Configuration overview</p>
+			<h1 className="text-2xl font-bold text-text-pri">Settings</h1>
+			<p className="mt-1 text-text-muted">Configuration overview</p>
 
 			{/* Appearance */}
 			<section className="mt-8">
-				<h2 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">Appearance</h2>
-				<div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-4 lg:w-[calc(50%-0.5rem)]">
+				<h2 className="text-lg font-semibold text-text-pri">Appearance</h2>
+				<div className="mt-4 flex items-center justify-between rounded-lg border border-border bg-surface p-4 lg:w-[calc(50%-0.5rem)]">
 					<div className="flex items-center gap-3">
 						{theme === 'dark' ? (
 							<svg
-								className="h-5 w-5 text-yellow-500"
+								className="h-5 w-5 text-warning"
 								fill="none"
 								viewBox="0 0 24 24"
 								stroke="currentColor"
@@ -170,7 +170,7 @@ export default function SettingsPage() {
 							</svg>
 						) : (
 							<svg
-								className="h-5 w-5 text-yellow-500"
+								className="h-5 w-5 text-warning"
 								fill="none"
 								viewBox="0 0 24 24"
 								stroke="currentColor"
@@ -184,8 +184,8 @@ export default function SettingsPage() {
 							</svg>
 						)}
 						<div>
-							<p className="text-sm font-medium text-gray-900 dark:text-neutral-100">Dark Mode</p>
-							<p className="text-xs text-gray-500 dark:text-neutral-400">
+							<p className="text-sm font-medium text-text-pri">Dark Mode</p>
+							<p className="text-xs text-text-muted">
 								{theme === 'dark' ? 'Dark theme is active' : 'Light theme is active'}
 							</p>
 						</div>
@@ -195,7 +195,7 @@ export default function SettingsPage() {
 						role="switch"
 						aria-checked={theme === 'dark'}
 						className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ${
-							theme === 'dark' ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-neutral-700'
+							theme === 'dark' ? 'bg-accent' : 'bg-border'
 						}`}
 					>
 						<span
@@ -209,10 +209,8 @@ export default function SettingsPage() {
 
 			{/* Email Subscribers */}
 			<section className="mt-8">
-				<h2 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">
-					Report Subscribers
-				</h2>
-				<p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">
+				<h2 className="text-lg font-semibold text-text-pri">Report Subscribers</h2>
+				<p className="mt-1 text-sm text-text-muted">
 					Manage who receives the intelligence report email
 				</p>
 
@@ -224,7 +222,7 @@ export default function SettingsPage() {
 							value={newEmail}
 							onChange={(e) => setNewEmail(e.target.value)}
 							onKeyDown={(e) => e.key === 'Enter' && addSubscriber()}
-							className="flex-1 rounded-lg border border-gray-300 dark:border-neutral-600 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none dark:bg-neutral-900 dark:text-neutral-100"
+							className="flex-1 rounded-lg border border-border px-3 py-2 text-sm focus:border-accent focus:outline-none bg-surface text-text-pri"
 						/>
 						<input
 							type="text"
@@ -232,23 +230,23 @@ export default function SettingsPage() {
 							value={newName}
 							onChange={(e) => setNewName(e.target.value)}
 							onKeyDown={(e) => e.key === 'Enter' && addSubscriber()}
-							className="w-40 rounded-lg border border-gray-300 dark:border-neutral-600 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none dark:bg-neutral-900 dark:text-neutral-100"
+							className="w-40 rounded-lg border border-border px-3 py-2 text-sm focus:border-accent focus:outline-none bg-surface text-text-pri"
 						/>
 						<button
 							onClick={addSubscriber}
-							className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+							className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover"
 						>
 							Add
 						</button>
 					</div>
-					{subError && <p className="text-sm text-red-600 dark:text-red-400">{subError}</p>}
+					{subError && <p className="text-sm text-danger">{subError}</p>}
 
 					{subscribers.length === 0 ? (
-						<p className="text-sm text-gray-400 dark:text-neutral-500">
+						<p className="text-sm text-text-dim">
 							No subscribers yet. Add an email to receive report notifications.
 						</p>
 					) : (
-						<div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 divide-y divide-gray-100 dark:divide-neutral-800">
+						<div className="rounded-lg border border-border bg-surface divide-y divide-gray-100 dark:divide-neutral-800">
 							{subscribers.map((sub) => (
 								<div key={sub.id} className="flex items-center justify-between px-4 py-3">
 									<div className="flex items-center gap-3 min-w-0">
@@ -257,7 +255,7 @@ export default function SettingsPage() {
 											role="switch"
 											aria-checked={sub.active}
 											className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
-												sub.active ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-neutral-700'
+												sub.active ? 'bg-accent' : 'bg-border'
 											}`}
 										>
 											<span
@@ -268,18 +266,16 @@ export default function SettingsPage() {
 										</button>
 										<div className="min-w-0">
 											<p
-												className={`text-sm truncate ${sub.active ? 'text-gray-900 dark:text-neutral-100' : 'text-gray-400 dark:text-neutral-500 line-through'}`}
+												className={`text-sm truncate ${sub.active ? 'text-text-pri' : 'text-text-dim line-through'}`}
 											>
 												{sub.email}
 											</p>
-											{sub.name && (
-												<p className="text-xs text-gray-400 dark:text-neutral-500">{sub.name}</p>
-											)}
+											{sub.name && <p className="text-xs text-text-dim">{sub.name}</p>}
 										</div>
 									</div>
 									<button
 										onClick={() => removeSubscriber(sub.id)}
-										className="flex-shrink-0 text-gray-400 hover:text-red-500 dark:hover:text-red-400"
+										className="flex-shrink-0 text-text-dim hover:text-danger"
 									>
 										<svg
 											className="h-4 w-4"
@@ -300,30 +296,26 @@ export default function SettingsPage() {
 
 			{/* Schedules */}
 			<section className="mt-8">
-				<h2 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">Schedules</h2>
-				<p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">
+				<h2 className="text-lg font-semibold text-text-pri">Schedules</h2>
+				<p className="mt-1 text-sm text-text-muted">
 					Configure when scrapes and report pipelines run
 				</p>
-				{scheduleError && (
-					<p className="mt-2 text-sm text-red-600 dark:text-red-400">{scheduleError}</p>
-				)}
+				{scheduleError && <p className="mt-2 text-sm text-danger">{scheduleError}</p>}
 
 				<div className="mt-4 space-y-6 max-w-3xl">
 					{/* Scrape Schedules */}
 					<div>
 						<div className="flex items-center justify-between">
-							<h3 className="text-sm font-semibold text-gray-700 dark:text-neutral-300">Scrape</h3>
+							<h3 className="text-sm font-semibold text-text-pri">Scrape</h3>
 							<button
 								onClick={() => addSchedule('scrape')}
-								className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+								className="text-xs font-medium text-accent hover:underline"
 							>
 								+ Add schedule
 							</button>
 						</div>
 						{scrapeSchedules.length === 0 ? (
-							<p className="mt-2 text-sm text-gray-400 dark:text-neutral-500">
-								No scrape schedules configured.
-							</p>
+							<p className="mt-2 text-sm text-text-dim">No scrape schedules configured.</p>
 						) : (
 							<div className="mt-2 space-y-2">
 								{scrapeSchedules.map((s) => (
@@ -341,20 +333,16 @@ export default function SettingsPage() {
 					{/* Pipeline Schedules */}
 					<div>
 						<div className="flex items-center justify-between">
-							<h3 className="text-sm font-semibold text-gray-700 dark:text-neutral-300">
-								Report / Content
-							</h3>
+							<h3 className="text-sm font-semibold text-text-pri">Report / Content</h3>
 							<button
 								onClick={() => addSchedule('pipeline')}
-								className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+								className="text-xs font-medium text-accent hover:underline"
 							>
 								+ Add schedule
 							</button>
 						</div>
 						{pipelineSchedules.length === 0 ? (
-							<p className="mt-2 text-sm text-gray-400 dark:text-neutral-500">
-								No pipeline schedules configured.
-							</p>
+							<p className="mt-2 text-sm text-text-dim">No pipeline schedules configured.</p>
 						) : (
 							<div className="mt-2 space-y-2">
 								{pipelineSchedules.map((s) => (
@@ -369,7 +357,7 @@ export default function SettingsPage() {
 						)}
 					</div>
 
-					<p className="text-xs text-gray-400 dark:text-neutral-500">
+					<p className="text-xs text-text-dim">
 						Changes take effect on the next scheduled cycle. Scrape collects data from all sources.
 						Pipeline generates the trend report, content drafts, and sends the email notification.
 					</p>
@@ -378,8 +366,8 @@ export default function SettingsPage() {
 
 			{/* Source Configuration */}
 			<section className="mt-8">
-				<h2 className="text-lg font-semibold text-gray-900 dark:text-neutral-100">Data Sources</h2>
-				<p className="mt-1 text-sm text-gray-500 dark:text-neutral-400">
+				<h2 className="text-lg font-semibold text-text-pri">Data Sources</h2>
+				<p className="mt-1 text-sm text-text-muted">
 					Toggle sources on or off for scheduled scrapes
 				</p>
 
@@ -476,9 +464,7 @@ function ScheduleRow({
 	return (
 		<div
 			className={`flex items-center gap-3 rounded-lg border p-3 ${
-				schedule.active
-					? 'border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900'
-					: 'border-gray-100 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-950 opacity-60'
+				schedule.active ? 'border-border bg-surface' : 'border-border bg-bg opacity-60'
 			}`}
 		>
 			<button
@@ -486,7 +472,7 @@ function ScheduleRow({
 				role="switch"
 				aria-checked={schedule.active}
 				className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
-					schedule.active ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-neutral-700'
+					schedule.active ? 'bg-accent' : 'bg-border'
 				}`}
 			>
 				<span
@@ -500,7 +486,7 @@ function ScheduleRow({
 				type="time"
 				value={timeValue}
 				onChange={(e) => handleTimeChange(e.target.value)}
-				className="rounded border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1.5 text-sm text-gray-900 dark:text-neutral-100 focus:border-indigo-500 focus:outline-none"
+				className="rounded border border-border bg-surface px-2 py-1.5 text-sm text-text-pri focus:border-accent focus:outline-none"
 			/>
 
 			<div className="flex gap-1">
@@ -510,8 +496,8 @@ function ScheduleRow({
 						onClick={() => toggleDay(i)}
 						className={`h-7 w-7 rounded text-xs font-medium transition ${
 							schedule.days.includes(i)
-								? 'bg-indigo-600 text-white'
-								: 'bg-gray-100 dark:bg-neutral-800 text-gray-400 dark:text-neutral-500 hover:bg-gray-200 dark:hover:bg-neutral-700'
+								? 'bg-accent text-accent-text'
+								: 'bg-bg-alt text-text-dim hover:bg-gray-200 dark:hover:bg-neutral-700'
 						}`}
 					>
 						{label.charAt(0)}
@@ -521,7 +507,7 @@ function ScheduleRow({
 
 			<button
 				onClick={() => onRemove(schedule.id)}
-				className="ml-auto flex-shrink-0 text-gray-400 hover:text-red-500 dark:hover:text-red-400"
+				className="ml-auto flex-shrink-0 text-text-dim hover:text-danger"
 			>
 				<svg
 					className="h-4 w-4"
@@ -552,16 +538,16 @@ function SourceCard({
 }) {
 	return (
 		<div
-			className={`rounded-lg border p-4 transition ${enabled ? 'border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900' : 'border-gray-100 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-950 opacity-60'}`}
+			className={`rounded-lg border p-4 transition ${enabled ? 'border-border bg-surface' : 'border-border bg-bg opacity-60'}`}
 		>
 			<div className="flex items-center justify-between">
-				<h3 className="text-sm font-semibold text-gray-700 dark:text-neutral-300">{title}</h3>
+				<h3 className="text-sm font-semibold text-text-pri">{title}</h3>
 				<button
 					onClick={() => onToggle(name)}
 					role="switch"
 					aria-checked={enabled}
 					className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-colors ${
-						enabled ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-neutral-700'
+						enabled ? 'bg-accent' : 'bg-border'
 					}`}
 				>
 					<span
@@ -573,10 +559,7 @@ function SourceCard({
 			</div>
 			<div className="mt-2 flex flex-wrap gap-1.5">
 				{items.map((item) => (
-					<span
-						key={item}
-						className="rounded bg-gray-100 dark:bg-neutral-800 px-2 py-0.5 text-xs text-gray-600 dark:text-neutral-400"
-					>
+					<span key={item} className="rounded bg-bg-alt px-2 py-0.5 text-xs text-text-sec">
 						{item}
 					</span>
 				))}
