@@ -34,11 +34,11 @@ import { renderMarkdownEmail } from '../../lib/viewModel/markdown';
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d') as any, { ssr: false }) as any;
 
 const GRAPH_GROUP_COLORS = [
-	'#6366f1',
+	'#7c3aed',
 	'#ec4899',
 	'#10b981',
 	'#f59e0b',
-	'#06b6d4',
+	'#41b6e6',
 	'#a855f7',
 	'#ef4444',
 	'#14b8a6',
@@ -61,11 +61,11 @@ function colorForGroup(group: string | undefined): string {
 }
 
 const TONE_CLASSES: Record<Tone, string> = {
-	neutral: 'bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-200',
-	positive: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
-	negative: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200',
-	warn: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
-	info: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200'
+	neutral: 'bg-surface text-text-sec border border-border',
+	positive: 'bg-success/15 text-success border border-success/30',
+	negative: 'bg-danger/15 text-danger border border-danger/30',
+	warn: 'bg-warning/15 text-warning border border-warning/30',
+	info: 'bg-accent-soft text-accent border border-accent/30'
 };
 
 export default function Renderer({ vm }: { vm: ViewModel }) {
@@ -117,16 +117,9 @@ function BlockView({ block }: { block: Block }) {
 
 function Section({ block }: { block: SectionBlock }) {
 	return (
-		<section
-			id={block.id}
-			className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-6 space-y-3"
-		>
-			{block.title && (
-				<h2 className="text-xl font-semibold text-gray-900 dark:text-neutral-100">{block.title}</h2>
-			)}
-			{block.subtitle && (
-				<p className="text-sm text-gray-500 dark:text-neutral-400">{block.subtitle}</p>
-			)}
+		<section id={block.id} className="rounded-lg border border-border bg-surface p-6 space-y-3">
+			{block.title && <h2 className="text-xl font-semibold text-text-pri">{block.title}</h2>}
+			{block.subtitle && <p className="text-sm text-text-muted">{block.subtitle}</p>}
 			{block.blocks.map((b, i) => (
 				<BlockView key={i} block={b} />
 			))}
@@ -143,10 +136,7 @@ function Heading({ block }: { block: HeadingBlock }) {
 	};
 	const Tag = `h${block.level}` as unknown as 'h1' | 'h2' | 'h3' | 'h4';
 	return (
-		<Tag
-			id={block.id}
-			className={`${sizes[block.level]} font-semibold text-gray-900 dark:text-neutral-100`}
-		>
+		<Tag id={block.id} className={`${sizes[block.level]} font-semibold text-text-pri`}>
 			{block.text}
 		</Tag>
 	);
@@ -154,9 +144,9 @@ function Heading({ block }: { block: HeadingBlock }) {
 
 function Text({ block }: { block: TextBlock }) {
 	const tone = {
-		normal: 'text-gray-700 dark:text-neutral-300',
-		muted: 'text-gray-500 dark:text-neutral-400',
-		strong: 'font-semibold text-gray-900 dark:text-neutral-100'
+		normal: 'text-text-pri',
+		muted: 'text-text-muted',
+		strong: 'font-semibold text-text-pri'
 	}[block.emphasis ?? 'normal'];
 	return <p className={`text-sm leading-relaxed ${tone}`}>{block.body}</p>;
 }
@@ -165,7 +155,7 @@ function Markdown({ block }: { block: MarkdownBlock }) {
 	const html = renderMarkdownEmail(block.body);
 	return (
 		<div
-			className="space-y-3 text-sm leading-relaxed text-gray-700 dark:text-neutral-300 [&_strong]:text-gray-900 dark:[&_strong]:text-neutral-100 [&_a]:text-indigo-600 dark:[&_a]:text-indigo-400 [&_a]:underline [&_ol]:list-decimal [&_ul]:list-disc [&_ol]:pl-5 [&_ul]:pl-5 [&_li]:my-1"
+			className="space-y-3 text-sm leading-relaxed text-text-pri [&_strong]:text-text-pri [&_a]:text-accent [&_a]:underline [&_ol]:list-decimal [&_ul]:list-disc [&_ol]:pl-5 [&_ul]:pl-5 [&_li]:my-1"
 			// biome-ignore lint/security/noDangerouslySetInnerHtml: shared markdown helper sanitizes input via escapeHtml
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>
@@ -174,25 +164,21 @@ function Markdown({ block }: { block: MarkdownBlock }) {
 
 function Card({ block }: { block: CardBlock }) {
 	const inner = (
-		<div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-4">
-			<div className="text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-400">
+		<div className="rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-hover">
+			<div className="text-xs font-mono uppercase tracking-[0.08em] text-text-muted">
 				{block.title}
 			</div>
 			{block.value !== undefined && (
-				<div className="mt-1 text-2xl font-bold text-gray-900 dark:text-neutral-100">
-					{block.value}
-				</div>
+				<div className="mt-1 text-2xl font-bold text-text-pri">{block.value}</div>
 			)}
 			{block.trend && (
 				<div
-					className={`text-xs ${TONE_CLASSES[block.trend.tone ?? 'neutral']} px-2 py-0.5 rounded inline-block mt-1`}
+					className={`text-xs ${TONE_CLASSES[block.trend.tone ?? 'neutral']} px-2 py-0.5 rounded-sm inline-block mt-1`}
 				>
 					{block.trend.deltaLabel}
 				</div>
 			)}
-			{block.footer && (
-				<div className="mt-2 text-xs text-gray-500 dark:text-neutral-400">{block.footer}</div>
-			)}
+			{block.footer && <div className="mt-2 text-xs text-text-muted">{block.footer}</div>}
 		</div>
 	);
 	if (block.href) {
@@ -219,21 +205,17 @@ function KpiGrid({ block }: { block: KpiGridBlock }) {
 
 function Table({ block }: { block: TableBlock }) {
 	if (block.rows.length === 0) {
-		return (
-			<p className="text-sm italic text-gray-500 dark:text-neutral-400">
-				{block.emptyText ?? 'No data.'}
-			</p>
-		);
+		return <p className="text-sm italic text-text-muted">{block.emptyText ?? 'No data.'}</p>;
 	}
 	return (
-		<div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-neutral-700">
+		<div className="overflow-x-auto rounded-lg border border-border">
 			<table className="min-w-full text-sm">
-				<thead className="bg-gray-50 dark:bg-neutral-800">
+				<thead className="bg-bg-alt">
 					<tr>
 						{block.columns.map((c) => (
 							<th
 								key={c.key}
-								className={`px-3 py-2 text-${c.align ?? 'left'} text-xs font-semibold uppercase text-gray-600 dark:text-neutral-300`}
+								className={`px-3 py-2 text-${c.align ?? 'left'} font-mono text-xs font-semibold uppercase tracking-[0.08em] text-text-muted`}
 								style={c.width ? { width: c.width } : undefined}
 							>
 								{c.label}
@@ -245,13 +227,10 @@ function Table({ block }: { block: TableBlock }) {
 					{block.rows.map((row) => (
 						<tr
 							key={row.id}
-							className="border-t border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/50"
+							className="border-t border-border hover:bg-surface-hover transition-colors"
 						>
 							{block.columns.map((c) => (
-								<td
-									key={c.key}
-									className={`px-3 py-2 text-${c.align ?? 'left'} text-gray-700 dark:text-neutral-300`}
-								>
+								<td key={c.key} className={`px-3 py-2 text-${c.align ?? 'left'} text-text-pri`}>
 									<TableCellView cell={row.cells[c.key]} />
 								</td>
 							))}
@@ -279,7 +258,7 @@ function TableCellView({ cell }: { cell: TableCell | undefined }) {
 					href={cell.href}
 					target={cell.external ? '_blank' : undefined}
 					rel={cell.external ? 'noopener noreferrer' : undefined}
-					className="text-indigo-600 dark:text-indigo-400 underline"
+					className="text-accent underline"
 				>
 					{cell.label}
 				</a>
@@ -287,7 +266,7 @@ function TableCellView({ cell }: { cell: TableCell | undefined }) {
 		case 'badge':
 			return (
 				<span
-					className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${TONE_CLASSES[cell.tone ?? 'neutral']}`}
+					className={`inline-block rounded-sm px-2 py-0.5 text-xs font-medium ${TONE_CLASSES[cell.tone ?? 'neutral']}`}
 				>
 					{cell.label}
 				</span>
@@ -317,7 +296,9 @@ function Chart({ block }: { block: ChartBlock }) {
 		return (
 			<div className="flex flex-col items-center">
 				{block.title && (
-					<div className="mb-2 text-xs text-gray-500 dark:text-neutral-400">{block.title}</div>
+					<div className="mb-2 font-mono text-xs uppercase tracking-[0.08em] text-text-muted">
+						{block.title}
+					</div>
 				)}
 				<div
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: trusted SVG renderer
@@ -341,7 +322,9 @@ function Chart({ block }: { block: ChartBlock }) {
 		return (
 			<div className="mx-auto max-w-[720px] flex flex-col items-center">
 				{block.title && (
-					<div className="mb-2 text-xs text-gray-500 dark:text-neutral-400">{block.title}</div>
+					<div className="mb-2 font-mono text-xs uppercase tracking-[0.08em] text-text-muted">
+						{block.title}
+					</div>
 				)}
 				<div
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: trusted SVG renderer
@@ -351,7 +334,7 @@ function Chart({ block }: { block: ChartBlock }) {
 		);
 	}
 	return (
-		<div className="rounded-md bg-amber-50 dark:bg-amber-900/30 p-3 text-sm text-amber-700 dark:text-amber-200">
+		<div className="rounded-md bg-warning/10 p-3 text-sm text-warning border border-warning/30">
 			Chart kind '{block.chartKind}' not supported.
 		</div>
 	);
@@ -374,32 +357,26 @@ function List({ block }: { block: ListBlock }) {
 						href={it.href}
 						target="_blank"
 						rel="noopener noreferrer"
-						className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+						className="font-semibold text-accent hover:underline"
 					>
 						{it.primary}
 					</a>
 				) : (
-					<span className="font-semibold text-gray-900 dark:text-neutral-100">{it.primary}</span>
+					<span className="font-semibold text-text-pri">{it.primary}</span>
 				);
 				const inner = (
 					<>
 						{primary}
 						{it.badge && (
 							<span
-								className={`ml-2 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${TONE_CLASSES[it.badge.tone ?? 'neutral']}`}
+								className={`ml-2 inline-block rounded-sm px-2 py-0.5 text-xs font-medium ${TONE_CLASSES[it.badge.tone ?? 'neutral']}`}
 							>
 								{it.badge.label}
 							</span>
 						)}
-						{it.secondary && (
-							<div className="mt-0.5 text-sm text-gray-600 dark:text-neutral-400">
-								{it.secondary}
-							</div>
-						)}
+						{it.secondary && <div className="mt-0.5 text-sm text-text-sec">{it.secondary}</div>}
 						{it.timestamp && (
-							<div className="mt-0.5 text-xs text-gray-400 dark:text-neutral-500">
-								{it.timestamp}
-							</div>
+							<div className="mt-0.5 font-mono text-xs text-text-dim">{it.timestamp}</div>
 						)}
 					</>
 				);
@@ -426,7 +403,7 @@ function Tabs({ block }: { block: TabsBlock }) {
 	const activePane: TabPane | undefined = block.panes.find((p) => p.id === active);
 	return (
 		<div>
-			<div className="flex flex-wrap gap-1 border-b border-gray-200 dark:border-neutral-700">
+			<div className="flex flex-wrap gap-1 border-b border-border">
 				{block.panes.map((pane) => (
 					<button
 						key={pane.id}
@@ -434,8 +411,8 @@ function Tabs({ block }: { block: TabsBlock }) {
 						onClick={() => setActive(pane.id)}
 						className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
 							pane.id === active
-								? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-								: 'border-transparent text-gray-500 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-neutral-200'
+								? 'border-accent text-accent'
+								: 'border-transparent text-text-muted hover:text-text-pri'
 						}`}
 					>
 						{pane.label}
@@ -492,7 +469,7 @@ function Graph({ block }: { block: GraphBlock }) {
 
 	if (block.nodes.length === 0) {
 		return (
-			<div className="rounded-md bg-gray-50 dark:bg-neutral-800/50 p-6 text-sm text-gray-600 dark:text-neutral-400">
+			<div className="rounded-md bg-bg-alt p-6 text-sm text-text-sec border border-border">
 				Graph has no nodes yet.
 			</div>
 		);
@@ -502,7 +479,7 @@ function Graph({ block }: { block: GraphBlock }) {
 		<div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
 			<div
 				ref={containerRef}
-				className="lg:col-span-2 overflow-hidden rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900"
+				className="lg:col-span-2 overflow-hidden rounded-lg border border-border bg-surface"
 				style={{ height }}
 			>
 				<ForceGraph2D
@@ -513,33 +490,27 @@ function Graph({ block }: { block: GraphBlock }) {
 					linkWidth={(link: { weight?: number }) => Math.sqrt(link.weight ?? 1)}
 					linkColor={() =>
 						typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
-							? '#404040'
-							: '#e5e7eb'
+							? 'rgba(255,255,255,0.12)'
+							: 'rgba(0,0,0,0.12)'
 					}
 					width={width}
 					height={height}
 				/>
 			</div>
-			<div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5 text-sm">
-				<h3 className="text-xs font-semibold uppercase text-gray-500 dark:text-neutral-400">
+			<div className="rounded-lg border border-border bg-surface p-5 text-sm">
+				<h3 className="font-mono text-xs font-semibold uppercase tracking-[0.08em] text-text-muted">
 					Node details
 				</h3>
 				{selected ? (
 					<div className="mt-3 space-y-1.5">
-						<p className="text-base font-medium text-gray-900 dark:text-neutral-100">
-							{selected.label}
-						</p>
-						{selected.group && (
-							<p className="text-gray-500 dark:text-neutral-400">Group: {selected.group}</p>
-						)}
-						{selected.size !== undefined && (
-							<p className="text-gray-500 dark:text-neutral-400">Score: {selected.size}</p>
-						)}
+						<p className="text-base font-medium text-text-pri">{selected.label}</p>
+						{selected.group && <p className="text-text-sec">Group: {selected.group}</p>}
+						{selected.size !== undefined && <p className="text-text-sec">Score: {selected.size}</p>}
 					</div>
 				) : (
-					<p className="mt-3 text-gray-400 dark:text-neutral-500">Click a node to see details.</p>
+					<p className="mt-3 text-text-dim">Click a node to see details.</p>
 				)}
-				<div className="mt-6 text-xs text-gray-500 dark:text-neutral-400 space-y-1">
+				<div className="mt-6 text-xs text-text-muted space-y-1">
 					<p>{block.nodes.length} nodes</p>
 					<p>{block.links.length} edges</p>
 				</div>
@@ -554,7 +525,7 @@ function Link({ block }: { block: LinkBlock }) {
 			href={block.href}
 			target={block.external ? '_blank' : undefined}
 			rel={block.external ? 'noopener noreferrer' : undefined}
-			className="text-indigo-600 dark:text-indigo-400 underline"
+			className="text-accent underline"
 		>
 			{block.label}
 		</a>
@@ -564,7 +535,7 @@ function Link({ block }: { block: LinkBlock }) {
 function Badge({ block }: { block: BadgeBlock }) {
 	return (
 		<span
-			className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${TONE_CLASSES[block.tone ?? 'neutral']}`}
+			className={`inline-block rounded-sm px-2 py-0.5 text-xs font-medium ${TONE_CLASSES[block.tone ?? 'neutral']}`}
 		>
 			{block.label}
 		</span>
@@ -572,16 +543,14 @@ function Badge({ block }: { block: BadgeBlock }) {
 }
 
 function Divider() {
-	return <hr className="my-6 border-gray-200 dark:border-neutral-800" />;
+	return <hr className="my-6 border-border" />;
 }
 
 function EmptyState({ block }: { block: EmptyStateBlock }) {
 	return (
-		<div className="rounded-lg border border-dashed border-gray-300 dark:border-neutral-700 p-8 text-center">
-			<div className="font-semibold text-gray-900 dark:text-neutral-100">{block.title}</div>
-			{block.body && (
-				<div className="mt-2 text-sm text-gray-500 dark:text-neutral-400">{block.body}</div>
-			)}
+		<div className="rounded-lg border border-dashed border-border p-8 text-center">
+			<div className="font-semibold text-text-pri">{block.title}</div>
+			{block.body && <div className="mt-2 text-sm text-text-muted">{block.body}</div>}
 			{block.cta && (
 				<div className="mt-4">
 					<Link block={block.cta} />
