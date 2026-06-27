@@ -4,27 +4,93 @@
 
 @layer base {
 	:root {
-		--background: 0 0% 100%;
-		--foreground: 224 71% 4%;
-		--card: 0 0% 100%;
-		--card-foreground: 224 71% 4%;
-		--primary: 243 75% 59%;
-		--primary-foreground: 0 0% 100%;
-		--secondary: 220 14% 96%;
-		--secondary-foreground: 224 71% 4%;
-		--muted: 220 14% 96%;
-		--muted-foreground: 220 8% 46%;
-		--accent: 220 14% 96%;
-		--accent-foreground: 224 71% 4%;
-		--destructive: 0 84% 60%;
-		--border: 220 13% 91%;
-		--ring: 243 75% 59%;
+		/* Surfaces (light mode: warm cream) */
+		--bg: #f0efe9;
+		--bg-alt: #ebeae4;
+		--surface: #e8e7e1;
+		--surface-hover: #dedcd5;
+
+		/* Text */
+		--text-pri: #0a0a0a;
+		--text-sec: rgba(10, 10, 10, 0.55);
+		--text-muted: rgba(10, 10, 10, 0.42);
+		--text-dim: rgba(10, 10, 10, 0.3);
+
+		/* Borders */
+		--border: rgba(0, 0, 0, 0.08);
+		--border-strong: rgba(0, 0, 0, 0.18);
+		--border-hover: rgba(0, 0, 0, 0.12);
+
+		/* Accent (Pulsar purple — replaces rocketride Horizon Blue) */
+		--accent: #7c3aed;
+		--accent-hover: #6927d8;
+		--accent-text: #ffffff;
+		--accent-soft: rgba(124, 58, 237, 0.1);
+		--accent-glow: rgba(124, 58, 237, 0.3);
+
+		/* Semantic */
+		--success: #059669;
+		--warning: #b45309;
+		--danger: #b91c1c;
+		--info: #1f9ad0;
+
+		/* Nav chrome */
+		--nav-bg: #ebeae4;
+		--nav-border: rgba(0, 0, 0, 0.08);
+
+		/* Shared (non-themed) */
+		--radius-sm: 4px;
+		--radius-md: 8px;
+		--radius-lg: 12px;
+		--radius-xl: 16px;
+
+		--font-sans: var(--font-instrument-sans), "Instrument Sans Variable", "Instrument Sans",
+			system-ui, sans-serif;
+		--font-mono: var(--font-ibm-plex-mono), "IBM Plex Mono", ui-monospace, Menlo, monospace;
+	}
+
+	.dark {
+		/* Surfaces (dark mode: deep abyss) */
+		--bg: #0b0a12;
+		--bg-alt: #131121;
+		--surface: #171522;
+		--surface-hover: #1d1a28;
+
+		/* Text */
+		--text-pri: #ffffff;
+		--text-sec: rgba(255, 255, 255, 0.55);
+		--text-muted: rgba(255, 255, 255, 0.4);
+		--text-dim: rgba(255, 255, 255, 0.25);
+
+		/* Borders */
+		--border: rgba(255, 255, 255, 0.08);
+		--border-strong: rgba(255, 255, 255, 0.18);
+		--border-hover: rgba(255, 255, 255, 0.12);
+
+		/* Accent (Pulsar purple — same hue both modes) */
+		--accent: #7c3aed;
+		--accent-hover: #9061f0;
+		--accent-text: #ffffff;
+		--accent-soft: rgba(124, 58, 237, 0.14);
+		--accent-glow: rgba(124, 58, 237, 0.4);
+
+		/* Semantic */
+		--success: #10b981;
+		--warning: #f59e0b;
+		--danger: #ef4444;
+		--info: #41b6e6;
+
+		/* Nav chrome */
+		--nav-bg: #16141e;
+		--nav-border: rgba(255, 255, 255, 0.08);
 	}
 }
 
 @layer base {
 	body {
-		@apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))];
+		background-color: var(--bg);
+		color: var(--text-pri);
+		font-family: var(--font-sans);
 	}
 }
 
