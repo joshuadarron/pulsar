@@ -69,7 +69,6 @@ export default function Sidebar() {
 				.then((r) => r.json())
 				.then((data) => {
 					setUnreadCount(data.unreadCount);
-					// Show toast for any new notifications we haven't seen
 					for (const n of data.notifications || []) {
 						if (!seenIds.has(n.id)) {
 							seenIds.add(n.id);
@@ -109,8 +108,8 @@ export default function Sidebar() {
 	}, []);
 
 	return (
-		<aside className="no-print flex h-screen w-64 flex-col border-r border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
-			<div className="flex h-16 items-center gap-2 border-b border-gray-200 dark:border-neutral-800 px-6">
+		<aside className="no-print flex h-screen w-64 flex-col border-r border-nav-border bg-nav-bg">
+			<div className="flex h-16 items-center gap-2 border-b border-nav-border px-6">
 				{hasRunning ? (
 					<Link href="/runs" title="Pipeline running — view run history">
 						<PulsarLogo className="h-8 w-8 cursor-pointer animate-pulsar-beacon text-purple-700 dark:text-purple-400" />
@@ -118,7 +117,7 @@ export default function Sidebar() {
 				) : (
 					<PulsarLogo className="h-8 w-8 text-purple-700 dark:text-purple-400" />
 				)}
-				<span className="text-xl font-bold">Pulsar</span>
+				<span className="text-xl font-bold text-text-pri">Pulsar</span>
 			</div>
 
 			<nav className="flex-1 overflow-y-auto p-4">
@@ -130,7 +129,7 @@ export default function Sidebar() {
 
 				{sections.map((section) => (
 					<div key={section.label} className="mt-6">
-						<p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500">
+						<p className="mb-2 px-3 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted">
 							{section.label}
 						</p>
 						<div className="space-y-1">
@@ -142,18 +141,18 @@ export default function Sidebar() {
 				))}
 			</nav>
 
-			<div className="border-t border-gray-200 dark:border-neutral-800 p-4 space-y-1">
+			<div className="border-t border-nav-border p-4 space-y-1">
 				<Link
 					href="/notifications"
-					className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+					className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
 						pathname.startsWith('/notifications')
-							? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-							: 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100'
+							? 'bg-accent-soft text-accent'
+							: 'text-text-sec hover:bg-surface-hover hover:text-text-pri'
 					}`}
 				>
 					<div className="relative h-5 w-5 flex-shrink-0">
 						<svg
-							className={`h-5 w-5 ${unreadCount > 0 ? 'text-red-500' : ''}`}
+							className={`h-5 w-5 ${unreadCount > 0 ? 'text-danger' : ''}`}
 							fill="none"
 							viewBox="0 0 24 24"
 							stroke="currentColor"
@@ -166,7 +165,7 @@ export default function Sidebar() {
 							/>
 						</svg>
 						{unreadCount > 0 && (
-							<span className="absolute -right-2 -top-2 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+							<span className="absolute -right-2 -top-2 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white">
 								{unreadCount > 10 ? '10+' : unreadCount}
 							</span>
 						)}
@@ -175,10 +174,10 @@ export default function Sidebar() {
 				</Link>
 				<Link
 					href="/settings"
-					className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+					className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
 						pathname.startsWith('/settings')
-							? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-							: 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100'
+							? 'bg-accent-soft text-accent'
+							: 'text-text-sec hover:bg-surface-hover hover:text-text-pri'
 					}`}
 				>
 					<svg
@@ -198,7 +197,7 @@ export default function Sidebar() {
 				</Link>
 				<button
 					onClick={() => signOut()}
-					className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 dark:text-neutral-400 transition hover:bg-gray-50 hover:text-gray-900 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+					className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-text-sec transition-colors hover:bg-surface-hover hover:text-text-pri"
 				>
 					<svg
 						className="h-5 w-5"
@@ -216,19 +215,17 @@ export default function Sidebar() {
 					Sign Out
 				</button>
 				{user && (
-					<div className="flex items-center gap-3 rounded-lg px-3 py-2.5 mt-2 border-t border-gray-200 dark:border-neutral-800 pt-3">
+					<div className="flex items-center gap-3 rounded-lg px-3 py-2.5 mt-2 border-t border-nav-border pt-3">
 						{user.image ? (
 							<Image src={user.image} alt="" width={28} height={28} className="rounded-full" />
 						) : (
-							<div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+							<div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent">
 								{(user.name || user.email || '?').charAt(0).toUpperCase()}
 							</div>
 						)}
 						<div className="min-w-0">
-							<p className="truncate text-sm font-medium text-gray-900 dark:text-neutral-100">
-								{user.name}
-							</p>
-							<p className="truncate text-xs text-gray-400 dark:text-neutral-500">{user.email}</p>
+							<p className="truncate text-sm font-medium text-text-pri">{user.name}</p>
+							<p className="truncate font-mono text-xs text-text-dim">{user.email}</p>
 						</div>
 					</div>
 				)}
@@ -242,10 +239,10 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
 	return (
 		<Link
 			href={item.href}
-			className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+			className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
 				active
-					? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-					: 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100'
+					? 'bg-accent-soft text-accent'
+					: 'text-text-sec hover:bg-surface-hover hover:text-text-pri'
 			}`}
 		>
 			<svg

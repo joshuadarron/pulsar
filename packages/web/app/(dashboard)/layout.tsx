@@ -13,7 +13,7 @@ export default function DashboardLayout({
 		<SessionProvider>
 			<div className="flex h-screen">
 				<Sidebar />
-				<main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-neutral-950 print-full">
+				<main className="flex-1 overflow-y-auto bg-bg print-full">
 					<div className="mx-auto max-w-7xl p-6">{children}</div>
 				</main>
 			</div>
