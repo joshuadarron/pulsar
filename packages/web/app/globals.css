@@ -50,11 +50,11 @@
 	}
 
 	.dark {
-		/* Surfaces (dark mode: deep abyss) */
-		--bg: #0b0a12;
-		--bg-alt: #131121;
-		--surface: #171522;
-		--surface-hover: #1d1a28;
+		/* Surfaces (dark mode: deep purple-ink, near-black with brand bias) */
+		--bg: #06031a;
+		--bg-alt: #0a0624;
+		--surface: #110a2a;
+		--surface-hover: #180f36;
 
 		/* Text */
 		--text-pri: #ffffff;
@@ -81,7 +81,7 @@
 		--info: #41b6e6;
 
 		/* Nav chrome */
-		--nav-bg: #16141e;
+		--nav-bg: #08051f;
 		--nav-border: rgba(255, 255, 255, 0.08);
 	}
 }
